@@ -2,9 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class ObjectPool : MonoBehaviour
+public class StageCreator : MonoBehaviour
 {
-    public GameObject objectToPool;
+    public GameObject brickObject;
     public int objectSize;
     public int xScale, zScale;
 
@@ -41,7 +41,7 @@ public class ObjectPool : MonoBehaviour
         {
             for (int i = 0; i < xScale; i++)
             {
-                GameObject obj = (GameObject)Instantiate(objectToPool);
+                GameObject obj = (GameObject)Instantiate(brickObject);
 
                 offset = possiblePos[posIndex];
 

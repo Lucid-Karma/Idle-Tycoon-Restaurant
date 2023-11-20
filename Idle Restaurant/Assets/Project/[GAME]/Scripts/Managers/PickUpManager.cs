@@ -8,6 +8,7 @@ public class PickUpManager : Singleton<PickUpManager>
     public GameObject currentPickedUpObject;
     [HideInInspector]
     public bool isPickedUp = false;
+    public bool isCurrentObjEatable = false;
 
     public void PickUp(Transform _transform)
     {
@@ -20,12 +21,18 @@ public class PickUpManager : Singleton<PickUpManager>
         isPickedUp = true;
     }
 
-    public void Drop(Transform _transform)
+    public void Drop(Transform _transform, Transform refTransform)
     {
         if(!isPickedUp)  return;
 
-        currentPickedUpObject.transform.parent = _transform;
-        currentPickedUpObject.transform.position = _transform.position;
+        if(isCurrentObjEatable)
+            StackManager.Instance.Stack(currentPickedUpObject, _transform, refTransform);
+        else
+        {
+            currentPickedUpObject.transform.parent = _transform;
+            currentPickedUpObject.transform.position = _transform.position;
+        }
+        
     
         isPickedUp = false;
     }

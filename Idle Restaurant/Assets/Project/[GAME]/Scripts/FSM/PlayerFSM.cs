@@ -25,13 +25,14 @@ public class PlayerFSM : MonoBehaviour
 
     ISpawnable spawnable;
     IPlaceable placeable;
+    IEatable eatable;
 
     #region Parameters
     Camera _playerCam;
     Ray ray;
     RaycastHit hit;
 
-    [SerializeField] private GameObject stackParent;
+    [SerializeField] private GameObject holdParent;
     #endregion
 
     void Start()
@@ -60,22 +61,33 @@ public class PlayerFSM : MonoBehaviour
             {
                 spawnable = hit.collider.GetComponent<ISpawnable>();
                 placeable = hit.collider.GetComponent<IPlaceable>();
+                eatable = hit.collider.GetComponent<IEatable>();
+
 
                 //executingPlayerState = ExecutingPlayerState.WALK;
                 Agent.SetDestination(hit.point);
-                Debug.Log("player must go somewhere.");
+                //Debug.Log("player must go somewhere.");
 
                 if(spawnable != null)
                 {
                     if(!PickUpManager.Instance.isPickedUp)
                     {
                         PickUpManager.Instance.currentPickedUpObject = spawnable?.Spawn();
-                        PickUpManager.Instance.PickUp(stackParent.transform);
+                        PickUpManager.Instance.PickUp(holdParent.transform);
+                    }
+                }
+                else if(eatable != null)
+                {
+                    if(!PickUpManager.Instance.isPickedUp)
+                    {
+                        PickUpManager.Instance.isCurrentObjEatable = true;
+                        PickUpManager.Instance.currentPickedUpObject = eatable.CurrentFood();
+                        PickUpManager.Instance.PickUp(holdParent.transform);
                     }
                 }
                 else if(placeable != null)
                 {
-                    PickUpManager.Instance.Drop(placeable?.placeTransform);
+                    PickUpManager.Instance.Drop(placeable?.placeTransform, placeable?.refTransform);
                 }
             }
         }

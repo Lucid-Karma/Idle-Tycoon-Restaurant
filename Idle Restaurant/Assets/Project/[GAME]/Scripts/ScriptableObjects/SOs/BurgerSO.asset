@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6d09c22f47bdbf49bf9a81a559b89a3, type: 3}
+  m_Name: BurgerSO
+  m_EditorClassIdentifier: 
+  prefab: {fileID: 4676811804137105970, guid: a2d154dc60ae9824ab72743ee832343f, type: 3}
+  uncookedPrefab: {fileID: 919132149155446097, guid: 8b86c44018ece984081c362c999c0561, type: 3}
+  cookedPrefab: {fileID: 919132149155446097, guid: 0a7782d92e874f343b82bef30d49aea6, type: 3}
+  overcookedPrefab: {fileID: 919132149155446097, guid: f23698cdc551e92479cbf4baebe52a61, type: 3}
+  chopped: {fileID: 0}
+  slice: {fileID: 0}
+  shouldCooked: 1
+  shouldSliced: 0
+  isAdded: 0
+  totalPoint: 0

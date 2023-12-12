@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Tomato : SelectableBase
+public class Burger : SelectableBase
 {
     public override GameObject SetFood()
     {

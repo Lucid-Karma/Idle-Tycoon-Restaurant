@@ -11,6 +11,8 @@ GameObject:
   - component: {fileID: 3169401904338222945}
   - component: {fileID: 2041293537156903108}
   - component: {fileID: 4301173909460960270}
+  - component: {fileID: 7404176877041309685}
+  - component: {fileID: -654149545403818}
   m_Layer: 0
   m_Name: Tomato
   m_TagString: Untagged
@@ -83,3 +85,32 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!135 &7404176877041309685
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2355429411537741275}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.3750001
+  m_Center: {x: 0, y: 0.3499986, z: 0.000000014901161}
+--- !u!114 &-654149545403818
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2355429411537741275}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be6145138cf218c4bb8972d326eb69d1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  pure: {fileID: 0}
+  ingredientPos: {x: 0, y: 0, z: 0}
+  isAdded: 0
+  totalPoint: 0

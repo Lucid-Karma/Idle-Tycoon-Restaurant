@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PickUpManager : Singleton<PickUpManager>
+public class PickUpController //: Singleton<PickUpManager>
 {
     [HideInInspector]
     public GameObject currentPickedUpObject;

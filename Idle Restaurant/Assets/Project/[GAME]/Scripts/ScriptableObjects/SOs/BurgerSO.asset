@@ -12,13 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e6d09c22f47bdbf49bf9a81a559b89a3, type: 3}
   m_Name: BurgerSO
   m_EditorClassIdentifier: 
-  prefab: {fileID: 4676811804137105970, guid: a2d154dc60ae9824ab72743ee832343f, type: 3}
-  uncookedPrefab: {fileID: 919132149155446097, guid: 8b86c44018ece984081c362c999c0561, type: 3}
-  cookedPrefab: {fileID: 919132149155446097, guid: 0a7782d92e874f343b82bef30d49aea6, type: 3}
-  overcookedPrefab: {fileID: 919132149155446097, guid: f23698cdc551e92479cbf4baebe52a61, type: 3}
-  chopped: {fileID: 0}
-  slice: {fileID: 0}
-  shouldCooked: 1
-  shouldSliced: 0
+  pure: {fileID: 919132149155446097, guid: 69ae00bbdd0e0074d8fb1056c9bb2eb6, type: 3}
+  ingredientPos: {x: 0, y: 0, z: 0}
   isAdded: 0
   totalPoint: 0
+  chopped: {fileID: 919132149155446097, guid: 462b7241c62aad247a8bf21037595ef9, type: 3}
+  slice: {fileID: 919132149155446097, guid: 2048a091a565c98418d35b1f275cc544, type: 3}

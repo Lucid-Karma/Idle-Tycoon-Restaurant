@@ -4,12 +4,12 @@ using UnityEngine;
 
 public class Plate : MonoBehaviour, IPlaceable
 {
-    public Transform placeTransform { get; set; }
+    public Transform parentTransform { get; set; }
     public Transform refTransform { get; set; }
 
     void Start()
     {
-        placeTransform = gameObject.transform;
+        parentTransform = gameObject.transform;
         refTransform = gameObject.transform.GetChild(0).transform;
     }
 

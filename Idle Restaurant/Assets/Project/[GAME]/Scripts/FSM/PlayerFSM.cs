@@ -25,19 +25,23 @@ public class PlayerFSM : MonoBehaviour
 
     ISpawnable spawnable;
     IPlaceable placeable;
-    IEatable eatable;
+    IEdible edible;
 
     #region Parameters
     Camera _playerCam;
     Ray ray;
-    RaycastHit hit;
+    private RaycastHit hit;
 
     [SerializeField] private GameObject holdParent;
+    private bool isHolded;
+    private GameObject currentFood;
+    private float distance;
     #endregion
 
     void Start()
     {
         _playerCam = Camera.main;
+        isHolded = false;
 
         executingState = ExecutingState.IDLE;
         currentState = playerIdleState;
@@ -47,8 +51,6 @@ public class PlayerFSM : MonoBehaviour
     void Update()
     {
         currentState.UpdateState(this);
-        //MovePlayer();
-        //DoneWithPath();
     }
 
     public void MovePlayer()
@@ -61,43 +63,91 @@ public class PlayerFSM : MonoBehaviour
             {
                 spawnable = hit.collider.GetComponent<ISpawnable>();
                 placeable = hit.collider.GetComponent<IPlaceable>();
-                eatable = hit.collider.GetComponent<IEatable>();
+                edible = hit.collider.GetComponent<SelectableBase>();
 
 
-                //executingPlayerState = ExecutingPlayerState.WALK;
-                Agent.SetDestination(hit.point);
-                //Debug.Log("player must go somewhere.");
+                executingState = ExecutingState.WALK;
 
-                if(spawnable != null)
-                {
-                    if(!PickUpManager.Instance.isPickedUp)
-                    {
-                        PickUpManager.Instance.currentPickedUpObject = spawnable?.Spawn();
-                        PickUpManager.Instance.PickUp(holdParent.transform);
-                    }
-                }
-                else if(eatable != null)
-                {
-                    if(!PickUpManager.Instance.isPickedUp)
-                    {
-                        PickUpManager.Instance.isCurrentObjEatable = true;
-                        PickUpManager.Instance.currentPickedUpObject = eatable.CurrentFood();
-                        PickUpManager.Instance.PickUp(holdParent.transform);
-                    }
-                }
-                else if(placeable != null)
-                {
-                    PickUpManager.Instance.Drop(placeable?.placeTransform, placeable?.refTransform);
-                }
+                distance = Vector3.Distance(Agent.transform.position, hit.point);
+                if(distance > 2.0f)
+                    Agent.SetDestination(hit.point);
             }
         }
     }
+
+    #region Selectables'Methods
+    public void GetFoodFromSource()
+    {
+        if(spawnable != null)
+        {
+            if (isHolded)   return;
+
+            spawnable?.Spawn();
+            currentFood = holdParent.transform.GetChild(0)? holdParent.transform.GetChild(0).gameObject: null;
+            isHolded = true;
+        }
+    }
+    public void GetFood()
+    {
+        if(edible != null)
+        {
+            PickUpObject(edible);
+        }
+    }
+    public void PlaceFood()
+    {
+        if (placeable != null)
+        {
+            DropObject(placeable);
+        }
+    }
+
+
+    void PickUpObject(IEdible ingredient) 
+    {
+        if (isHolded)   return;
+
+        currentFood = ingredient.SetFood(); 
+
+        if(currentFood == null) return;
+
+        currentFood.transform.parent = holdParent.transform;
+        currentFood.transform.localRotation = Quaternion.identity;
+        currentFood.transform.position = holdParent.transform.position;
+
+        isHolded = true;
+        Debug.Log("food picked up");
+    }
+    void DropObject(IPlaceable place)
+    {
+        if(!isHolded)   return;
+        if(currentFood == null) return;
+
+        currentFood.transform.parent = place.parentTransform;
+        currentFood.transform.position = place.parentTransform.position;
+    
+        currentFood = null;
+
+        isHolded = false;
+        Debug.Log("food dropped");
+    }
+    #endregion
+    
+
+    // void NotifyObjectClicked(GameObject clickedObject) 
+    // {
+    //     IngredientsBase food = clickedObject.GetComponent<IngredientsBase>();
+    //     if (food != null) 
+    //     {
+    //         food.OnPlayerInteract(); // Notify the food object about player interaction
+    //     } 
+    // }
+
     public void DoneWithPath()
     {
         if(Agent.remainingDistance <= Agent.stoppingDistance)
         {
-            //executingPlayerState = ExecutingPlayerState.IDLE;
-            
+            executingState = ExecutingState.IDLE;
         }
     }
 

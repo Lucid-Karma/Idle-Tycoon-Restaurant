@@ -4,21 +4,22 @@ using UnityEngine;
 
 public class IngredientsSource : MonoBehaviour, ISpawnable
 {
-    [SerializeField] private GameObject ingredientPrefab;
+    [SerializeField] private GameObject spawnPrefab;
+    private FoodPool foodPool;
 
-
-    public GameObject Spawn()
+    void Awake()
     {
-        // var food = new Tomato();
-        // GameObject obj = (GameObject)Instantiate(food.pure);
-        GameObject obj = (GameObject)Instantiate(ingredientPrefab);
+        foodPool = new FoodPool();
+        foodPool.FillPool(spawnPrefab);
+    }
 
-        if(obj != null)
-        {
-            return obj;
-        }
+    void Start()
+    {
+        foodPool.spawnPosRef = GameObject.FindWithTag("Player").GetComponent<Transform>();
+    }
 
-        Debug.LogError("There is not any instantiated Object!");
-        return null;
+    public void Spawn()
+    {
+        foodPool.GetObject();
     }
 }

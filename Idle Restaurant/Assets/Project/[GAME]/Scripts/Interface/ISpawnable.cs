@@ -2,5 +2,5 @@ using UnityEngine;
 
 public interface ISpawnable 
 {
-    GameObject Spawn();
+    void Spawn();
 }

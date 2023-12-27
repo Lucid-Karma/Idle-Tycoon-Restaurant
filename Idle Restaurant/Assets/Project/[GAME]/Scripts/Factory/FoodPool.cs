@@ -38,6 +38,8 @@ public class FoodPool
 
         if(ingredient != null)
         {
+            ingredient.GetComponent<Collider>().enabled = true;
+            
             ingredient.transform.parent = spawnPosRef;
             ingredient.transform.rotation = Quaternion.identity;
             ingredient.transform.position = spawnPosRef.position;

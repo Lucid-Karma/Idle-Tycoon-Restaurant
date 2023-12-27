@@ -25,7 +25,7 @@ public class PlayerFSM : MonoBehaviour
 
     ISpawnable spawnable;
     IPlaceable placeable;
-    IEdible edible;
+    EdibleBase edible;
 
     #region Parameters
     Camera _playerCam;
@@ -34,7 +34,7 @@ public class PlayerFSM : MonoBehaviour
 
     [SerializeField] private GameObject holdParent;
     private bool isHolded;
-    private GameObject currentFood;
+    private EdibleBase currentFood;
     private float distance;
     #endregion
 
@@ -63,14 +63,15 @@ public class PlayerFSM : MonoBehaviour
             {
                 spawnable = hit.collider.GetComponent<ISpawnable>();
                 placeable = hit.collider.GetComponent<IPlaceable>();
-                edible = hit.collider.GetComponent<SelectableBase>();
-
+                edible = hit.collider.GetComponent<EdibleBase>();
 
                 executingState = ExecutingState.WALK;
 
                 distance = Vector3.Distance(Agent.transform.position, hit.point);
-                if(distance > 2.0f)
+                if(distance > 3.0f)
                     Agent.SetDestination(hit.point);
+
+                Debug.Log(hit.collider.gameObject.name);
             }
         }
     }
@@ -83,7 +84,8 @@ public class PlayerFSM : MonoBehaviour
             if (isHolded)   return;
 
             spawnable?.Spawn();
-            currentFood = holdParent.transform.GetChild(0)? holdParent.transform.GetChild(0).gameObject: null;
+            EventManager.OnFoodHolded.Invoke();
+            currentFood = holdParent.transform.GetChild(0)? holdParent.transform.GetChild(0).gameObject.GetComponent<EdibleBase>(): null;
             isHolded = true;
         }
     }
@@ -102,46 +104,40 @@ public class PlayerFSM : MonoBehaviour
         }
     }
 
-
-    void PickUpObject(IEdible ingredient) 
+    void PickUpObject(EdibleBase ingredient) 
     {
         if (isHolded)   return;
 
-        currentFood = ingredient.SetFood(); 
+        currentFood = ingredient;
 
-        if(currentFood == null) return;
+        if(currentFood == null || !ingredient.isLastPiece) return;
+
+        EventManager.OnFoodHolded.Invoke();
 
         currentFood.transform.parent = holdParent.transform;
         currentFood.transform.localRotation = Quaternion.identity;
         currentFood.transform.position = holdParent.transform.position;
 
+        ingredient.RemoveFromList();
+
         isHolded = true;
-        Debug.Log("food picked up");
     }
     void DropObject(IPlaceable place)
     {
-        if(!isHolded)   return;
-        if(currentFood == null) return;
+        if(isHolded)
+        {
+            if(currentFood == null) return;
 
-        currentFood.transform.parent = place.parentTransform;
-        currentFood.transform.position = place.parentTransform.position;
-    
-        currentFood = null;
+            place?.UseFood(currentFood);
+            EventManager.OnFoodDropped.Invoke();
 
-        isHolded = false;
-        Debug.Log("food dropped");
+            currentFood = null;
+
+            isHolded = false;
+            Debug.Log("dropped");
+        }
     }
     #endregion
-    
-
-    // void NotifyObjectClicked(GameObject clickedObject) 
-    // {
-    //     IngredientsBase food = clickedObject.GetComponent<IngredientsBase>();
-    //     if (food != null) 
-    //     {
-    //         food.OnPlayerInteract(); // Notify the food object about player interaction
-    //     } 
-    // }
 
     public void DoneWithPath()
     {

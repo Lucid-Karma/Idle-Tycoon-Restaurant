@@ -9,8 +9,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4676811804137105971}
-  - component: {fileID: 4676811804137105968}
-  - component: {fileID: 640693282120938900}
+  - component: {fileID: 4061750842831438003}
+  - component: {fileID: -4317807747149001261}
   m_Layer: 0
   m_Name: Burger
   m_TagString: Untagged
@@ -36,7 +36,15 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 118.5, z: 0}
---- !u!65 &4676811804137105968
+--- !u!33 &4061750842831438003
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4676811804137105970}
+  m_Mesh: {fileID: 8183966572487801318, guid: d07a5d9396197ec4d9daf638af8640d8, type: 3}
+--- !u!65 &-4317807747149001261
 BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -49,21 +57,6 @@ BoxCollider:
   serializedVersion: 2
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &640693282120938900
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4676811804137105970}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2e736b49849c1914db63907042b3283d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  ingredientPos: {x: 0, y: 0, z: 0}
-  isAdded: 0
-  totalPoint: 0
 --- !u!1 &5487132978346194844
 GameObject:
   m_ObjectHideFlags: 0

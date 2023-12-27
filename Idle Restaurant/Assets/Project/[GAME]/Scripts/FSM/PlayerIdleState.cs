@@ -6,7 +6,7 @@ public class PlayerIdleState : PlayerStates
 {
     public override void EnterState(PlayerFSM fsm)
     {
-        Debug.Log("IDLE");
+        //Debug.Log("IDLE");
         
         fsm.GetFoodFromSource();
         fsm.GetFood();

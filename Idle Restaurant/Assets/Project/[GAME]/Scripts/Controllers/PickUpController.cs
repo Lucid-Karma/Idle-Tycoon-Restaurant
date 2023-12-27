@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PickUpController //: Singleton<PickUpManager>
+public class PickUpController 
 {
     [HideInInspector]
     public GameObject currentPickedUpObject;
@@ -25,13 +25,13 @@ public class PickUpController //: Singleton<PickUpManager>
     {
         if(!isPickedUp)  return;
 
-        if(isCurrentObjEatable)
-            StackManager.Instance.Stack(currentPickedUpObject, _transform, refTransform);
-        else
-        {
-            currentPickedUpObject.transform.parent = _transform;
-            currentPickedUpObject.transform.position = _transform.position;
-        }
+        // if(isCurrentObjEatable)
+        //     StackManager.Instance.Stack(currentPickedUpObject, _transform, refTransform);
+        // else
+        // {
+        //     currentPickedUpObject.transform.parent = _transform;
+        //     currentPickedUpObject.transform.position = _transform.position;
+        // }
         
     
         isPickedUp = false;

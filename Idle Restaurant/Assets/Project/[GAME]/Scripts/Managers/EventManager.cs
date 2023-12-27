@@ -19,6 +19,9 @@ public static class EventManager
 
     public static UnityEvent OnObstacleCreated = new UnityEvent();
 
+    public static UnityEvent OnFoodHolded = new UnityEvent();
+    public static UnityEvent OnFoodDropped = new UnityEvent();
+
     public static UnityEvent OnPlayerStartedRunning = new UnityEvent();
 
     public static UnityEvent OnMusicOn = new UnityEvent();

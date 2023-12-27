@@ -6,7 +6,7 @@ public class PlayerWalkState : PlayerStates
 {
     public override void EnterState(PlayerFSM fsm)
     {
-        Debug.Log("WALK");
+        //Debug.Log("WALK");
     }
 
     public override void UpdateState(PlayerFSM fsm)

@@ -4,6 +4,7 @@ using UnityEngine;
 
 public abstract class EdibleBase : MonoBehaviour, IEdible
 {
+    public GameObject purePrefab;
     protected GameObject pure;
     protected GameObject prefab;
     //public Mesh slicedMesh;
@@ -15,13 +16,21 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     Transform hands;
 
     IPlaceable placeable;
+    protected DynamicFoodPool pool;
 
     void OnEnable()
     {
-        pure = this.gameObject;
         isLastPiece = true;
 
+        pool = new DynamicFoodPool();
+        pool.CreateFood(purePrefab);
+
         //GetComponent<MeshFilter>().sharedMesh = slicedMesh;
+    }
+
+    void Start()
+    {
+        pool.GetObject(this.gameObject.transform);
     }
 
     public void GetPlaceable(IPlaceable _placable)
@@ -31,13 +40,11 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     public void RemoveFromList()
     {
         if(placeable != null)
-            placeable.RemoveFoodFromPlate(this);
+            placeable.RemoveFood(this);
     }
 
     public virtual GameObject SetFood()
     {
-        if(prefab != null)  return prefab;
-
         return pure;
     }
 }

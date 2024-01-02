@@ -24,7 +24,7 @@ public class PlayerFSM : MonoBehaviour
     #endregion
 
     ISpawnable spawnable;
-    IPlaceable placeable;
+    PlaceableBase placeable;
     EdibleBase edible;
 
     #region Parameters
@@ -62,7 +62,7 @@ public class PlayerFSM : MonoBehaviour
             if(Physics.Raycast(ray, out hit, 100))
             {
                 spawnable = hit.collider.GetComponent<ISpawnable>();
-                placeable = hit.collider.GetComponent<IPlaceable>();
+                placeable = hit.collider.GetComponent<PlaceableBase>();
                 edible = hit.collider.GetComponent<EdibleBase>();
 
                 executingState = ExecutingState.WALK;
@@ -112,17 +112,18 @@ public class PlayerFSM : MonoBehaviour
 
         if(currentFood == null || !ingredient.isLastPiece) return;
 
+        ingredient.RemoveFromList();
         EventManager.OnFoodHolded.Invoke();
 
         currentFood.transform.parent = holdParent.transform;
         currentFood.transform.localRotation = Quaternion.identity;
         currentFood.transform.position = holdParent.transform.position;
 
-        ingredient.RemoveFromList();
+        //ingredient.RemoveFromList();
 
         isHolded = true;
     }
-    void DropObject(IPlaceable place)
+    void DropObject(PlaceableBase place)
     {
         if(isHolded)
         {

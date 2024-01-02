@@ -6,8 +6,15 @@ public class Burger : EdibleBase
 {
     public override GameObject SetFood()
     {
-        if(prefab != null)  return prefab;
-
         return pure;
+    }
+
+    private void EnableFood()
+    {
+
+    }
+    private void DisableFood()
+    {
+
     }
 }

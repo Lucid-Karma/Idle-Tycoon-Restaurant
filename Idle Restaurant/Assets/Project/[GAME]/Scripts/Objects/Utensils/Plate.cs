@@ -3,64 +3,53 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 
-public class Plate : MonoBehaviour, IPlaceable
+public class Plate : PlaceableBase
 {
     private List<EdibleBase> ingredients = new List<EdibleBase>();
     private int _ingredientsCount;
     private float distanceBetweenObjects;
     private Transform parentTransform { get; set; }
     private Transform refTransform { get; set; }
-    private BoxCollider plateCollider;
     Vector3 colSize, colCenter;
     [SerializeField] private GameObject hamburger;
     private bool doesHaveHamburger;
-    
-    void OnEnable()
-    {
-        EventManager.OnFoodHolded.AddListener(DisableCollider);
-        EventManager.OnFoodDropped.AddListener(() => plateCollider.enabled = false);
-    }
-    void OnDisable()
-    {
-        EventManager.OnFoodHolded.RemoveListener(DisableCollider);
-        EventManager.OnFoodDropped.RemoveListener(() => plateCollider.enabled = false);
-    }
-    private void DisableCollider()
+
+    public override void EnableCollider()
     {
         if(!doesHaveHamburger)
-            plateCollider.enabled = true;
+            placeableCollider.enabled = true;
     }
 
-    void Start()
+    public override void Start()
     {
         doesHaveHamburger = false;
 
         parentTransform = gameObject.transform;
         refTransform = gameObject.transform.GetChild(0).transform;
     
-        plateCollider = GetComponent<BoxCollider>();
-        colSize = plateCollider.size;
-        colCenter = plateCollider.center;
+        base.Start();
+        colSize = placeableCollider.size;
+        colCenter = placeableCollider.center;
     }
 
     private void ExtendCollider(GameObject stackedObj)
     {
-        plateCollider.size = new Vector3(plateCollider.size.x, plateCollider.size.y + stackedObj.transform.localScale.y / 2, plateCollider.size.z);
-        plateCollider.center = new Vector3(plateCollider.center.x, plateCollider.center.y + stackedObj.transform.localScale.y / 4, plateCollider.center.z);
+        placeableCollider.size = new Vector3(placeableCollider.size.x, placeableCollider.size.y + stackedObj.transform.localScale.y / 2, placeableCollider.size.z);
+        placeableCollider.center = new Vector3(placeableCollider.center.x, placeableCollider.center.y + stackedObj.transform.localScale.y / 4, placeableCollider.center.z);
     }
     private void CompressCollider()
     {
         _ingredientsCount = ingredients.Count;
 
-        plateCollider.size = new Vector3(plateCollider.size.x, plateCollider.size.y - (ingredients[_ingredientsCount-1].transform.localScale.y / 2), plateCollider.size.z);
-        plateCollider.center = new Vector3(plateCollider.center.x, plateCollider.center.y - ingredients[_ingredientsCount-1].transform.localScale.y / 4, plateCollider.center.z);
+        placeableCollider.size = new Vector3(placeableCollider.size.x, placeableCollider.size.y - (ingredients[_ingredientsCount-1].transform.localScale.y / 2), placeableCollider.size.z);
+        placeableCollider.center = new Vector3(placeableCollider.center.x, placeableCollider.center.y - ingredients[_ingredientsCount-1].transform.localScale.y / 4, placeableCollider.center.z);
     }
 
-    public void UseFood(EdibleBase ingredient) 
+    public override void UseFood(EdibleBase ingredient) 
     {
         if(doesHaveHamburger)   return;
 
-        if(ingredients.Count <= 6)
+        if(ingredients.Count <= 5)
         {
             _ingredientsCount = ingredients.Count;
 
@@ -88,9 +77,9 @@ public class Plate : MonoBehaviour, IPlaceable
 
             refTransform.position = ingredient.gameObject.transform.position;
 
-            if(ingredients.Count == 7)
+            if(ingredients.Count == 6)
             {
-                plateCollider.enabled = false;
+                placeableCollider.enabled = false;
                 GameObject obj = (GameObject)Instantiate(hamburger);
                 obj.transform.position = transform.position;
                 foreach (EdibleBase item in ingredients)
@@ -110,7 +99,7 @@ public class Plate : MonoBehaviour, IPlaceable
         }
     }
 
-    public void RemoveFoodFromPlate(EdibleBase ingredient)
+    public override void RemoveFood(EdibleBase ingredient)
     {
         ingredients.Remove(ingredient);
         if(ingredients.Count >= 1)
@@ -123,9 +112,9 @@ public class Plate : MonoBehaviour, IPlaceable
         {
             refTransform.position = gameObject.transform.position;
 
-            plateCollider.size = colSize;
-            plateCollider.center = colCenter;
-            plateCollider.enabled = true;
+            placeableCollider.size = colSize;
+            placeableCollider.center = colCenter;
+            placeableCollider.enabled = true;
 
             doesHaveHamburger = false;
         }

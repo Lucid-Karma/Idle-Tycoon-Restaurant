@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class FoodPool 
 {
-    protected List<GameObject> _pooledObjects = new List<GameObject>();
+    private List<GameObject> _pooledObjects = new List<GameObject>();
     private int _amountToPool = 15;
     public Transform spawnPosRef;
 

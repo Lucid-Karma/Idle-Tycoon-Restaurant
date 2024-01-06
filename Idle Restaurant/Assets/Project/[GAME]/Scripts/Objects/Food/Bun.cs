@@ -4,10 +4,20 @@ using UnityEngine;
 
 public class Bun : EdibleBase
 {
+    private List<GameObject> slicedBuns = new List<GameObject>();
+    [SerializeField] private GameObject bunSlice;
+
     public override GameObject SetFood()
     {
-        if(prefab != null)  return prefab;
+        currentVersion.SetActive(false);
+        pool.GetObject(this.gameObject.transform, bunSlice, slicedBuns);
+        currentVersion = pool.currentObject;
+        //currentVersion.SetActive(false);    // !!!
+        return currentVersion;
+    }
 
-        return pure;
+    public override bool IsBun()
+    {
+        return true;
     }
 }

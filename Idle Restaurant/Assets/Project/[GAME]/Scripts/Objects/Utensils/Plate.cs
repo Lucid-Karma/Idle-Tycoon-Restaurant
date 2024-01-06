@@ -10,9 +10,10 @@ public class Plate : PlaceableBase
     private float distanceBetweenObjects;
     private Transform parentTransform { get; set; }
     private Transform refTransform { get; set; }
-    Vector3 colSize, colCenter;
+    private Vector3 colSize, colCenter;
     [SerializeField] private GameObject hamburger;
     private bool doesHaveHamburger;
+    private bool doesHaveBun;
 
     public override void EnableCollider()
     {
@@ -23,6 +24,7 @@ public class Plate : PlaceableBase
     public override void Start()
     {
         doesHaveHamburger = false;
+        doesHaveBun = false;
 
         parentTransform = gameObject.transform;
         refTransform = gameObject.transform.GetChild(0).transform;
@@ -76,26 +78,8 @@ public class Plate : PlaceableBase
             ingredient.gameObject.transform.localPosition = desiredPos; 
 
             refTransform.position = ingredient.gameObject.transform.position;
-
-            if(ingredients.Count == 6)
-            {
-                placeableCollider.enabled = false;
-                GameObject obj = (GameObject)Instantiate(hamburger);
-                obj.transform.position = transform.position;
-                foreach (EdibleBase item in ingredients)
-                {
-                    item.gameObject.transform.parent = obj.transform;
-                    obj.GetComponent<Hamburger>().ExtendCollider(item.gameObject);
-                    item.gameObject.GetComponent<Collider>().enabled = false;
-                }
-                EdibleBase _hamburger = obj.GetComponent<EdibleBase>();
-                ingredients.Add(_hamburger);
-                _hamburger.GetPlaceable(this);
-                doesHaveHamburger = true;
-
-                ingredients.Clear();
-                refTransform.position = transform.position;
-            }
+            
+            GenerateHamburger(ingredient);
         }
     }
 
@@ -117,6 +101,39 @@ public class Plate : PlaceableBase
             placeableCollider.enabled = true;
 
             doesHaveHamburger = false;
+        }
+    }
+
+    private void GenerateHamburger(EdibleBase ingredient)
+    {
+        if(ingredients.Count == 6)
+        {
+            placeableCollider.enabled = false;
+            GameObject obj = (GameObject)Instantiate(hamburger);
+            obj.transform.position = transform.position;
+            Hamburger _justHamburger = obj.GetComponent<Hamburger>();
+            foreach (EdibleBase item in ingredients)
+            {
+                item.gameObject.transform.parent = obj.transform;
+                obj.GetComponent<Hamburger>().ExtendCollider(item.gameObject);
+                item.gameObject.GetComponent<Collider>().enabled = false;
+
+                if(ingredient.IsBun())  doesHaveBun = true;
+            }
+            if(doesHaveBun == true)
+            {
+                _justHamburger.PutLastBun(refTransform);
+                Debug.Log("have bun");
+            }
+                
+
+            EdibleBase _hamburger = obj.GetComponent<EdibleBase>();
+            ingredients.Add(_hamburger);
+            _hamburger.GetPlaceable(this);
+            doesHaveHamburger = true;
+
+            ingredients.Clear();
+            refTransform.position = transform.position;
         }
     }
 }

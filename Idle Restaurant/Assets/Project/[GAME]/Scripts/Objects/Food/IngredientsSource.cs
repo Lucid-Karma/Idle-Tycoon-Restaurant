@@ -4,22 +4,20 @@ using UnityEngine;
 
 public class IngredientsSource : MonoBehaviour, ISpawnable
 {
+    private List<GameObject> spawnPrefabList = new List<GameObject>();
     [SerializeField] private GameObject spawnPrefab;
-    private FoodPool foodPool;
-
-    void Awake()
-    {
-        foodPool = new FoodPool();
-        foodPool.FillPool(spawnPrefab);
-    }
+    private DynamicFoodPool dynamicPool;
+    private Transform playerTransform;
 
     void Start()
     {
-        foodPool.spawnPosRef = GameObject.FindWithTag("Player").GetComponent<Transform>();
+        dynamicPool = new DynamicFoodPool();
+    
+        playerTransform = GameObject.FindWithTag("Player").GetComponent<Transform>();
     }
 
     public void Spawn()
-    {
-        foodPool.GetObject();
+    {   
+        dynamicPool.GetObject(playerTransform, spawnPrefab, spawnPrefabList);
     }
 }

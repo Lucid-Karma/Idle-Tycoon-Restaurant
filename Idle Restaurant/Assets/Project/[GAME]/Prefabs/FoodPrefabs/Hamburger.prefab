@@ -50,6 +50,7 @@ MonoBehaviour:
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
+  finishBun: {fileID: 919132149155446097, guid: c46cd77982d081d49804545b9a449660, type: 3}
 --- !u!65 &4041958219378826030
 BoxCollider:
   m_ObjectHideFlags: 0

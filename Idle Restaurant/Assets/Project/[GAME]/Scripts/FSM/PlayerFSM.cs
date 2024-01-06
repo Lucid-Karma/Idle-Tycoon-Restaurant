@@ -70,8 +70,6 @@ public class PlayerFSM : MonoBehaviour
                 distance = Vector3.Distance(Agent.transform.position, hit.point);
                 if(distance > 3.0f)
                     Agent.SetDestination(hit.point);
-
-                Debug.Log(hit.collider.gameObject.name);
             }
         }
     }
@@ -119,8 +117,6 @@ public class PlayerFSM : MonoBehaviour
         currentFood.transform.localRotation = Quaternion.identity;
         currentFood.transform.position = holdParent.transform.position;
 
-        //ingredient.RemoveFromList();
-
         isHolded = true;
     }
     void DropObject(PlaceableBase place)
@@ -135,7 +131,6 @@ public class PlayerFSM : MonoBehaviour
             currentFood = null;
 
             isHolded = false;
-            Debug.Log("dropped");
         }
     }
     #endregion

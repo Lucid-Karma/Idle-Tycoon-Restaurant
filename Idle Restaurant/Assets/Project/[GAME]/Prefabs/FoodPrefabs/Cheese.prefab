@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6030084736041286373}
   - component: {fileID: 5215302482571577605}
-  - component: {fileID: 5123821919944357947}
+  - component: {fileID: 5721089912672962982}
   m_Layer: 0
   m_Name: Cheese
   m_TagString: Untagged
@@ -46,7 +46,7 @@ BoxCollider:
   serializedVersion: 2
   m_Size: {x: 0.97660375, y: 0.5, z: 0.72198963}
   m_Center: {x: -0.15326798, y: 0.25, z: 0.0020340234}
---- !u!114 &5123821919944357947
+--- !u!114 &5721089912672962982
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}

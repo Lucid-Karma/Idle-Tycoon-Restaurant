@@ -58,8 +58,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2e736b49849c1914db63907042b3283d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  purePrefab: {fileID: 919132149155446097, guid: 8b86c44018ece984081c362c999c0561, type: 3}
+  purePrefab: {fileID: 1199679678561101911, guid: 7b1aee443d9b8034d94b011318e91f81, type: 3}
   ingredientPos: {x: 0, y: 0, z: 0}
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
+  cookedBurger: {fileID: 919132149155446097, guid: 0a7782d92e874f343b82bef30d49aea6, type: 3}
+  overcookedBurger: {fileID: 919132149155446097, guid: f23698cdc551e92479cbf4baebe52a61, type: 3}

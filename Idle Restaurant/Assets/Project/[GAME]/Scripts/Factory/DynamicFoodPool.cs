@@ -1,44 +1,40 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public class DynamicFoodPool 
 {
-    private List<GameObject> _pooledObjects = new List<GameObject>();
+    private List<GameObject> _pooledObjects = new();
     private GameObject poolObject;
-
-    public void CreateFood(GameObject _objectToPool)
-    {
-        poolObject = _objectToPool;
-
-        GameObject obj = Object.Instantiate(poolObject);
-        obj.SetActive(false); 
-        _pooledObjects.Add(obj);
-    }
+    public GameObject currentObject;
 
     private GameObject ExpandPool()
     {
         GameObject obj = Object.Instantiate(poolObject);
-        obj.SetActive(false); 
         _pooledObjects.Add(obj);
         return obj;
     }
 
     private GameObject GetPooledObject() 
     {
-        for (int i = 0; i < _pooledObjects.Count; i++) 
+        if (_pooledObjects != null)
         {
-            if (!_pooledObjects[i].activeInHierarchy) 
+            for (int i = 0; i < _pooledObjects.Count; i++) 
             {
-                return _pooledObjects[i];
+                if (!_pooledObjects[i].activeInHierarchy) 
+                {
+                    return _pooledObjects[i];
+                }
             }
         }
-        
         return ExpandPool();
     }
 
-    public void GetObject(Transform spawnTransform)   
+    public void GetObject(Transform spawnTransform, GameObject desiredObject, List<GameObject> desiredList)   
     {
+        poolObject = desiredObject;
+        _pooledObjects = desiredList;
         GameObject ingredient = GetPooledObject();
 
         if(ingredient != null)
@@ -48,5 +44,6 @@ public class DynamicFoodPool
             ingredient.transform.position = spawnTransform.position;
             ingredient.SetActive(true);
         }
+        currentObject = ingredient;
     }
 }

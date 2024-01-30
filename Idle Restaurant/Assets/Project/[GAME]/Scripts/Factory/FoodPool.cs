@@ -34,7 +34,6 @@ public class FoodPool
     public void GetObject()   
     {
         GameObject ingredient = GetPooledObject();
-        Debug.Log("ingredientBase has been created.");
 
         if(ingredient != null)
         {

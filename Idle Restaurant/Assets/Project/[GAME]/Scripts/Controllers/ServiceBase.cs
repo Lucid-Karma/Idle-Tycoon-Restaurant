@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class ChoppingBoard : NonStackBase
+public class ServiceBase : NonStackBase
 {
     public override void UseFood(EdibleBase ingredient)
     {

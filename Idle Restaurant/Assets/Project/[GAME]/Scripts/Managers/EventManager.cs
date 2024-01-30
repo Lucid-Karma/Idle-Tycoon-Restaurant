@@ -19,6 +19,8 @@ public static class EventManager
 
     public static UnityEvent OnObstacleCreated = new UnityEvent();
 
+    //public static HamburgerEvent OnHamburgerPrep = new HamburgerEvent();
+
     public static UnityEvent OnFoodHolded = new UnityEvent();
     public static UnityEvent OnFoodDropped = new UnityEvent();
 
@@ -27,3 +29,5 @@ public static class EventManager
     public static UnityEvent OnMusicOn = new UnityEvent();
     public static UnityEvent OnMusicOff = new UnityEvent();
 }
+
+//public class HamburgerEvent : UnityEvent<Transform> { }

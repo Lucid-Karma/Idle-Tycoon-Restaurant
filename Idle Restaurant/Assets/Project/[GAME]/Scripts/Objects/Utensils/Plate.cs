@@ -8,11 +8,12 @@ public class Plate : PlaceableBase
     private List<EdibleBase> ingredients = new List<EdibleBase>();
     private int _ingredientsCount;
     private float distanceBetweenObjects;
-    private Transform parentTransform { get; set; }
-    private Transform refTransform { get; set; }
-    Vector3 colSize, colCenter;
+    private Transform parentTransform;
+    private Transform refTransform;
+    private Vector3 colSize, colCenter;
     [SerializeField] private GameObject hamburger;
     private bool doesHaveHamburger;
+    private Transform bunSpawnTransform;
 
     public override void EnableCollider()
     {
@@ -26,7 +27,7 @@ public class Plate : PlaceableBase
 
         parentTransform = gameObject.transform;
         refTransform = gameObject.transform.GetChild(0).transform;
-    
+
         base.Start();
         colSize = placeableCollider.size;
         colCenter = placeableCollider.center;
@@ -49,7 +50,7 @@ public class Plate : PlaceableBase
     {
         if(doesHaveHamburger)   return;
 
-        if(ingredients.Count <= 5)
+        if(ingredients.Count <= 2)
         {
             _ingredientsCount = ingredients.Count;
 
@@ -76,26 +77,8 @@ public class Plate : PlaceableBase
             ingredient.gameObject.transform.localPosition = desiredPos; 
 
             refTransform.position = ingredient.gameObject.transform.position;
-
-            if(ingredients.Count == 6)
-            {
-                placeableCollider.enabled = false;
-                GameObject obj = (GameObject)Instantiate(hamburger);
-                obj.transform.position = transform.position;
-                foreach (EdibleBase item in ingredients)
-                {
-                    item.gameObject.transform.parent = obj.transform;
-                    obj.GetComponent<Hamburger>().ExtendCollider(item.gameObject);
-                    item.gameObject.GetComponent<Collider>().enabled = false;
-                }
-                EdibleBase _hamburger = obj.GetComponent<EdibleBase>();
-                ingredients.Add(_hamburger);
-                _hamburger.GetPlaceable(this);
-                doesHaveHamburger = true;
-
-                ingredients.Clear();
-                refTransform.position = transform.position;
-            }
+            
+            GenerateHamburger(ingredient);
         }
     }
 
@@ -117,6 +100,41 @@ public class Plate : PlaceableBase
             placeableCollider.enabled = true;
 
             doesHaveHamburger = false;
+        }
+    }
+
+    private void GenerateHamburger(EdibleBase ingredient)
+    {
+        if(ingredients.Count == 3)
+        {
+            placeableCollider.enabled = false;
+            PoolingManager.HamburgerPool.GetObject(transform, hamburger, PoolingManager.HamburgerList);
+            GameObject obj = PoolingManager.HamburgerPool.currentObject;
+            Hamburger _hamburger = obj.GetComponent<Hamburger>();
+            foreach (EdibleBase item in ingredients)
+            {
+                item.gameObject.transform.parent = obj.transform;
+                _hamburger.ExtendCollider(item.gameObject);
+                item.gameObject.GetComponent<Collider>().enabled = false;
+            }
+            if(ingredients.Any(x => x.IsBun()))
+            {
+                bunSpawnTransform = _hamburger.bunHolder.transform;
+                Collider hamCollider = _hamburger.gameObject.GetComponent<Collider>();
+                Vector3 hamPos = hamCollider.bounds.center;
+                float yOffset = (ingredient.gameObject.transform.localScale.y / 2) + 0.2f;
+                Vector3 spawnPos = new Vector3(hamPos.x, hamPos.y + yOffset, hamPos.z);
+                bunSpawnTransform.position = spawnPos;
+                _hamburger.PutLastBun(bunSpawnTransform);
+            }
+
+            EdibleBase _edibleHam = obj.GetComponent<EdibleBase>();
+            ingredients.Add(_edibleHam);
+            _edibleHam.GetPlaceable(this);
+            doesHaveHamburger = true;
+
+            ingredients.Clear();
+            refTransform.position = transform.position;
         }
     }
 }

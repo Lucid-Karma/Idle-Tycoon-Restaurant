@@ -5,12 +5,15 @@ public class Hamburger : EdibleBase
 {
     private BoxCollider hamCollider;
     [SerializeField] private GameObject finishBun;
-    private List<GameObject> bunList = new List<GameObject>();
+    public GameObject bunHolder;
 
-    // void Start()
-    // {
-    //     hamCollider = GetComponent<BoxCollider>();
-    // }
+    public override void Start()
+    {
+        pool = PoolingManager.hamburgerPool;
+        pureList = PoolingManager.plateList;
+
+        base.Start();
+    }
 
     public void ExtendCollider(GameObject stackedObj)
     {
@@ -22,9 +25,8 @@ public class Hamburger : EdibleBase
 
     public void PutLastBun(Transform bunTransform)
     {
-        pool.GetObject(bunTransform, finishBun, bunList);
+        pool.GetObject(bunTransform, finishBun, PoolingManager.bunTopList);
         ExtendCollider(finishBun);
-        Debug.Log("last bun putted");
     }
 
     public override GameObject SetFood()

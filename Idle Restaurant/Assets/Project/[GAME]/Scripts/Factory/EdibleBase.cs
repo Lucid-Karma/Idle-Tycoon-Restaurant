@@ -8,7 +8,6 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     protected GameObject pure;
     protected GameObject prefab;
     protected GameObject currentVersion;
-    //public Mesh slicedMesh;
     private bool isHolded;
     [HideInInspector] public Vector3 ingredientPos;
     [HideInInspector] public bool isAdded = false;
@@ -16,16 +15,15 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     [HideInInspector] public bool isLastPiece;
     Transform hands;
 
-    IPlaceable placeable;
+    protected PlaceableBase placeable;
     protected DynamicFoodPool pool = new DynamicFoodPool();
     protected List<GameObject> pureList = new List<GameObject>();
 
-    // void Awake()
-    // {
-    //     //GetComponent<MeshFilter>().sharedMesh = slicedMesh;
-    // }
-
     public virtual void Start()
+    {
+        SetStarterVersion();
+    }
+    protected void SetStarterVersion()
     {
         isLastPiece = true;
 
@@ -33,7 +31,7 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
         currentVersion = pool.currentObject;
     }
 
-    public void GetPlaceable(IPlaceable _placable)
+    public void GetPlaceable(PlaceableBase _placable)
     {
         placeable = _placable;
     }
@@ -41,11 +39,17 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     {
         if(placeable != null)
             placeable.RemoveFood(this);
+
+        LeavePlaceable();
+    }
+    public virtual void LeavePlaceable()
+    {
+        placeable = null;
     }
 
     public virtual GameObject SetFood()
     {
-        return pure;
+        return currentVersion;
     }
 
     public virtual bool IsBun()

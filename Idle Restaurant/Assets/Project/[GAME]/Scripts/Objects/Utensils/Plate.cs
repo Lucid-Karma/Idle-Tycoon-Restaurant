@@ -8,12 +8,12 @@ public class Plate : PlaceableBase
     private List<EdibleBase> ingredients = new List<EdibleBase>();
     private int _ingredientsCount;
     private float distanceBetweenObjects;
-    private Transform parentTransform { get; set; }
-    private Transform refTransform { get; set; }
+    private Transform parentTransform;
+    private Transform refTransform;
     private Vector3 colSize, colCenter;
     [SerializeField] private GameObject hamburger;
     private bool doesHaveHamburger;
-    private bool doesHaveBun;
+    private Transform bunSpawnTransform;
 
     public override void EnableCollider()
     {
@@ -24,11 +24,10 @@ public class Plate : PlaceableBase
     public override void Start()
     {
         doesHaveHamburger = false;
-        doesHaveBun = false;
 
         parentTransform = gameObject.transform;
         refTransform = gameObject.transform.GetChild(0).transform;
-    
+
         base.Start();
         colSize = placeableCollider.size;
         colCenter = placeableCollider.center;
@@ -51,7 +50,7 @@ public class Plate : PlaceableBase
     {
         if(doesHaveHamburger)   return;
 
-        if(ingredients.Count <= 5)
+        if(ingredients.Count <= 2)
         {
             _ingredientsCount = ingredients.Count;
 
@@ -106,30 +105,32 @@ public class Plate : PlaceableBase
 
     private void GenerateHamburger(EdibleBase ingredient)
     {
-        if(ingredients.Count == 6)
+        if(ingredients.Count == 3)
         {
             placeableCollider.enabled = false;
-            GameObject obj = (GameObject)Instantiate(hamburger);
-            obj.transform.position = transform.position;
-            Hamburger _justHamburger = obj.GetComponent<Hamburger>();
+            PoolingManager.HamburgerPool.GetObject(transform, hamburger, PoolingManager.HamburgerList);
+            GameObject obj = PoolingManager.HamburgerPool.currentObject;
+            Hamburger _hamburger = obj.GetComponent<Hamburger>();
             foreach (EdibleBase item in ingredients)
             {
                 item.gameObject.transform.parent = obj.transform;
-                obj.GetComponent<Hamburger>().ExtendCollider(item.gameObject);
+                _hamburger.ExtendCollider(item.gameObject);
                 item.gameObject.GetComponent<Collider>().enabled = false;
-
-                if(ingredient.IsBun())  doesHaveBun = true;
             }
-            if(doesHaveBun == true)
+            if(ingredients.Any(x => x.IsBun()))
             {
-                _justHamburger.PutLastBun(refTransform);
-                Debug.Log("have bun");
+                bunSpawnTransform = _hamburger.bunHolder.transform;
+                Collider hamCollider = _hamburger.gameObject.GetComponent<Collider>();
+                Vector3 hamPos = hamCollider.bounds.center;
+                float yOffset = (ingredient.gameObject.transform.localScale.y / 2) + 0.2f;
+                Vector3 spawnPos = new Vector3(hamPos.x, hamPos.y + yOffset, hamPos.z);
+                bunSpawnTransform.position = spawnPos;
+                _hamburger.PutLastBun(bunSpawnTransform);
             }
-                
 
-            EdibleBase _hamburger = obj.GetComponent<EdibleBase>();
-            ingredients.Add(_hamburger);
-            _hamburger.GetPlaceable(this);
+            EdibleBase _edibleHam = obj.GetComponent<EdibleBase>();
+            ingredients.Add(_edibleHam);
+            _edibleHam.GetPlaceable(this);
             doesHaveHamburger = true;
 
             ingredients.Clear();

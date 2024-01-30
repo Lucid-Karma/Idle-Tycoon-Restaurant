@@ -5,29 +5,14 @@ using System.Linq;
 
 public class DynamicFoodPool 
 {
-    //private List<List<GameObject>> _mainList = new List<List<GameObject>>();
-    private List<GameObject> _pooledObjects = new List<GameObject>();
+    private List<GameObject> _pooledObjects = new();
     private GameObject poolObject;
     public GameObject currentObject;
-
-    // public void CreateFood(GameObject _objectToPool, List<GameObject> objectList)
-    // {
-    //     _pooledObjects = objectList;
-    //     poolObject = _objectToPool;
-
-    //     GameObject obj = Object.Instantiate(poolObject);
-    //     obj.SetActive(false); 
-    //     _pooledObjects.Add(obj);
-    //     _mainList.Add(_pooledObjects);
-    //     Debug.Log("created: " + poolObject.name);
-    // }
 
     private GameObject ExpandPool()
     {
         GameObject obj = Object.Instantiate(poolObject);
-        obj.SetActive(false); 
         _pooledObjects.Add(obj);
-        Debug.Log("recreated " + poolObject.name);
         return obj;
     }
 
@@ -43,7 +28,6 @@ public class DynamicFoodPool
                 }
             }
         }
-        Debug.Log("pool is NULL");
         return ExpandPool();
     }
 
@@ -60,7 +44,6 @@ public class DynamicFoodPool
             ingredient.transform.position = spawnTransform.position;
             ingredient.SetActive(true);
         }
-        Debug.Log(desiredObject.name);
         currentObject = ingredient;
     }
 }

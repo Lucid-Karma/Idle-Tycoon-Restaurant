@@ -16,7 +16,7 @@ public class Bun : EdibleBase
 
     public override void Start()
     {
-        maxCookingTime = 3.0f;
+        maxCookingTime = 10.0f;
         isOver = false;
 
         isSlicedBun = false;

@@ -26,4 +26,9 @@ public class NonStackBase : PlaceableBase
     {
         currentObject = null;
     }
+
+    public override bool IsSuitable(EdibleBase ingredient)
+    {
+        return true;
+    }
 }

@@ -137,4 +137,9 @@ public class Plate : PlaceableBase
             refTransform.position = transform.position;
         }
     }
+
+    public override bool IsSuitable(EdibleBase ingredient)
+    {
+        return true;
+    }
 }

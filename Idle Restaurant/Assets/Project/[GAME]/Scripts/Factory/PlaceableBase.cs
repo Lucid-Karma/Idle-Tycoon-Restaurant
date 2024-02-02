@@ -26,4 +26,6 @@ public abstract class PlaceableBase : MonoBehaviour, IPlaceable
     public abstract void UseFood(EdibleBase ingredient);
 
     public abstract void RemoveFood(EdibleBase ingredient);
+
+    public abstract bool IsSuitable(EdibleBase ingredient);
 }

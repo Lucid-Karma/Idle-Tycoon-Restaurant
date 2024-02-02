@@ -2,8 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Onion : EdibleBase
+public class Onion : CuttableBase
 {
+    [SerializeField] private GameObject slicedOnion;
+
     public override void Start()
     {
         pool = PoolingManager.onionPool;
@@ -12,10 +14,10 @@ public class Onion : EdibleBase
         base.Start();
     }
 
-    public override GameObject SetFood()
+    public override void SetSliced()
     {
-        if(prefab != null)  return prefab;
-
-        return pure;
+        base.SetSliced();
+        pool.GetObject(this.gameObject.transform, slicedOnion, PoolingManager.onionSlicedList);
+        currentVersion = pool.currentObject;
     }
 }

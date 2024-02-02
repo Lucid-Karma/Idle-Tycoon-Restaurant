@@ -2,8 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Cheese : EdibleBase
+public class Cheese : CuttableBase
 {
+    [SerializeField] private GameObject slicedCheese;
+
     public override void Start()
     {
         pool = PoolingManager.cheesePool;
@@ -12,10 +14,10 @@ public class Cheese : EdibleBase
         base.Start();
     }
 
-    public override GameObject SetFood()
+    public override void SetSliced()
     {
-        if(prefab != null)  return prefab;
-
-        return pure;
+        base.SetSliced();
+        pool.GetObject(this.gameObject.transform, slicedCheese, PoolingManager.cheeseSlicedList);
+        currentVersion = pool.currentObject;
     }
 }

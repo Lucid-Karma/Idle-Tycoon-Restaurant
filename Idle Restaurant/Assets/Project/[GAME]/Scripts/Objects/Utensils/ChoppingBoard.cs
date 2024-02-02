@@ -4,12 +4,37 @@ using UnityEngine;
 
 public class ChoppingBoard : NonStackBase
 {
+    Animator animator;
+    Animator Animator { get { return (animator == null)? animator = GetComponent<Animator>(): animator; }}
+
+    CuttableBase foodToCut;
+
     public override void UseFood(EdibleBase ingredient)
     {
-        currentObject = ingredient.SetFood();
-        ingredient.GetPlaceable(this);
+        foodToCut = ingredient.gameObject.GetComponent<CuttableBase>();
+        if(!IsSuitable(ingredient)) return;
+        base.UseFood(ingredient);
 
-        ingredient.gameObject.transform.parent = transform;
-        ingredient.gameObject.transform.position = transform.position;
+        foodToCut.gameObject.GetComponent<Collider>().enabled = false;
+        
+        Animator.SetTrigger("Chop");
+    }
+
+    public void ChopFood()
+    {
+        Animator.SetTrigger("Idle");
+
+        if(foodToCut != null)
+        {
+            foodToCut.SetSliced();
+        }
+
+        foodToCut.gameObject.GetComponent<Collider>().enabled = true;
+    }
+
+    public override bool IsSuitable(EdibleBase ingredient)
+    {
+        if(ingredient != foodToCut)    return false;
+        else    return true;
     }
 }

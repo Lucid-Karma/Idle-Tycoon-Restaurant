@@ -2,8 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Tomato : EdibleBase
+public class Tomato : CuttableBase
 {
+    [SerializeField] private GameObject slicedTomato;
+
     public override void Start()
     {
         pool = PoolingManager.tomatoPool;
@@ -12,15 +14,10 @@ public class Tomato : EdibleBase
         base.Start();
     }
 
-    public override GameObject SetFood()
+    public override void SetSliced()
     {
-        if(prefab != null)  return prefab;
-
-        return pure;
+        base.SetSliced();
+        pool.GetObject(this.gameObject.transform, slicedTomato, PoolingManager.tomatoSlicedList);
+        currentVersion = pool.currentObject;
     }
-
-    // public override void RemoveFood(List<GameObject> food)
-    // {
-    //     food.Remove(gameObject);
-    // }
 }

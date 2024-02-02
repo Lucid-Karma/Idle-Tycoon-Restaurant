@@ -63,3 +63,4 @@ MonoBehaviour:
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
+  slicedTomato: {fileID: 919132149155446097, guid: 281a3d6454c2a624fa951a6e3ffe6976, type: 3}

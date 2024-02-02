@@ -33,8 +33,10 @@ public class Pan : CookingBase
 
     public override void UseFood(EdibleBase ingredient)
     {
-        base.UseFood(ingredient);
         burger = ingredient.gameObject.GetComponent<Burger>();
+        if(!IsSuitable(ingredient)) return;
+
+        base.UseFood(ingredient);
         cookingTimer = burger.fryingTimer;
 
         if(!burger.isOver)   state = State.Cook;
@@ -46,5 +48,11 @@ public class Pan : CookingBase
         burger.fryingTimer = cookingTimer;
         base.RemoveFood(ingredient);
         state = State.Idle;
+    }
+
+    public override bool IsSuitable(EdibleBase ingredient)
+    {
+        if(ingredient != burger)    return false;
+        else    return true;
     }
 }

@@ -63,3 +63,4 @@ MonoBehaviour:
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
+  slicedOnion: {fileID: 919132149155446097, guid: a94c68957739b5e4fabcc155452041b9, type: 3}

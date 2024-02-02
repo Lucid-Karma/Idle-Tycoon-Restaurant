@@ -126,6 +126,7 @@ public class PlayerFSM : MonoBehaviour
             if(currentFood == null) return;
 
             place?.UseFood(currentFood);
+            if(!place.IsSuitable(currentFood)) return;
             EventManager.OnFoodDropped.Invoke();
 
             currentFood = null;

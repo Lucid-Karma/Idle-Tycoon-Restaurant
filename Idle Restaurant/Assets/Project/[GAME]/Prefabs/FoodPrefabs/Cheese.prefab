@@ -16,7 +16,7 @@ GameObject:
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
-  m_StaticEditorFlags: 2147483647
+  m_StaticEditorFlags: 0
   m_IsActive: 1
 --- !u!4 &6030084736041286373
 Transform:
@@ -63,3 +63,4 @@ MonoBehaviour:
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
+  slicedCheese: {fileID: 919132149155446097, guid: 6aad7eebed07db34d83fb31016021ec7, type: 3}

@@ -30,4 +30,22 @@ public class Oven : CookingBase
             }
         }
     }
+
+    public override void UseFood(EdibleBase ingredient)
+    {
+        bun = ingredient.gameObject.GetComponent<Bun>();
+        if(!IsSuitable(ingredient)) return;
+
+        base.UseFood(ingredient);
+        cookingTimer = bun.bakeTimer;
+
+        if(!bun.isOver)   state = State.Cook;
+        Debug.Log("pre: " + cookingTimer);
+    }
+
+    public override bool IsSuitable(EdibleBase ingredient)
+    {
+        if(ingredient != bun)    return false;
+        else    return true;
+    }
 }

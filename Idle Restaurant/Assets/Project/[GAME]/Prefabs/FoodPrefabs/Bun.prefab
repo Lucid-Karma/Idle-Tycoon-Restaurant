@@ -64,3 +64,6 @@ MonoBehaviour:
   totalPoint: 0
   isLastPiece: 0
   bunSlice: {fileID: 919132149155446097, guid: 4af5f34694eb0d443a07ec0c6dcd900a, type: 3}
+  maxCookingTime: 0
+  bakeTimer: 0
+  isOver: 0

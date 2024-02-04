@@ -9,7 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3169401904338222945}
-  - component: {fileID: 7404176877041309685}
+  - component: {fileID: 5796642119314575467}
   - component: {fileID: -654149545403818}
   m_Layer: 0
   m_Name: Tomato
@@ -33,8 +33,8 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!135 &7404176877041309685
-SphereCollider:
+--- !u!65 &5796642119314575467
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -44,8 +44,8 @@ SphereCollider:
   m_IsTrigger: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.3750001
-  m_Center: {x: 0, y: 0.3499986, z: 0.000000014901161}
+  m_Size: {x: 0.7500002, y: 0.66439044, z: 0.7500001}
+  m_Center: {x: 0, y: 0.3321938, z: 8.2692015e-16}
 --- !u!114 &-654149545403818
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -63,4 +63,5 @@ MonoBehaviour:
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
+  collider: {fileID: 0}
   slicedTomato: {fileID: 919132149155446097, guid: 281a3d6454c2a624fa951a6e3ffe6976, type: 3}

@@ -15,18 +15,22 @@ public class Hamburger : EdibleBase
         base.Start();
     }
 
-    public void ExtendCollider(GameObject stackedObj)
+    public void ExtendCollider(EdibleBase stackedObj)
     {
         hamCollider = GetComponent<BoxCollider>();
 
-        hamCollider.size = new Vector3(hamCollider.size.x, hamCollider.size.y + stackedObj.transform.localScale.y / 2, hamCollider.size.z);
-        hamCollider.center = new Vector3(hamCollider.center.x, hamCollider.center.y + stackedObj.transform.localScale.y / 4, hamCollider.center.z);
+        hamCollider.size = new Vector3(hamCollider.size.x, hamCollider.size.y + stackedObj.collider.size.y, hamCollider.size.z);
+        hamCollider.center = new Vector3(hamCollider.center.x, hamCollider.center.y + stackedObj.collider.center.y, hamCollider.center.z);
     }
 
     public void PutLastBun(Transform bunTransform)
     {
         pool.GetObject(bunTransform, finishBun, PoolingManager.bunTopList);
-        ExtendCollider(finishBun);
+        
+        hamCollider = GetComponent<BoxCollider>();
+
+        hamCollider.size = new Vector3(hamCollider.size.x, hamCollider.size.y + 0.3071972f, hamCollider.size.z);
+        hamCollider.center = new Vector3(hamCollider.center.x, hamCollider.center.y + 0.1536008f, hamCollider.center.z);
     }
 
     public override GameObject SetFood()

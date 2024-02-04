@@ -56,7 +56,8 @@ public class Plate : PlaceableBase
 
             if(_ingredientsCount >= 1)
             {
-                distanceBetweenObjects = (ingredients[_ingredientsCount-1].gameObject.transform.localScale.y / 2);
+                distanceBetweenObjects = (ingredients[_ingredientsCount-1].collider.size.y);
+                // distanceBetweenObjects = (ingredients[_ingredientsCount-1].gameObject.transform.localScale.y / 2);
                 ingredients.Last().isLastPiece = false;
                 
                 //Debug.Log("local:" + ingredients[_ingredientsCount-1].transform.lossyScale.y / 2 + " \nlossy:" + ingredients[_ingredientsCount-1].transform.localScale.y / 2);
@@ -114,7 +115,7 @@ public class Plate : PlaceableBase
             foreach (EdibleBase item in ingredients)
             {
                 item.gameObject.transform.parent = obj.transform;
-                _hamburger.ExtendCollider(item.gameObject);
+                _hamburger.ExtendCollider(item);
                 item.gameObject.GetComponent<Collider>().enabled = false;
             }
             if(ingredients.Any(x => x.IsBun()))
@@ -122,7 +123,8 @@ public class Plate : PlaceableBase
                 bunSpawnTransform = _hamburger.bunHolder.transform;
                 Collider hamCollider = _hamburger.gameObject.GetComponent<Collider>();
                 Vector3 hamPos = hamCollider.bounds.center;
-                float yOffset = (ingredient.gameObject.transform.localScale.y / 2) + 0.2f;
+                // float yOffset = (ingredient.gameObject.transform.localScale.y / 2) + 0.2f;
+                float yOffset = ingredient.collider.size.y;
                 Vector3 spawnPos = new Vector3(hamPos.x, hamPos.y + yOffset, hamPos.z);
                 bunSpawnTransform.position = spawnPos;
                 _hamburger.PutLastBun(bunSpawnTransform);

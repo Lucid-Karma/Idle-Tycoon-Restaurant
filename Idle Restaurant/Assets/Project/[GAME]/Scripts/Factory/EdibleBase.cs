@@ -15,12 +15,20 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     [HideInInspector] public bool isLastPiece;
     Transform hands;
 
+    public new BoxCollider collider;
+    protected Vector3 colSize;
+    protected Vector3 colCenter;
+
     protected PlaceableBase placeable;
     protected DynamicFoodPool pool = new DynamicFoodPool();
     protected List<GameObject> pureList = new List<GameObject>();
 
     public virtual void Start()
     {
+        collider = GetComponent<BoxCollider>();
+        colSize = collider.size;
+        colCenter = collider.center;
+
         SetStarterVersion();
     }
     protected void SetStarterVersion()
@@ -55,5 +63,11 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     public virtual bool IsBun()
     {
         return false;
+    }
+
+    protected virtual void OnDisable()
+    {
+        colSize = collider.size;
+        colCenter = collider.center;
     }
 }

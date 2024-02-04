@@ -57,8 +57,9 @@ public class Burger : EdibleBase
             SetStarterVersion();
         }
     }
-    void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         _currentBurgerState = 0;  
         fryingTimer = 0f;
         isOver = false;

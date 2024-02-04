@@ -5,6 +5,8 @@ using UnityEngine;
 public class Bun : EdibleBase
 {
     [SerializeField] private GameObject bunSlice;
+    private Vector3 slicedBunColSize = new Vector3(0.693757f, 0.2f, 0.693757f);
+    private Vector3 slicedBunColCenter = new Vector3(0f, 0.1f, 0f);
     private bool isSlicedBun;
 
     #region Bake
@@ -50,6 +52,8 @@ public class Bun : EdibleBase
         currentVersion.SetActive(false);
         pool.GetObject(this.gameObject.transform, bunSlice, PoolingManager.bunBottomList);
         currentVersion = pool.currentObject;
+        collider.size = slicedBunColSize;
+        collider.center = slicedBunColCenter;
         isSlicedBun = true;
         return currentVersion;
     }
@@ -59,8 +63,10 @@ public class Bun : EdibleBase
         return isSlicedBun? true: false;
     }
 
-    void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
+        
         _currentBunState = 0;  
         bakeTimer = 0f;
         isOver = false;

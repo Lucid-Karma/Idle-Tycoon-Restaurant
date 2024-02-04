@@ -14,10 +14,12 @@ public class ChoppingBoard : NonStackBase
         foodToCut = ingredient.gameObject.GetComponent<CuttableBase>();
         if(!IsSuitable(ingredient)) return;
         base.UseFood(ingredient);
-
-        foodToCut.gameObject.GetComponent<Collider>().enabled = false;
         
-        Animator.SetTrigger("Chop");
+        if(!foodToCut.isSliced)
+        {
+            foodToCut.gameObject.GetComponent<Collider>().enabled = false;
+            Animator.SetTrigger("Chop");
+        }
     }
 
     public void ChopFood()
@@ -35,6 +37,7 @@ public class ChoppingBoard : NonStackBase
     public override bool IsSuitable(EdibleBase ingredient)
     {
         if(ingredient != foodToCut)    return false;
-        else    return true;
+
+        return true;
     }
 }

@@ -5,6 +5,8 @@ using UnityEngine;
 public class Cheese : CuttableBase
 {
     [SerializeField] private GameObject slicedCheese;
+    private Vector3 slicedCheeseColSize = new Vector3(0.8243364f, 0.1054935f, 0.8243367f);
+    private Vector3 slicedCheeseColCenter = new Vector3(1.043081e-06f, -0.03467316f, -1.231838e-16f);
 
     public override void Start()
     {
@@ -19,5 +21,8 @@ public class Cheese : CuttableBase
         base.SetSliced();
         pool.GetObject(this.gameObject.transform, slicedCheese, PoolingManager.cheeseSlicedList);
         currentVersion = pool.currentObject;
+
+        collider.size = slicedCheeseColSize;
+        collider.center = slicedCheeseColCenter;
     }
 }

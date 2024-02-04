@@ -9,7 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7491772535472987706}
-  - component: {fileID: 5296409075502729222}
+  - component: {fileID: 2518701613776388391}
   - component: {fileID: 5310904651032488084}
   m_Layer: 0
   m_Name: Onion
@@ -33,8 +33,8 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!135 &5296409075502729222
-SphereCollider:
+--- !u!65 &2518701613776388391
+BoxCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -44,8 +44,8 @@ SphereCollider:
   m_IsTrigger: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.4
-  m_Center: {x: -0.000000014901161, y: 0.41986495, z: 0.000000029802322}
+  m_Size: {x: 0.75, y: 0.813242, z: 0.75}
+  m_Center: {x: 0, y: 0.39528695, z: 0.000000029802322}
 --- !u!114 &5310904651032488084
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -63,4 +63,5 @@ MonoBehaviour:
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
+  collider: {fileID: 0}
   slicedOnion: {fileID: 919132149155446097, guid: a94c68957739b5e4fabcc155452041b9, type: 3}

@@ -5,6 +5,7 @@ using UnityEngine;
 public abstract class EdibleBase : MonoBehaviour, IEdible
 {
     public GameObject purePrefab;
+    public float point;
     protected GameObject pure;
     protected GameObject prefab;
     protected GameObject currentVersion;
@@ -67,7 +68,7 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
 
     protected virtual void OnDisable()
     {
-        colSize = collider.size;
-        colCenter = collider.center;
+        collider.size = colSize;
+        collider.center = colCenter;
     }
 }

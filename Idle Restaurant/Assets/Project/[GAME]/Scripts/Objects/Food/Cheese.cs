@@ -12,6 +12,7 @@ public class Cheese : CuttableBase
     {
         pool = PoolingManager.cheesePool;
         pureList = PoolingManager.cheesePureList;
+        point = 1f;
 
         base.Start();
     }
@@ -21,6 +22,7 @@ public class Cheese : CuttableBase
         base.SetSliced();
         pool.GetObject(this.gameObject.transform, slicedCheese, PoolingManager.cheeseSlicedList);
         currentVersion = pool.currentObject;
+        point = 10f;
 
         collider.size = slicedCheeseColSize;
         collider.center = slicedCheeseColCenter;

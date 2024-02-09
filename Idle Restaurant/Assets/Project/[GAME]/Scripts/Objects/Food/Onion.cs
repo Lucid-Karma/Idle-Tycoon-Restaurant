@@ -12,6 +12,7 @@ public class Onion : CuttableBase
     {
         pool = PoolingManager.onionPool;
         pureList = PoolingManager.onionPureList;
+        point = 0.2f;
 
         base.Start();
     }
@@ -21,6 +22,7 @@ public class Onion : CuttableBase
         base.SetSliced();
         pool.GetObject(this.gameObject.transform, slicedOnion, PoolingManager.onionSlicedList);
         currentVersion = pool.currentObject;
+        point = 10f;
 
         collider.size = slicedOnionColSize;
         collider.center = slicedOnionColCenter;

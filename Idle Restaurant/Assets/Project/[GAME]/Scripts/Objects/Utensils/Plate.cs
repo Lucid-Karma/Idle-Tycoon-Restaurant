@@ -46,36 +46,41 @@ public class Plate : PlaceableBase
         placeableCollider.center = new Vector3(placeableCollider.center.x, placeableCollider.center.y - ingredients[_ingredientsCount-1].transform.localScale.y / 4, placeableCollider.center.z);
     }
 
+    private void SetDistanceBetweenIngredients()
+    {
+        _ingredientsCount = ingredients.Count;
+
+        if(_ingredientsCount >= 1)
+        {
+            distanceBetweenObjects = (ingredients[_ingredientsCount-1].collider.size.y);
+            ingredients.Last().isLastPiece = false;
+        } 
+        else
+            distanceBetweenObjects = 0;
+    }
+    private void SetIngredientPos(EdibleBase ingredient)
+    {
+        ingredient.gameObject.transform.parent = parentTransform;
+        Vector3 desiredPos = refTransform.localPosition;
+        desiredPos.y += distanceBetweenObjects;    
+        
+        ingredient.gameObject.transform.localRotation = Quaternion.identity;
+        ingredient.gameObject.transform.localPosition = desiredPos; 
+    }
+
     public override void UseFood(EdibleBase ingredient) 
     {
         if(doesHaveHamburger)   return;
 
-        if(ingredients.Count <= 2)
+        if(ingredients.Count <= 5)
         {
-            _ingredientsCount = ingredients.Count;
-
-            if(_ingredientsCount >= 1)
-            {
-                distanceBetweenObjects = (ingredients[_ingredientsCount-1].collider.size.y);
-                // distanceBetweenObjects = (ingredients[_ingredientsCount-1].gameObject.transform.localScale.y / 2);
-                ingredients.Last().isLastPiece = false;
-                
-                //Debug.Log("local:" + ingredients[_ingredientsCount-1].transform.lossyScale.y / 2 + " \nlossy:" + ingredients[_ingredientsCount-1].transform.localScale.y / 2);
-            } 
-            else
-                distanceBetweenObjects = 0;
+            SetDistanceBetweenIngredients();
             
             ingredients.Add(ingredient);
             ingredient.GetPlaceable(this);
 
             ExtendCollider(ingredient.gameObject);
-
-            ingredient.gameObject.transform.parent = parentTransform;
-            Vector3 desiredPos = refTransform.localPosition;
-            desiredPos.y += distanceBetweenObjects;    
-            
-            ingredient.gameObject.transform.localRotation = Quaternion.identity;
-            ingredient.gameObject.transform.localPosition = desiredPos; 
+            SetIngredientPos(ingredient);
 
             refTransform.position = ingredient.gameObject.transform.position;
             
@@ -106,28 +111,20 @@ public class Plate : PlaceableBase
 
     private void GenerateHamburger(EdibleBase ingredient)
     {
-        if(ingredients.Count == 3)
+        if(ingredients.Count == 6)
         {
+            SetDistanceBetweenIngredients();
             placeableCollider.enabled = false;
             PoolingManager.HamburgerPool.GetObject(transform, hamburger, PoolingManager.HamburgerList);
             GameObject obj = PoolingManager.HamburgerPool.currentObject;
             Hamburger _hamburger = obj.GetComponent<Hamburger>();
             foreach (EdibleBase item in ingredients)
             {
-                item.gameObject.transform.parent = obj.transform;
-                _hamburger.ExtendCollider(item);
-                item.gameObject.GetComponent<Collider>().enabled = false;
+                _hamburger.AddIngredient(item);
             }
             if(ingredients.Any(x => x.IsBun()))
             {
-                bunSpawnTransform = _hamburger.bunHolder.transform;
-                Collider hamCollider = _hamburger.gameObject.GetComponent<Collider>();
-                Vector3 hamPos = hamCollider.bounds.center;
-                // float yOffset = (ingredient.gameObject.transform.localScale.y / 2) + 0.2f;
-                float yOffset = ingredient.collider.size.y;
-                Vector3 spawnPos = new Vector3(hamPos.x, hamPos.y + yOffset, hamPos.z);
-                bunSpawnTransform.position = spawnPos;
-                _hamburger.PutLastBun(bunSpawnTransform);
+                _hamburger.PutLastBun(refTransform, parentTransform, distanceBetweenObjects);
             }
 
             EdibleBase _edibleHam = obj.GetComponent<EdibleBase>();

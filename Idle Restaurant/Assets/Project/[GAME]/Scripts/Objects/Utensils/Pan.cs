@@ -40,7 +40,7 @@ public class Pan : CookingBase
         cookingTimer = burger.fryingTimer;
 
         if(!burger.isOver)   state = State.Cook;
-        Debug.Log("pre: " + cookingTimer);
+        //Debug.Log("pre: " + cookingTimer);
     }
 
     public override void RemoveFood(EdibleBase ingredient)

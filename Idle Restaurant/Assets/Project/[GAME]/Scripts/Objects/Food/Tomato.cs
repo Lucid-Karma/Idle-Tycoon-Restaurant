@@ -12,6 +12,7 @@ public class Tomato : CuttableBase
     {
         pool = PoolingManager.tomatoPool;
         pureList = PoolingManager.tomatoPureList;
+        point = 2f;
 
         base.Start();
     }
@@ -21,6 +22,7 @@ public class Tomato : CuttableBase
         base.SetSliced();
         pool.GetObject(this.gameObject.transform, slicedTomato, PoolingManager.tomatoSlicedList);
         currentVersion = pool.currentObject;
+        point = 10f;
         
         collider.size = slicedTomatoColSize;
         collider.center = slicedTomatoColCenter;

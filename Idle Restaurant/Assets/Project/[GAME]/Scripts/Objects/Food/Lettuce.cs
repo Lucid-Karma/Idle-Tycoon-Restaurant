@@ -8,6 +8,7 @@ public class Lettuce : EdibleBase
     {
         pool = PoolingManager.lettucePool;
         pureList = PoolingManager.lettuceSlicedList;
+        point = 10f;
 
         base.Start();
     }

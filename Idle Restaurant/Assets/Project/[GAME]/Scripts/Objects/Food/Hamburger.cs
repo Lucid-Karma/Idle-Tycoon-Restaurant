@@ -23,12 +23,27 @@ public class Hamburger : EdibleBase
         hamCollider.center = new Vector3(hamCollider.center.x, hamCollider.center.y + stackedObj.collider.center.y, hamCollider.center.z);
     }
 
-    public void PutLastBun(Transform bunTransform)
+    public void AddIngredient(EdibleBase item)
     {
-        pool.GetObject(bunTransform, finishBun, PoolingManager.bunTopList);
-        
-        hamCollider = GetComponent<BoxCollider>();
+        item.gameObject.transform.parent = transform;
+        ExtendCollider(item);
+        point += item.point;
+        item.gameObject.GetComponent<Collider>().enabled = false;
+    }
 
+    public void PutLastBun(Transform refTransform, Transform parentTransform, float distanceBetweenObjects)
+    {
+        pool.GetObjectWOutPos(finishBun, PoolingManager.bunTopList);
+        pool.currentObject.transform.parent = parentTransform;
+
+        Vector3 desiredPos = refTransform.localPosition;
+        desiredPos.y += distanceBetweenObjects;    
+        pool.currentObject.transform.localRotation = Quaternion.identity;
+        pool.currentObject.transform.localPosition = desiredPos;
+        pool.currentObject.transform.parent = transform; 
+        
+
+        hamCollider = GetComponent<BoxCollider>();
         hamCollider.size = new Vector3(hamCollider.size.x, hamCollider.size.y + 0.3071972f, hamCollider.size.z);
         hamCollider.center = new Vector3(hamCollider.center.x, hamCollider.center.y + 0.1536008f, hamCollider.center.z);
     }
@@ -37,4 +52,14 @@ public class Hamburger : EdibleBase
     {
         return gameObject;
     }
+
+    public float CalculateScore()
+    {
+        point = point / 6;
+        Debug.Log("point: " + point);
+        point *= (float)3 / 10;
+        Debug.Log("point: " + point);
+        return point;
+    }
+
 }

@@ -59,9 +59,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   purePrefab: {fileID: 919132149155446097, guid: b9fd0c620b032364a8f1a882f287aa4d, type: 3}
+  point: 0
   ingredientPos: {x: 0, y: 0, z: 0}
   isAdded: 0
   totalPoint: 0
   isLastPiece: 0
   collider: {fileID: 0}
+  isSliced: 0
   slicedOnion: {fileID: 919132149155446097, guid: a94c68957739b5e4fabcc155452041b9, type: 3}

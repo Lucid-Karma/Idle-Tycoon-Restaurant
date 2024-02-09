@@ -15,6 +15,7 @@ public class Burger : EdibleBase
     {  
         maxCookingTime = 10.0f;
         isOver = false;
+        point = 0.1f;
 
         pool = PoolingManager.burgerPool;
         pureList = PoolingManager.burgerUncookedList;
@@ -35,6 +36,7 @@ public class Burger : EdibleBase
             currentVersion.SetActive(false);
             pool.GetObject(this.gameObject.transform, cookedBurger, PoolingManager.burgerCookedList);
             currentVersion = pool.currentObject;
+            point = 10f;
 
             _currentBurgerState ++;
             break;
@@ -43,6 +45,7 @@ public class Burger : EdibleBase
             currentVersion.SetActive(false);
             pool.GetObject(this.gameObject.transform, overcookedBurger, PoolingManager.burgerOvercookedList);
             currentVersion = pool.currentObject;
+            point = 0.2f;
 
             _currentBurgerState ++;
             isOver = true;

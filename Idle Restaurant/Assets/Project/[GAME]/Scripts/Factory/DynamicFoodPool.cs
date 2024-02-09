@@ -39,9 +39,24 @@ public class DynamicFoodPool
 
         if(ingredient != null)
         {   
+            //ingredient.GetComponent<Collider>().enabled = true;   ?????
             ingredient.transform.parent = spawnTransform;
             ingredient.transform.rotation = Quaternion.identity;
             ingredient.transform.position = spawnTransform.position;
+            ingredient.SetActive(true);
+        }
+        currentObject = ingredient;
+    }
+
+    public void GetObjectWOutPos(GameObject desiredObject, List<GameObject> desiredList)   
+    {
+        poolObject = desiredObject;
+        _pooledObjects = desiredList;
+        GameObject ingredient = GetPooledObject();
+
+        if(ingredient != null)
+        {   
+            ingredient.transform.rotation = Quaternion.identity;
             ingredient.SetActive(true);
         }
         currentObject = ingredient;

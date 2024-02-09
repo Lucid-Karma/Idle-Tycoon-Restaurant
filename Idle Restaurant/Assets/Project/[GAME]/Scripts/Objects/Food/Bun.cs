@@ -20,6 +20,7 @@ public class Bun : EdibleBase
     {
         maxCookingTime = 10.0f;
         isOver = false;
+        point = 1.5f;
 
         isSlicedBun = false;
         pool = PoolingManager.bunPool;
@@ -34,12 +35,14 @@ public class Bun : EdibleBase
         {
             case 0:
             Debug.Log("bun cooked.");
+            point = 10f;
 
             _currentBunState ++;
             break;
 
             case 1:
             Debug.Log("bun burned.");
+            point = 4f;
 
             _currentBunState ++;
             isOver = true;

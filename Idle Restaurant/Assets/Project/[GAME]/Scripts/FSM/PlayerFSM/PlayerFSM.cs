@@ -2,11 +2,13 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.Events;
 
 public enum ExecutingState
 {
     IDLE,
-    WALK
+    RUN,
+    INTERACT
 }
 public class PlayerFSM : MonoBehaviour
 {
@@ -14,8 +16,18 @@ public class PlayerFSM : MonoBehaviour
     public ExecutingState executingState;
     public PlayerStates currentState;
 
-    public PlayerIdleState playerIdleState = new PlayerIdleState();
-    public PlayerWalkState playerWalkState = new PlayerWalkState();
+    public PlayerIdleState playerIdleState = new();
+    public PlayerRunState playerRunState = new();
+    public PlayerInteractState playerInteractState = new();
+    #endregion
+
+    #region Events
+    [HideInInspector]
+    public UnityEvent OnPlayerIdle = new UnityEvent();
+    [HideInInspector]
+    public UnityEvent OnPlayerRun = new UnityEvent();
+    [HideInInspector]
+    public UnityEvent OnPlayerInteract = new UnityEvent();
     #endregion
 
     #region Components
@@ -40,6 +52,7 @@ public class PlayerFSM : MonoBehaviour
 
     void Start()
     {
+        EventManager.OnLevelStart.Invoke();
         _playerCam = Camera.main;
         isHolded = false;
 
@@ -65,7 +78,9 @@ public class PlayerFSM : MonoBehaviour
                 placeable = hit.collider.GetComponent<PlaceableBase>();
                 edible = hit.collider.GetComponent<EdibleBase>();
 
-                executingState = ExecutingState.WALK;
+                UpdateStoppingDistance();
+
+                executingState = ExecutingState.RUN;
 
                 distance = Vector3.Distance(Agent.transform.position, hit.point);
                 if(distance > 3.0f)
@@ -105,6 +120,7 @@ public class PlayerFSM : MonoBehaviour
     void PickUpObject(EdibleBase ingredient) 
     {
         if (isHolded)   return;
+        if(ingredient.untouchable)  return;
 
         currentFood = ingredient;
 
@@ -140,7 +156,25 @@ public class PlayerFSM : MonoBehaviour
     {
         if(Agent.remainingDistance <= Agent.stoppingDistance)
         {
+            // Add a new line to choose idle or interact after adding the anim. event to the interact anim.
             executingState = ExecutingState.IDLE;
+        }
+    }
+
+    private void UpdateStoppingDistance()  
+    {
+        if(placeable != null)
+        {
+            if(placeable.gameObject.GetComponent<ServiceBase>() != null)
+            {
+                Agent.stoppingDistance = 1.34f;
+            }
+            else 
+                Agent.stoppingDistance = 0f;
+        }
+        else
+        {
+            Agent.stoppingDistance = 0f;
         }
     }
 

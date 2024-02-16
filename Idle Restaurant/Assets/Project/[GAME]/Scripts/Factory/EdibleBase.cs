@@ -10,6 +10,7 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     protected GameObject prefab;
     protected GameObject currentVersion;
     private bool isHolded;
+    [HideInInspector] public bool untouchable;
     [HideInInspector] public Vector3 ingredientPos;
     [HideInInspector] public bool isAdded = false;
     [HideInInspector] public int totalPoint = 0;
@@ -35,6 +36,7 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     protected void SetStarterVersion()
     {
         isLastPiece = true;
+        untouchable = false;
 
         pool.GetObject(this.gameObject.transform, purePrefab, pureList);
         currentVersion = pool.currentObject;

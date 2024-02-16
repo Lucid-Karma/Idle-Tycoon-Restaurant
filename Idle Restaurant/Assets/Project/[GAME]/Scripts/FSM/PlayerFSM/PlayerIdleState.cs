@@ -7,6 +7,7 @@ public class PlayerIdleState : PlayerStates
     public override void EnterState(PlayerFSM fsm)
     {
         //Debug.Log("IDLE");
+        fsm.OnPlayerIdle.Invoke();
         
         fsm.GetFoodFromSource();
         fsm.GetFood();
@@ -25,9 +26,9 @@ public class PlayerIdleState : PlayerStates
 
     public override void ExitState(PlayerFSM fsm)
     {
-        if(fsm.executingState == ExecutingState.WALK)
+        if(fsm.executingState == ExecutingState.RUN)
         {
-            fsm.SwitchState(fsm.playerWalkState);
+            fsm.SwitchState(fsm.playerRunState);
         }
     }
 }

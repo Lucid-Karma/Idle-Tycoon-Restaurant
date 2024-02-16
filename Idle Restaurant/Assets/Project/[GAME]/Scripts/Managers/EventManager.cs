@@ -5,29 +5,31 @@ using UnityEngine.Events;
 
 public static class EventManager
 {
-    public static UnityEvent OnGameStart = new UnityEvent();
-    public static UnityEvent OnGameEnd = new UnityEvent();
+    public static UnityEvent OnGameStart = new();
+    public static UnityEvent OnGameEnd = new();
 
-    public static UnityEvent OnLevelStart = new UnityEvent();
-    public static UnityEvent OnLevelContine = new UnityEvent();
-    public static UnityEvent OnLevelFinish = new UnityEvent();
+    public static UnityEvent OnLevelStart = new();
+    public static UnityEvent OnLevelContine = new();
+    public static UnityEvent OnLevelFinish = new();
 
-    public static UnityEvent OnLevelSuccess = new UnityEvent();
-    public static UnityEvent OnLevelFail = new UnityEvent();
+    public static UnityEvent OnLevelSuccess = new();
+    public static UnityEvent OnLevelFail = new();
 
-    public static UnityEvent OnRestart = new UnityEvent();
+    public static UnityEvent OnRestart = new();
 
-    public static UnityEvent OnObstacleCreated = new UnityEvent();
+    public static UnityEvent OnCustomerWent = new();
 
     //public static HamburgerEvent OnHamburgerPrep = new HamburgerEvent();
 
-    public static UnityEvent OnFoodHolded = new UnityEvent();
-    public static UnityEvent OnFoodDropped = new UnityEvent();
+    public static UnityEvent OnFoodHolded = new();
+    public static UnityEvent OnFoodDropped = new();
 
-    public static UnityEvent OnPlayerStartedRunning = new UnityEvent();
+    //public static UnityEvent OnService = new();
 
-    public static UnityEvent OnMusicOn = new UnityEvent();
-    public static UnityEvent OnMusicOff = new UnityEvent();
+    public static UnityEvent OnPlayerStartedRunning = new();
+
+    public static UnityEvent OnMusicOn = new();
+    public static UnityEvent OnMusicOff = new();
 }
 
 //public class HamburgerEvent : UnityEvent<Transform> { }

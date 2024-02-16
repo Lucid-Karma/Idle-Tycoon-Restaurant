@@ -11,5 +11,7 @@ public class ServiceBase : NonStackBase
 
         ingredient.gameObject.transform.parent = transform;
         ingredient.gameObject.transform.position = transform.position;
+
+        ingredient.untouchable = true;
     }
 }

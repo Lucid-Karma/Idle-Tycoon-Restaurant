@@ -31,4 +31,15 @@ public class NonStackBase : PlaceableBase
     {
         return true;
     }
+
+    public bool IsHaveFood()
+    {
+        if(currentObject == null)   return false;
+        return true;
+    }
+
+    public Hamburger GetHamburger()
+    {
+        return currentObject.gameObject.GetComponent<Hamburger>();
+    }
 }

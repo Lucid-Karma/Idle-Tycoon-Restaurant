@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.Events;
 
 public enum ExecutingNpcState
 {
@@ -20,36 +21,36 @@ public class NpcFsm : MonoBehaviour
     //public NpcStates currentState;
     #endregion
 
+    #region Events
+    [HideInInspector]
+    public UnityEvent OnNpcWalk = new();
+    [HideInInspector]
+    public UnityEvent OnNpcSitChairDown = new();
+    [HideInInspector]
+    public UnityEvent OnNpcSitChairIdle = new();
+    [HideInInspector]
+    public UnityEvent OnNpcSitChairStandUp = new();
+    
+    #endregion
+
     #region Components
     private NavMeshAgent agent;
     public NavMeshAgent Agent{ get { return (agent == null) ? agent = GetComponent<UnityEngine.AI.NavMeshAgent>() : agent; } }
     #endregion
 
-    PlaceableBase placeable;
-    EdibleBase edible;
-    Hamburger _hamburger;
-
     #region Parameters
-    [SerializeField] private List<Transform> targetPositions = new();
     private Vector3 nextPos;
-    private int posIndex;
-
-    Vector3 characterPosition;
-    Vector3 rayDirection;
 
     private float waitingTimer;
     private float timeScore;
     private float totalPoint;
 
-    [SerializeField] private GameObject holdParent;
-    private bool isHolded;
-    private EdibleBase currentFood;
+    Hamburger _hamburger;
+    [HideInInspector] public ISedile chair;
     #endregion
 
     void OnEnable()
     {
-        isHolded = false;
-
         executingNpcState = ExecutingNpcState.COME;
         MoveNpc();
         // currentState = NpcIdleState;
@@ -92,61 +93,15 @@ public class NpcFsm : MonoBehaviour
     }
 
     public void MoveNpc()
-    {
-        posIndex = Random.Range(0, targetPositions.Count-1);
-        nextPos = targetPositions[posIndex].position;
-        Agent.SetDestination(nextPos);
-    }
-
-    #region Selectables'Methods
-    public void GetFood()
-    {
-        if(edible != null)
+    {   
+        if(chair != null)
         {
-            PickUpObject(edible);
+            nextPos = chair.CalculateSitPos();
+            Agent.SetDestination(nextPos);
+            chair.IsEmpty = false;
         }
+        
     }
-    public void PlaceFood()
-    {
-        if (placeable != null)
-        {
-            DropObject(placeable);
-        }
-    }
-
-    void PickUpObject(EdibleBase ingredient) 
-    {
-        if (isHolded)   return;
-
-        currentFood = ingredient;
-
-        if(currentFood == null) return;
-
-        ingredient.RemoveFromList();
-        EventManager.OnFoodHolded.Invoke();
-
-        currentFood.transform.parent = holdParent.transform;
-        currentFood.transform.localRotation = Quaternion.identity;
-        currentFood.transform.position = holdParent.transform.position;
-
-        isHolded = true;
-    }
-    void DropObject(PlaceableBase place)
-    {
-        if(isHolded)
-        {
-            if(currentFood == null) return;
-
-            place?.UseFood(currentFood);
-            if(!place.IsSuitable(currentFood)) return;
-            EventManager.OnFoodDropped.Invoke();
-
-            currentFood = null;
-
-            isHolded = false;
-        }
-    }
-    #endregion
 
     public void DoneWithPath()
     {
@@ -158,10 +113,15 @@ public class NpcFsm : MonoBehaviour
 
     public void Order()
     {
-        Debug.Log("Hamburger please!");
-        executingNpcState = ExecutingNpcState.WAIT;
+        if(chair != null)
+        {
+            transform.rotation = chair.GetSedileRot();
+            OnNpcSitChairDown.Invoke();
+            Debug.Log("Hamburger please!");
+            executingNpcState = ExecutingNpcState.WAIT;
+        }
     }
-
+    
     public void Wait()
     {
         waitingTimer += Time.deltaTime;
@@ -171,20 +131,13 @@ public class NpcFsm : MonoBehaviour
             return;    
         }
 
-        characterPosition = transform.position;
-        rayDirection = transform.forward * 3;
-
-        Ray ray = new Ray(characterPosition, rayDirection);
-        RaycastHit hit;
-        if (Physics.Raycast(ray, out hit))
+        if(chair.GetTableService().IsHaveFood())
         {
-            edible = hit.collider.GetComponent<EdibleBase>();
-            if (edible != null)
-            {
-                _hamburger = edible.gameObject.GetComponent<Hamburger>();
-                if(_hamburger != null)
-                    executingNpcState = ExecutingNpcState.EAT;
-            }
+            _hamburger = chair.GetTableService().GetHamburger();
+            if(_hamburger != null)
+                executingNpcState = ExecutingNpcState.EAT;
+            else
+                executingNpcState = ExecutingNpcState.PROTEST;
         }
     }
 
@@ -192,7 +145,7 @@ public class NpcFsm : MonoBehaviour
     {
         // start eating animation.
         // add an animation event at the end to start REACT.
-        GetFood();
+        //GetFood();
         Debug.Log("Mmmh hamburger!");
         executingNpcState = ExecutingNpcState.REACT;
     }
@@ -210,6 +163,8 @@ public class NpcFsm : MonoBehaviour
         totalPoint = (_hamburger.CalculateScore() + timeScore);
         Debug.Log("time point: " + timeScore);
         Debug.Log("not bad. " + totalPoint);
+
+        OnNpcSitChairStandUp.Invoke();
         
         // start a new animation for a reaction.
 
@@ -226,9 +181,11 @@ public class NpcFsm : MonoBehaviour
     public void Go()
     {
         Debug.Log("byeee");
+        OnNpcWalk.Invoke();
         // go back about wherever you came.
         Agent.SetDestination(Vector3.zero);
         gameObject.SetActive(false);
+        EventManager.OnCustomerWent.Invoke();
     }
 
     // public void SwitchState(NpcStates nextState)

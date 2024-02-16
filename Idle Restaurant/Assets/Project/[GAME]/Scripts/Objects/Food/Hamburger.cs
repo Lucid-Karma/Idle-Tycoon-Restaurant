@@ -3,7 +3,6 @@ using UnityEngine;
 
 public class Hamburger : EdibleBase
 {
-    private BoxCollider hamCollider;
     [SerializeField] private GameObject finishBun;
     public GameObject bunHolder;
 
@@ -17,10 +16,11 @@ public class Hamburger : EdibleBase
 
     public void ExtendCollider(EdibleBase stackedObj)
     {
-        hamCollider = GetComponent<BoxCollider>();
+        collider = GetComponent<BoxCollider>();
 
-        hamCollider.size = new Vector3(hamCollider.size.x, hamCollider.size.y + stackedObj.collider.size.y, hamCollider.size.z);
-        hamCollider.center = new Vector3(hamCollider.center.x, hamCollider.center.y + stackedObj.collider.center.y, hamCollider.center.z);
+        collider.size = new Vector3(collider.size.x, collider.size.y + stackedObj.collider.size.y, collider.size.z);
+        collider.center = new Vector3(collider.center.x, collider.center.y + stackedObj.collider.center.y, collider.center.z);
+        //Debug.Log("stackObject's size: " + stackedObj.collider.size.y + "total size: " + collider.size.y);
     }
 
     public void AddIngredient(EdibleBase item)
@@ -43,9 +43,9 @@ public class Hamburger : EdibleBase
         pool.currentObject.transform.parent = transform; 
         
 
-        hamCollider = GetComponent<BoxCollider>();
-        hamCollider.size = new Vector3(hamCollider.size.x, hamCollider.size.y + 0.3071972f, hamCollider.size.z);
-        hamCollider.center = new Vector3(hamCollider.center.x, hamCollider.center.y + 0.1536008f, hamCollider.center.z);
+        collider = GetComponent<BoxCollider>();
+        collider.size = new Vector3(collider.size.x, (collider.size.y + 0.3071972f) * 10f, collider.size.z);
+        collider.center = new Vector3(collider.center.x, (collider.center.y + 0.1536008f) * 10f, collider.center.z);
     }
 
     public override GameObject SetFood()

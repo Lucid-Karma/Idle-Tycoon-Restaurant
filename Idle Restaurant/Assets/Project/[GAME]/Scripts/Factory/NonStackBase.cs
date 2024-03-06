@@ -14,7 +14,7 @@ public class NonStackBase : PlaceableBase
 
     public override void UseFood(EdibleBase ingredient)
     {
-        ingredient.GetPlaceable(this);
+        ingredient.SetPlaceable(this);
         currentObject = ingredient.SetFood();
         
 

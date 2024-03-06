@@ -18,7 +18,14 @@ public class NpcFsm : MonoBehaviour
 {
     #region FSM
     public ExecutingNpcState executingNpcState;
-    //public NpcStates currentState;
+    public NpcStates currentState;
+    public NpcComeState comeState = new();
+    public NpcOrderState orderState = new();
+    public NpcWaitState waitState = new();
+    public NpcEatState eatState = new();
+    public NpcReactState reactState = new();
+    public NpcProtestState protestState = new();
+    public NpcGoState goState = new();
     #endregion
 
     #region Events
@@ -30,6 +37,11 @@ public class NpcFsm : MonoBehaviour
     public UnityEvent OnNpcSitChairIdle = new();
     [HideInInspector]
     public UnityEvent OnNpcSitChairStandUp = new();
+
+    [HideInInspector]
+    public UnityEvent OnNpcEatStart = new();
+    [HideInInspector]
+    public UnityEvent OnNpcEatEnd = new();
     
     #endregion
 
@@ -43,6 +55,7 @@ public class NpcFsm : MonoBehaviour
 
     private float waitingTimer;
     private float timeScore;
+    private float hamburgerPoint;
     private float totalPoint;
 
     Hamburger _hamburger;
@@ -52,44 +65,13 @@ public class NpcFsm : MonoBehaviour
     void OnEnable()
     {
         executingNpcState = ExecutingNpcState.COME;
-        MoveNpc();
-        // currentState = NpcIdleState;
-        // currentState.EnterState(this);
+        currentState = comeState;
+        currentState.EnterState(this);
     }
 
     void Update()
     {
-        //currentState.UpdateState(this);
-        switch (executingNpcState)
-        {
-            case ExecutingNpcState.COME:
-            DoneWithPath();
-            break;
-
-            case ExecutingNpcState.ORDER:
-            Order();
-            break;
-
-            case ExecutingNpcState.WAIT:
-            Wait();
-            break;
-
-            case ExecutingNpcState.EAT:
-            Eat();
-            break;
-
-            case ExecutingNpcState.REACT:
-            React();
-            break;
-
-            case ExecutingNpcState.PROTEST:
-            Protest();
-            break;
-
-            case ExecutingNpcState.GO:
-            Go();
-            break;
-        }
+        currentState.UpdateState(this);
     }
 
     public void MoveNpc()
@@ -117,7 +99,6 @@ public class NpcFsm : MonoBehaviour
         {
             transform.rotation = chair.GetSedileRot();
             OnNpcSitChairDown.Invoke();
-            Debug.Log("Hamburger please!");
             executingNpcState = ExecutingNpcState.WAIT;
         }
     }
@@ -135,7 +116,10 @@ public class NpcFsm : MonoBehaviour
         {
             _hamburger = chair.GetTableService().GetHamburger();
             if(_hamburger != null)
+            {
+                OnNpcEatStart.Invoke();
                 executingNpcState = ExecutingNpcState.EAT;
+            }
             else
                 executingNpcState = ExecutingNpcState.PROTEST;
         }
@@ -145,26 +129,44 @@ public class NpcFsm : MonoBehaviour
     {
         // start eating animation.
         // add an animation event at the end to start REACT.
-        //GetFood();
-        Debug.Log("Mmmh hamburger!");
-        executingNpcState = ExecutingNpcState.REACT;
+        
+        //executingNpcState = ExecutingNpcState.REACT;
     }
 
     public void React()
     {
+        hamburgerPoint = _hamburger.CalculateScore();
         if(waitingTimer <= 75f)
         {
-            timeScore = 2;
+            if(hamburgerPoint < 1f)
+            {
+                timeScore = 0.6f;
+            }
+            else
+                timeScore = 2;
         }
         else
         {
             timeScore = (240f - waitingTimer) * 2 / 165f;
         }
-        totalPoint = (_hamburger.CalculateScore() + timeScore);
-        Debug.Log("time point: " + timeScore);
-        Debug.Log("not bad. " + totalPoint);
+        totalPoint = (hamburgerPoint + timeScore);
 
         OnNpcSitChairStandUp.Invoke();
+        ScoreManager.Instance.CalculateLevelScore(totalPoint);
+        EventManager.OnScoreUpdate.Invoke();
+
+        if(totalPoint < 2.5f)
+        {
+            EventManager.OnScoreBad.Invoke();
+        }
+        else if(totalPoint >= 4)
+        {
+            EventManager.OnScoreGood.Invoke();
+        }
+        else
+        {
+            EventManager.OnScoreNotBad.Invoke();
+        }
         
         // start a new animation for a reaction.
 
@@ -173,24 +175,35 @@ public class NpcFsm : MonoBehaviour
 
     public void Protest()
     {
-        Debug.Log("WTF!!");
-        Debug.Log("time so far: " + waitingTimer);
+        // Add a event to trigger chef's sad anim.
+
+        //Debug.Log("time so far: " + waitingTimer);
+        ScoreManager.Instance.hostedCustomer ++;
         executingNpcState = ExecutingNpcState.GO;
     }
 
     public void Go()
     {
-        Debug.Log("byeee");
-        OnNpcWalk.Invoke();
-        // go back about wherever you came.
-        Agent.SetDestination(Vector3.zero);
-        gameObject.SetActive(false);
-        EventManager.OnCustomerWent.Invoke();
+        if(IsPathEnd())
+        {
+            ScoreManager.Instance.HostedCustomerCount ++;
+            Agent.stoppingDistance = 0;
+            gameObject.SetActive(false);
+            EventManager.OnCustomerWent.Invoke();
+            ScoreManager.Instance.FinishLevel();
+        }
     }
 
-    // public void SwitchState(NpcStates nextState)
-    // {
-    //     currentState = nextState;
-    //     currentState.EnterState(this);
-    // }
+    private bool IsPathEnd()
+    {
+        if(Agent.remainingDistance <= Agent.stoppingDistance)
+            return true;
+        return false;
+    }
+
+    public void SwitchState(NpcStates nextState)
+    {
+        currentState = nextState;
+        currentState.EnterState(this);
+    }
 }

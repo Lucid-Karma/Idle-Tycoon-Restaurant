@@ -24,7 +24,11 @@ public static class EventManager
     public static UnityEvent OnFoodHolded = new();
     public static UnityEvent OnFoodDropped = new();
 
-    //public static UnityEvent OnService = new();
+    public static UnityEvent OnScoreUpdate = new();
+    public static UnityEvent OnScoreBad = new();
+    public static UnityEvent OnScoreNotBad = new();
+    public static UnityEvent OnScoreGood = new();
+    public static UnityEvent OnCustomerProtest = new();
 
     public static UnityEvent OnPlayerStartedRunning = new();
 

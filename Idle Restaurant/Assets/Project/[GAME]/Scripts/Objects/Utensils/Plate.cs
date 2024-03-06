@@ -77,7 +77,7 @@ public class Plate : PlaceableBase
             SetDistanceBetweenIngredients();
             
             ingredients.Add(ingredient);
-            ingredient.GetPlaceable(this);
+            ingredient.SetPlaceable(this);
 
             ExtendCollider(ingredient.gameObject);
             SetIngredientPos(ingredient);
@@ -129,7 +129,7 @@ public class Plate : PlaceableBase
 
             EdibleBase _edibleHam = obj.GetComponent<EdibleBase>();
             ingredients.Add(_edibleHam);
-            _edibleHam.GetPlaceable(this);
+            _edibleHam.SetPlaceable(this);
             doesHaveHamburger = true;
 
             ingredients.Clear();

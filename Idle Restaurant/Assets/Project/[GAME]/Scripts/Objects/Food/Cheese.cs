@@ -10,9 +10,12 @@ public class Cheese : CuttableBase
 
     public override void Start()
     {
+        Name = "cheese";
+        
         pool = PoolingManager.cheesePool;
         pureList = PoolingManager.cheesePureList;
-        point = 1f;
+        defaultPoint = 1f;
+        point = defaultPoint;
 
         base.Start();
     }

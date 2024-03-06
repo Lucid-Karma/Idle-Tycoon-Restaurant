@@ -17,7 +17,7 @@ public class Pan : CookingBase
 
                 case State.Cook:
                 cookingTimer += Time.deltaTime;
-                if (cookingTimer > burger.maxCookingTime)
+                if (cookingTimer > maxCookingTime)
                 {
                     if(!burger.isOver)
                     {
@@ -34,13 +34,14 @@ public class Pan : CookingBase
     public override void UseFood(EdibleBase ingredient)
     {
         burger = ingredient.gameObject.GetComponent<Burger>();
+        maxCookingTime = burger.maxCookingTime;
+
         if(!IsSuitable(ingredient)) return;
 
         base.UseFood(ingredient);
         cookingTimer = burger.fryingTimer;
 
         if(!burger.isOver)   state = State.Cook;
-        //Debug.Log("pre: " + cookingTimer);
     }
 
     public override void RemoveFood(EdibleBase ingredient)

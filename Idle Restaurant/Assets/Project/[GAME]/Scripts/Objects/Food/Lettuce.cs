@@ -6,17 +6,18 @@ public class Lettuce : EdibleBase
 {
     public override void Start()
     {
+        Name = "lettuce";
+        
         pool = PoolingManager.lettucePool;
         pureList = PoolingManager.lettuceSlicedList;
-        point = 10f;
+        defaultPoint = 10f;
+        point = defaultPoint;
 
         base.Start();
     }
 
     public override GameObject SetFood()
     {
-        if(prefab != null)  return prefab;
-
-        return pure;
+        return currentVersion;
     }
 }

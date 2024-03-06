@@ -10,9 +10,12 @@ public class Tomato : CuttableBase
 
     public override void Start()
     {
+        Name = "tomato";
+        
         pool = PoolingManager.tomatoPool;
         pureList = PoolingManager.tomatoPureList;
-        point = 2f;
+        defaultPoint = 2f;
+        point = defaultPoint;
 
         base.Start();
     }

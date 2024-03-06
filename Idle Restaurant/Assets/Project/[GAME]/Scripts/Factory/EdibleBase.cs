@@ -4,18 +4,13 @@ using UnityEngine;
 
 public abstract class EdibleBase : MonoBehaviour, IEdible
 {
+    [HideInInspector] public string Name;
     public GameObject purePrefab;
     public float point;
-    protected GameObject pure;
-    protected GameObject prefab;
+    protected float defaultPoint;
     protected GameObject currentVersion;
-    private bool isHolded;
     [HideInInspector] public bool untouchable;
-    [HideInInspector] public Vector3 ingredientPos;
-    [HideInInspector] public bool isAdded = false;
-    [HideInInspector] public int totalPoint = 0;
     [HideInInspector] public bool isLastPiece;
-    Transform hands;
 
     public new BoxCollider collider;
     protected Vector3 colSize;
@@ -37,12 +32,13 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
     {
         isLastPiece = true;
         untouchable = false;
+        point = defaultPoint;
 
         pool.GetObject(this.gameObject.transform, purePrefab, pureList);
         currentVersion = pool.currentObject;
     }
 
-    public void GetPlaceable(PlaceableBase _placable)
+    public void SetPlaceable(PlaceableBase _placable)
     {
         placeable = _placable;
     }
@@ -68,9 +64,24 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
         return false;
     }
 
+    public bool IsPlaced()
+    {
+        return (placeable != null)? true: false;
+    }
+
+    public virtual void OnEnable()
+    {
+        if (currentVersion != null && !currentVersion.activeInHierarchy)
+        {
+            SetStarterVersion();
+        }
+    }
+
     protected virtual void OnDisable()
     {
         collider.size = colSize;
         collider.center = colCenter;
+
+        currentVersion.SetActive(false);
     }
 }

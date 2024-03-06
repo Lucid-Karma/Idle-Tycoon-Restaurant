@@ -6,12 +6,12 @@ public abstract class PlaceableBase : MonoBehaviour, IPlaceable
 {
     protected BoxCollider placeableCollider;
 
-    void OnEnable()
+    protected virtual void OnEnable()
     {
         EventManager.OnFoodHolded.AddListener(EnableCollider);
         EventManager.OnFoodDropped.AddListener(() => placeableCollider.enabled = false);
     }
-    void OnDisable()
+    protected virtual void OnDisable()
     {
         EventManager.OnFoodHolded.RemoveListener(EnableCollider);
         EventManager.OnFoodDropped.RemoveListener(() => placeableCollider.enabled = false);

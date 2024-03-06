@@ -1,47 +1,38 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class GamePanels : Panel
 {
-    public Panel LevelSuccesPanel;
-    public Panel LevelFailPanel;
-    public Panel BlurPanel;
+    public Panel InGamePanel;
+    public Panel LevelFinishPanel;
 
     private void Awake() 
     {
-        LevelSuccesPanel.HidePanel();
-        LevelFailPanel.HidePanel();
-        BlurPanel.HidePanel();
+        InGamePanel.HidePanel();
+        LevelFinishPanel.HidePanel();
     }
 
     private void OnEnable()
     {
-        EventManager.OnLevelFail.AddListener(InitializeLevelFailPanel);
-        EventManager.OnLevelSuccess.AddListener(InitializeLevelSuccessPanel);
-        EventManager.OnGameStart.AddListener(HidePanel);
+        EventManager.OnLevelStart.AddListener(InitializeInGamePanel);
+        EventManager.OnLevelFinish.AddListener(InitializeLevelFinishPanel);
     }
-
     private void OnDisable()
     {
-        EventManager.OnLevelFail.RemoveListener(InitializeLevelFailPanel);
-        EventManager.OnLevelSuccess.RemoveListener(InitializeLevelSuccessPanel);
-        EventManager.OnGameStart.RemoveListener(HidePanel);
+        EventManager.OnLevelStart.RemoveListener(InitializeInGamePanel);
+        EventManager.OnLevelFinish.RemoveListener(InitializeLevelFinishPanel);
     }
 
-    private void InitializeLevelFailPanel()
+    private void InitializeInGamePanel()
     {
-        LevelSuccesPanel.HidePanel();
-        BlurPanel.ShowPanel();
-        LevelFailPanel.ShowPanel();
+        LevelFinishPanel.HidePanel();
+        InGamePanel.ShowPanel();
         ShowPanel();
     }
 
-    private void InitializeLevelSuccessPanel()
+    private void InitializeLevelFinishPanel()
     {
-        LevelSuccesPanel.ShowPanel();
-        BlurPanel.ShowPanel();
-        LevelFailPanel.HidePanel();
+        InGamePanel.HidePanel();
+        LevelFinishPanel.ShowPanel();
         ShowPanel();
     }
 }

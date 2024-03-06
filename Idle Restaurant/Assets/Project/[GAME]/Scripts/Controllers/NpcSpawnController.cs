@@ -38,7 +38,7 @@ public class NpcSpawnController : MonoBehaviour
                 _npcList.Add(obj);
             }
         }
-
+        
         levelCustomerCount = 3;
     }
 
@@ -69,18 +69,18 @@ public class NpcSpawnController : MonoBehaviour
         GameObject npc = GetPooledNpc();
         if(targetChairs.Any(x => x.GetComponent<ISedile>().IsEmpty))
         {
-            List<GameObject> specificChairs = targetChairs.Where(x => x.GetComponent<ISedile>().IsEmpty).ToList();
-            chairIndex = Random.Range(0, specificChairs.Count - 1);
-            Debug.Log("SChairCount: " + specificChairs.Count + " chairIndex: " + chairIndex);
-            npc.GetComponent<NpcFsm>().chair = specificChairs[chairIndex].GetComponent<ISedile>();
-        }
-        else return;
+            if(npc != null)
+            {
+                List<GameObject> specificChairs = targetChairs.Where(x => x.GetComponent<ISedile>().IsEmpty).ToList();
+                chairIndex = Random.Range(0, specificChairs.Count - 1);
+                //Debug.Log("SChairCount: " + specificChairs.Count + " chairIndex: " + chairIndex);
+                npc.GetComponent<NpcFsm>().chair = specificChairs[chairIndex].GetComponent<ISedile>();
 
-        if(npc != null)
-        {
-            spawnPos = new Vector3(23.39f, 1.2f, 27.35f);
-            npc.transform.position = spawnPos;
-            npc.SetActive(true);
+                spawnPos = new Vector3(21.35f, 1.2f, 8.79f);
+                npc.transform.position = spawnPos;
+                npc.SetActive(true);
+            }
+            
         }
     }
 

@@ -5,7 +5,7 @@ using System.Linq;
 
 public class DynamicFoodPool 
 {
-    private List<GameObject> _pooledObjects = new();
+    public List<GameObject> _pooledObjects = new();
     private GameObject poolObject;
     public GameObject currentObject;
 
@@ -13,6 +13,7 @@ public class DynamicFoodPool
     {
         GameObject obj = Object.Instantiate(poolObject);
         _pooledObjects.Add(obj);
+        //Debug.Log("name: " + obj.name + "count: " + _pooledObjects.Count);
         return obj;
     }
 
@@ -22,9 +23,12 @@ public class DynamicFoodPool
         {
             for (int i = 0; i < _pooledObjects.Count; i++) 
             {
-                if (!_pooledObjects[i].activeInHierarchy) 
+                if(_pooledObjects[i] != null)
                 {
-                    return _pooledObjects[i];
+                    if (!_pooledObjects[i].activeInHierarchy) 
+                    {
+                        return _pooledObjects[i];
+                    }
                 }
             }
         }

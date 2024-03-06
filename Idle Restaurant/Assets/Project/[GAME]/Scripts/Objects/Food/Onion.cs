@@ -10,9 +10,12 @@ public class Onion : CuttableBase
 
     public override void Start()
     {
+        Name = "onion";
+        
         pool = PoolingManager.onionPool;
         pureList = PoolingManager.onionPureList;
-        point = 0.2f;
+        defaultPoint = 0.2f;
+        point = defaultPoint;
 
         base.Start();
     }

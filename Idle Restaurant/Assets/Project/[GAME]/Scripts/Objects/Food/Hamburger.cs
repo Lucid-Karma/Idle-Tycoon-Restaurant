@@ -3,8 +3,30 @@ using UnityEngine;
 
 public class Hamburger : EdibleBase
 {
+    HashSet<string> ingredientPointSet = new();
+    List<GameObject> ingredients = new();
     [SerializeField] private GameObject finishBun;
     public GameObject bunHolder;
+    private Vector3 hamSize = new Vector3(0.95f, 0.1f, 0.95f);
+    private Vector3 hamCenter = new Vector3(-1.490116e-08f, 0.05f, 0);
+
+    public override void OnEnable()
+    {
+        EventManager.OnScoreUpdate.AddListener(() => gameObject.SetActive(false));
+    }
+    protected override void OnDisable()
+    {
+        collider.size = hamSize;
+        collider.center = hamCenter;
+
+        pool._pooledObjects.Clear();
+        ingredientPointSet.Clear();
+
+        untouchable = false;
+        point = 0;
+
+        EventManager.OnScoreUpdate.RemoveListener(() => gameObject.SetActive(false));
+    }
 
     public override void Start()
     {
@@ -18,16 +40,23 @@ public class Hamburger : EdibleBase
     {
         collider = GetComponent<BoxCollider>();
 
-        collider.size = new Vector3(collider.size.x, collider.size.y + stackedObj.collider.size.y, collider.size.z);
-        collider.center = new Vector3(collider.center.x, collider.center.y + stackedObj.collider.center.y, collider.center.z);
-        //Debug.Log("stackObject's size: " + stackedObj.collider.size.y + "total size: " + collider.size.y);
+        collider.size = new Vector3(collider.size.x, collider.size.y + (stackedObj.collider.size.y) * 10f, collider.size.z);
+        collider.center = new Vector3(collider.center.x, collider.center.y + (stackedObj.collider.center.y) * 10f, collider.center.z);
     }
 
     public void AddIngredient(EdibleBase item)
     {
         item.gameObject.transform.parent = transform;
         ExtendCollider(item);
-        point += item.point;
+
+        if(!ingredientPointSet.Contains(item.Name))
+        {
+            point += item.point;
+            defaultPoint = point;
+            Debug.Log("item's point: " + item.point);
+        }
+        ingredientPointSet.Add(item.Name);
+        
         item.gameObject.GetComponent<Collider>().enabled = false;
     }
 
@@ -56,7 +85,6 @@ public class Hamburger : EdibleBase
     public float CalculateScore()
     {
         point = point / 6;
-        Debug.Log("point: " + point);
         point *= (float)3 / 10;
         Debug.Log("point: " + point);
         return point;

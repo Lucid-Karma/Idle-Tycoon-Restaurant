@@ -4,14 +4,20 @@ using UnityEngine;
 
 public class ServiceBase : NonStackBase
 {
+    protected override void OnEnable()
+    {
+        EventManager.OnScoreUpdate.AddListener(() => currentObject = null);
+    }
+    protected override void OnDisable()
+    {
+        EventManager.OnScoreUpdate.RemoveListener(() => currentObject = null);
+    }
+    
     public override void UseFood(EdibleBase ingredient)
     {
-        currentObject = ingredient.SetFood();
-        ingredient.GetPlaceable(this);
+        base.UseFood(ingredient);
 
-        ingredient.gameObject.transform.parent = transform;
-        ingredient.gameObject.transform.position = transform.position;
-
-        ingredient.untouchable = true;
+        if(ingredient is Hamburger)
+            ingredient.untouchable = true;
     }
 }

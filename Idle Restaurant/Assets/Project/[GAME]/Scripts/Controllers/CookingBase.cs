@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class CookingBase : NonStackBase
 {
@@ -11,6 +12,7 @@ public class CookingBase : NonStackBase
     }
     protected State state;
     protected float cookingTimer;
+    protected float maxCookingTime;
 
     public override void Start()
     {

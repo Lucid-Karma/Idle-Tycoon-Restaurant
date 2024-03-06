@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class Bun : EdibleBase
 {
+    [SerializeField] private GameObject progressBar;
     [SerializeField] private GameObject bunSlice;
     private Vector3 slicedBunColSize = new Vector3(0.693757f, 0.2f, 0.693757f);
     private Vector3 slicedBunColCenter = new Vector3(0f, 0.1f, 0f);
@@ -18,9 +19,12 @@ public class Bun : EdibleBase
 
     public override void Start()
     {
+        Name = "bun";
+
         maxCookingTime = 10.0f;
         isOver = false;
-        point = 1.5f;
+        defaultPoint = 1.5f;
+        point = defaultPoint;
 
         isSlicedBun = false;
         pool = PoolingManager.bunPool;
@@ -52,6 +56,8 @@ public class Bun : EdibleBase
 
     public override GameObject SetFood()
     {
+        progressBar.SetActive(true);
+
         currentVersion.SetActive(false);
         pool.GetObject(this.gameObject.transform, bunSlice, PoolingManager.bunBottomList);
         currentVersion = pool.currentObject;
@@ -73,5 +79,6 @@ public class Bun : EdibleBase
         _currentBunState = 0;  
         bakeTimer = 0f;
         isOver = false;
+        progressBar.GetComponentInChildren<CookingProgressBar>().ResetProgressBar();
     }
 }

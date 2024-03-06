@@ -6,8 +6,8 @@ public class PlayerRunState : PlayerStates
 {
     public override void EnterState(PlayerFSM fsm)
     {
-        //Debug.Log("RUN");
         fsm.OnPlayerRun.Invoke();
+        fsm.ParticleSystem.Play();
     }
 
     public override void UpdateState(PlayerFSM fsm)
@@ -22,6 +22,7 @@ public class PlayerRunState : PlayerStates
 
     public override void ExitState(PlayerFSM fsm)
     {
+        fsm.ParticleSystem.Stop();
         if(fsm.executingState == ExecutingState.IDLE)
         {
             fsm.SwitchState(fsm.playerIdleState);

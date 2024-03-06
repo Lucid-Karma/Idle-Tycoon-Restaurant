@@ -33,6 +33,10 @@ public class PlayerFSM : MonoBehaviour
     #region Components
     private NavMeshAgent agent;
     public NavMeshAgent Agent{ get { return (agent == null) ? agent = GetComponent<UnityEngine.AI.NavMeshAgent>() : agent; } }
+    
+    private ParticleSystem _particleSystem;
+    public ParticleSystem ParticleSystem{ get { return (_particleSystem == null)? _particleSystem = GetComponentInChildren<ParticleSystem>(): _particleSystem;}}
+    
     #endregion
 
     ISpawnable spawnable;

@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public abstract class PlaceableBase : MonoBehaviour, IPlaceable
+public abstract class PlaceableBase : MonoBehaviour, IPlaceable, ISelectable
 {
     protected BoxCollider placeableCollider;
 

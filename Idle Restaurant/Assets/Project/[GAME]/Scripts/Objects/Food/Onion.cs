@@ -24,6 +24,7 @@ public class Onion : CuttableBase
     {
         base.SetSliced();
         pool.GetObject(this.gameObject.transform, slicedOnion, PoolingManager.onionSlicedList);
+        pool.currentObject.transform.position += new Vector3(0, 0.04f, 0);
         currentVersion = pool.currentObject;
         point = 10f;
 

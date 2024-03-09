@@ -60,14 +60,7 @@ public class Burger : EdibleBase
             break;
         }
     }
-
-    // void OnEnable()
-    // {
-    //     if (currentVersion != null && !currentVersion.activeInHierarchy)
-    //     {
-    //         SetStarterVersion();
-    //     }
-    // }
+    
     protected override void OnDisable()
     {
         base.OnDisable();

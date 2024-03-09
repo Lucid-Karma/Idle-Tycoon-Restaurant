@@ -24,7 +24,9 @@ public class Cheese : CuttableBase
     {
         base.SetSliced();
         pool.GetObject(this.gameObject.transform, slicedCheese, PoolingManager.cheeseSlicedList);
+        pool.currentObject.transform.position += new Vector3(0, 0.1f, 0);
         currentVersion = pool.currentObject;
+        
         point = 10f;
 
         collider.size = slicedCheeseColSize;

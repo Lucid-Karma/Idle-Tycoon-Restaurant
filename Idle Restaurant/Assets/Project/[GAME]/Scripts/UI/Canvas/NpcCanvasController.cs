@@ -21,12 +21,14 @@ public class NpcCanvasController : MonoBehaviour
         NpcFsm.OnNpcSitChairDown.AddListener(InitializeOrderIMG);
         NpcFsm.OnNpcEatStart.AddListener(InitializeProgressBar);
         NpcFsm.OnNpcEatEnd.AddListener(DesposeAll);
+        NpcFsm.OnNpcWaitEnd.AddListener(DesposeAll);
     }
     void OnDisable()
     {
         NpcFsm.OnNpcSitChairDown.RemoveListener(InitializeOrderIMG);
         NpcFsm.OnNpcEatStart.RemoveListener(InitializeProgressBar);
         NpcFsm.OnNpcEatEnd.RemoveListener(DesposeAll);
+        NpcFsm.OnNpcWaitEnd.RemoveListener(DesposeAll);
         DesposeAll();
     }
 

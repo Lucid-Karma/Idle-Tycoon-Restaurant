@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class IngredientsSource : MonoBehaviour, ISpawnable
+public class IngredientsSource : MonoBehaviour, ISpawnable, ISelectable
 {
     private List<GameObject> spawnPrefabList = new List<GameObject>();
     [SerializeField] private GameObject spawnPrefab;

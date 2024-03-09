@@ -32,6 +32,6 @@ public class LevelScoreTextController : MonoBehaviour
     private void UpdateScoreText()
     {
         point = ScoreManager.Instance.totalLevelScore;
-        ScoreText.text = point.ToString();
+        ScoreText.text = point.ToString("F2") + " pt";
     }
 }

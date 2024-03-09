@@ -40,8 +40,8 @@ public class Hamburger : EdibleBase
     {
         collider = GetComponent<BoxCollider>();
 
-        collider.size = new Vector3(collider.size.x, collider.size.y + (stackedObj.collider.size.y) * 10f, collider.size.z);
-        collider.center = new Vector3(collider.center.x, collider.center.y + (stackedObj.collider.center.y) * 10f, collider.center.z);
+        collider.size = new Vector3(collider.size.x, collider.size.y + (stackedObj.collider.size.y * 10f), collider.size.z);
+        collider.center = new Vector3(collider.center.x, collider.center.y + (stackedObj.collider.center.y * 10f), collider.center.z);
     }
 
     public void AddIngredient(EdibleBase item)
@@ -53,7 +53,7 @@ public class Hamburger : EdibleBase
         {
             point += item.point;
             defaultPoint = point;
-            Debug.Log("item's point: " + item.point);
+            //Debug.Log("item's point: " + item.point);
         }
         ingredientPointSet.Add(item.Name);
         
@@ -73,8 +73,8 @@ public class Hamburger : EdibleBase
         
 
         collider = GetComponent<BoxCollider>();
-        collider.size = new Vector3(collider.size.x, (collider.size.y + 0.3071972f) * 10f, collider.size.z);
-        collider.center = new Vector3(collider.center.x, (collider.center.y + 0.1536008f) * 10f, collider.center.z);
+        collider.size = new Vector3(collider.size.x, collider.size.y + (0.3071972f * 10f), collider.size.z);
+        collider.center = new Vector3(collider.center.x, collider.center.y + (0.1536008f * 10f), collider.center.z);
     }
 
     public override GameObject SetFood()
@@ -86,7 +86,7 @@ public class Hamburger : EdibleBase
     {
         point = point / 6;
         point *= (float)3 / 10;
-        Debug.Log("point: " + point);
+        //Debug.Log("point: " + point);
         return point;
     }
 

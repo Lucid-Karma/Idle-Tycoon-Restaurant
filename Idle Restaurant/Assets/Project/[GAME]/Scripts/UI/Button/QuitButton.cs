@@ -6,6 +6,13 @@ public class QuitButton : MonoBehaviour
 { 
     public void Finish()
     {
+        EventManager.OnGameEnd.Invoke();
+        Invoke("QuitGame", 4.5f);
+    }
+
+    private void QuitGame()
+    {
+        GameManager.Instance.EndGame();
         Application.Quit();
     }
 }

@@ -1,15 +1,19 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class GameManager : Singleton<GameManager>
 {
-    private bool isGameStarted;
-    public bool IsGameStarted { get { return isGameStarted; } private set { isGameStarted = value; } }
+    private static bool IsGameStarted;
+    [HideInInspector] public static bool IsGameRestarted;
+
+    void Start()
+    {
+        StartGame();
+        StartLevel();
+    }
 
     public void StartGame()
     {
-        if (IsGameStarted || applicationIsQuitting == false)
+        if (IsGameStarted || applicationIsQuitting == true)
             return;
 
         IsGameStarted = true;
@@ -25,25 +29,28 @@ public class GameManager : Singleton<GameManager>
         EventManager.OnGameEnd.Invoke();
     }
 
+    private void StartLevel()
+    {
+        if(IsGameStarted && IsGameRestarted)
+        {
+            EventManager.OnLevelStart.Invoke();
+        }
+    }
 
     private void OnEnable()
     {
         EventManager.OnRestart.AddListener(ContinueGame);
-        EventManager.OnLevelFail.AddListener(PauseGame);
-        EventManager.OnLevelSuccess.AddListener(PauseGame);
-        //Timer.OnTimeOut += PauseGame;
+        EventManager.OnLevelFinish.AddListener(PauseGame);
     }
     private void OnDisable()
     {
         EventManager.OnRestart.RemoveListener(ContinueGame);
-        EventManager.OnLevelFail.RemoveListener(PauseGame);
-        EventManager.OnLevelSuccess.RemoveListener(PauseGame);
-        //Timer.OnTimeOut -= PauseGame;
+        EventManager.OnLevelFinish.RemoveListener(PauseGame);
     }
 
     void PauseGame()
     {
-        Time.timeScale = 0.5f;
+        Time.timeScale = 0;
     }
 
     void ContinueGame()

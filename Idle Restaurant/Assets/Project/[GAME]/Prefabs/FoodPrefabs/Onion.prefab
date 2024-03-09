@@ -58,11 +58,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ce4f603fbb0adac4187971bbd0cc017e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Name: 
   purePrefab: {fileID: 919132149155446097, guid: b9fd0c620b032364a8f1a882f287aa4d, type: 3}
   point: 0
-  ingredientPos: {x: 0, y: 0, z: 0}
-  isAdded: 0
-  totalPoint: 0
+  untouchable: 0
   isLastPiece: 0
   collider: {fileID: 0}
   isSliced: 0

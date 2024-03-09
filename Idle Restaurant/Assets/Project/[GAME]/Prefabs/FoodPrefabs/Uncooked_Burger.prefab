@@ -59,12 +59,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2e736b49849c1914db63907042b3283d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Name: 
   purePrefab: {fileID: 1199679678561101911, guid: 7b1aee443d9b8034d94b011318e91f81, type: 3}
   point: 0
   untouchable: 0
-  ingredientPos: {x: 0, y: 0, z: 0}
-  isAdded: 0
-  totalPoint: 0
   isLastPiece: 0
   collider: {fileID: 0}
   progressBar: {fileID: 8901986999711258304}
@@ -260,7 +258,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &8901986999711258364
 RectTransform:
   m_ObjectHideFlags: 0

@@ -15,7 +15,8 @@ public class Audio : MonoBehaviour
         if( audioObject == null )
         {
             audioObject = this;
-            DontDestroyOnLoad( this );
+            DontDestroyOnLoad( gameObject );
+            PlayMusic();
         }
         else if( this != audioObject )
         {

@@ -43,7 +43,6 @@ public class DynamicFoodPool
 
         if(ingredient != null)
         {   
-            //ingredient.GetComponent<Collider>().enabled = true;   ?????
             ingredient.transform.parent = spawnTransform;
             ingredient.transform.rotation = Quaternion.identity;
             ingredient.transform.position = spawnTransform.position;

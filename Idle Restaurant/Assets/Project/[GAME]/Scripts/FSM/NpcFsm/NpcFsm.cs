@@ -42,6 +42,8 @@ public class NpcFsm : MonoBehaviour
     public UnityEvent OnNpcEatStart = new();
     [HideInInspector]
     public UnityEvent OnNpcEatEnd = new();
+    [HideInInspector]
+    public UnityEvent OnNpcWaitEnd = new();
     
     #endregion
 
@@ -167,16 +169,12 @@ public class NpcFsm : MonoBehaviour
         {
             EventManager.OnScoreNotBad.Invoke();
         }
-        
-        // start a new animation for a reaction.
 
         executingNpcState = ExecutingNpcState.GO;
     }
 
     public void Protest()
     {
-        // Add a event to trigger chef's sad anim.
-
         //Debug.Log("time so far: " + waitingTimer);
         ScoreManager.Instance.hostedCustomer ++;
         executingNpcState = ExecutingNpcState.GO;

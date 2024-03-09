@@ -38,6 +38,7 @@ public class CookingProgressBar : MonoBehaviour
     public void ResetProgressBar()
     {
         current = 0;
+        mask = GetComponent<Image>();
         mask.fillAmount = 0f;
         mask.color = mainColor;
     }

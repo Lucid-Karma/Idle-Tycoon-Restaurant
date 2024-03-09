@@ -2,36 +2,58 @@ using UnityEngine;
 
 public class GamePanels : Panel
 {
+    public Panel WelcomePanel;
     public Panel InGamePanel;
+    public Panel ScorePanel;
     public Panel LevelFinishPanel;
 
     private void Awake() 
     {
-        InGamePanel.HidePanel();
+        WelcomePanel.HidePanel();
+        //InGamePanel.HidePanel();
+        ScorePanel.HidePanel();
         LevelFinishPanel.HidePanel();
     }
 
     private void OnEnable()
     {
+        EventManager.OnGameStart.AddListener(InitializeWelcomePanel);
         EventManager.OnLevelStart.AddListener(InitializeInGamePanel);
-        EventManager.OnLevelFinish.AddListener(InitializeLevelFinishPanel);
+        EventManager.OnLevelFinish.AddListener(InitializeScorePanel);
+        EventManager.OnGameEnd.AddListener(InitializeLevelFinishPanel);
     }
     private void OnDisable()
     {
+        EventManager.OnGameStart.RemoveListener(InitializeWelcomePanel);
         EventManager.OnLevelStart.RemoveListener(InitializeInGamePanel);
-        EventManager.OnLevelFinish.RemoveListener(InitializeLevelFinishPanel);
+        EventManager.OnLevelFinish.RemoveListener(InitializeScorePanel);
+        EventManager.OnGameEnd.RemoveListener(InitializeLevelFinishPanel);
+    }
+
+    private void InitializeWelcomePanel()
+    {
+        InGamePanel.HidePanel();
+        WelcomePanel.ShowPanel();
+        ShowPanel();
     }
 
     private void InitializeInGamePanel()
     {
-        LevelFinishPanel.HidePanel();
+        WelcomePanel.HidePanel();
         InGamePanel.ShowPanel();
+        ShowPanel();
+    }
+
+    private void InitializeScorePanel()
+    {
+        InGamePanel.HidePanel();
+        ScorePanel.ShowPanel();
         ShowPanel();
     }
 
     private void InitializeLevelFinishPanel()
     {
-        InGamePanel.HidePanel();
+        ScorePanel.HidePanel();
         LevelFinishPanel.ShowPanel();
         ShowPanel();
     }

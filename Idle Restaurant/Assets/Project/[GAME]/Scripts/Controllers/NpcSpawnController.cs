@@ -86,7 +86,7 @@ public class NpcSpawnController : MonoBehaviour
 
     IEnumerator DelayedCreation()
     {
-        timeBreak = Random.Range(3, 10);
+        timeBreak = Random.Range(10, 30);
         yield return new WaitForSeconds(timeBreak);
         CreateNpc();
     }
@@ -95,7 +95,7 @@ public class NpcSpawnController : MonoBehaviour
     {
         for (int i = 0; i < levelCustomerCount; i++)
         {
-            timeBreak = Random.Range(3, 10);
+            timeBreak = Random.Range(1, 5);
             yield return new WaitForSeconds(timeBreak);
             CreateNpc();
         }

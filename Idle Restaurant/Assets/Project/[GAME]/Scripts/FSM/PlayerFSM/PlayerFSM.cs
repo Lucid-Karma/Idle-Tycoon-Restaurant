@@ -42,6 +42,7 @@ public class PlayerFSM : MonoBehaviour
     ISpawnable spawnable;
     PlaceableBase placeable;
     EdibleBase edible;
+    ISelectable selectable;
 
     #region Parameters
     Camera _playerCam;
@@ -56,7 +57,6 @@ public class PlayerFSM : MonoBehaviour
 
     void Start()
     {
-        EventManager.OnLevelStart.Invoke();
         _playerCam = Camera.main;
         isHolded = false;
 
@@ -81,7 +81,9 @@ public class PlayerFSM : MonoBehaviour
                 spawnable = hit.collider.GetComponent<ISpawnable>();
                 placeable = hit.collider.GetComponent<PlaceableBase>();
                 edible = hit.collider.GetComponent<EdibleBase>();
+                selectable = hit.collider.GetComponent<ISelectable>();
 
+                SelectObject();
                 UpdateStoppingDistance();
 
                 executingState = ExecutingState.RUN;
@@ -154,13 +156,20 @@ public class PlayerFSM : MonoBehaviour
             isHolded = false;
         }
     }
+    
+    private void SelectObject()
+    {
+        if(selectable != null)
+        {
+            EventManager.OnClick.Invoke();
+        }
+    }
     #endregion
 
     public void DoneWithPath()
     {
         if(Agent.remainingDistance <= Agent.stoppingDistance)
         {
-            // Add a new line to choose idle or interact after adding the anim. event to the interact anim.
             executingState = ExecutingState.IDLE;
         }
     }

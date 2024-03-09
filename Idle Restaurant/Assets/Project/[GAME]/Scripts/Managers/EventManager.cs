@@ -34,6 +34,8 @@ public static class EventManager
 
     public static UnityEvent OnMusicOn = new();
     public static UnityEvent OnMusicOff = new();
+
+    public static UnityEvent OnClick = new();
 }
 
 //public class HamburgerEvent : UnityEvent<Transform> { }

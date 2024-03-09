@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public abstract class EdibleBase : MonoBehaviour, IEdible
+public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
 {
     [HideInInspector] public string Name;
     public GameObject purePrefab;
@@ -74,6 +74,7 @@ public abstract class EdibleBase : MonoBehaviour, IEdible
         if (currentVersion != null && !currentVersion.activeInHierarchy)
         {
             SetStarterVersion();
+            gameObject.GetComponent<Collider>().enabled = true;
         }
     }
 

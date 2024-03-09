@@ -10,5 +10,6 @@ public class RestartButton : MonoBehaviour
     {
         SceneManager.LoadScene( SceneManager.GetActiveScene().name );
         EventManager.OnRestart.Invoke();
+        GameManager.IsGameRestarted = true;
     }
 }

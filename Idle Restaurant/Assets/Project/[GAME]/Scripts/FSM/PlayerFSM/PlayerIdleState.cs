@@ -12,6 +12,7 @@ public class PlayerIdleState : PlayerStates
         fsm.GetFoodFromSource();
         fsm.GetFood();
         fsm.PlaceFood();
+        fsm.TrashEdible();
     }
 
     public override void UpdateState(PlayerFSM fsm)

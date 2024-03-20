@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
@@ -13,7 +12,6 @@ public class Plate : PlaceableBase
     private Vector3 colSize, colCenter;
     [SerializeField] private GameObject hamburger;
     private bool doesHaveHamburger;
-    private Transform bunSpawnTransform;
 
     public override void EnableCollider()
     {
@@ -44,6 +42,14 @@ public class Plate : PlaceableBase
 
         placeableCollider.size = new Vector3(placeableCollider.size.x, placeableCollider.size.y - (ingredients[_ingredientsCount-1].transform.localScale.y / 2), placeableCollider.size.z);
         placeableCollider.center = new Vector3(placeableCollider.center.x, placeableCollider.center.y - ingredients[_ingredientsCount-1].transform.localScale.y / 4, placeableCollider.center.z);
+    }
+    private void ResetColAndRef()
+    {
+        refTransform.position = gameObject.transform.position;
+
+        placeableCollider.size = colSize;
+        placeableCollider.center = colCenter;
+        placeableCollider.enabled = true;
     }
 
     private void SetDistanceBetweenIngredients()
@@ -84,32 +90,33 @@ public class Plate : PlaceableBase
 
             refTransform.position = ingredient.gameObject.transform.position;
             
-            GenerateHamburger(ingredient);
+            GenerateHamburger();
         }
     }
 
     public override void RemoveFood(EdibleBase ingredient)
     {
-        ingredients.Remove(ingredient);
-        if(ingredients.Count >= 1)
+        
+        if(ingredients.Count > 1)
         {
+            ingredients.Remove(ingredient);
             refTransform.position = ingredients.Last().gameObject.transform.position;
             ingredients.Last().isLastPiece = true;
             CompressCollider();
         }   
+        else if(ingredients.Count == 1)
+        {
+            ingredients.Remove(ingredient);
+            ResetColAndRef();
+        }
         else
         {
-            refTransform.position = gameObject.transform.position;
-
-            placeableCollider.size = colSize;
-            placeableCollider.center = colCenter;
-            placeableCollider.enabled = true;
-
+            ResetColAndRef();
             doesHaveHamburger = false;
         }
     }
 
-    private void GenerateHamburger(EdibleBase ingredient)
+    private void GenerateHamburger()
     {
         if(ingredients.Count == 6)
         {

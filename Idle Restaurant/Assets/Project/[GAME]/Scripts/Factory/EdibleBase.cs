@@ -20,6 +20,8 @@ public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
     protected DynamicFoodPool pool = new DynamicFoodPool();
     protected List<GameObject> pureList = new List<GameObject>();
 
+    [SerializeField] protected Material defaultMaterial;
+
     public virtual void Start()
     {
         collider = GetComponent<BoxCollider>();
@@ -84,5 +86,10 @@ public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
         collider.center = colCenter;
 
         currentVersion.SetActive(false);
+    }
+
+    public Material DefaultMaterial()
+    {
+        return defaultMaterial;
     }
 }

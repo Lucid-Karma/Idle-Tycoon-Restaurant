@@ -2727,10 +2727,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: Npc_WS_Canvas
       objectReference: {fileID: 0}
-    - target: {fileID: 2125874281155669113, guid: 0c8d5c038aec81249b7e8996acdf0b26, type: 3}
-      propertyPath: m_PresetInfoIsWorld
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 2125874281155669115, guid: 0c8d5c038aec81249b7e8996acdf0b26, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5

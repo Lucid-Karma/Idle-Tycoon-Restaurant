@@ -14,7 +14,7 @@ public class NpcEatProgressBar : MonoBehaviour
     private Image mask;
     private float fillAmount;
 
-    void Start()
+    void OnEnable()
     {
         mask = GetComponent<Image>();
     }
@@ -37,5 +37,11 @@ public class NpcEatProgressBar : MonoBehaviour
         current += Time.deltaTime;
         fillAmount = (float)current / (float)maximum;
         mask.fillAmount = fillAmount;
+    }
+
+    private void OnDisable()
+    {
+        current = 0;
+        mask.fillAmount = 0;
     }
 }

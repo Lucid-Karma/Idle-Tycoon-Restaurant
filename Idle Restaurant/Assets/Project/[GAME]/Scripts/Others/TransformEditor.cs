@@ -1,51 +1,51 @@
-using System;
-using System.Reflection;
-using UnityEditor;
-using UnityEngine;
+// using system;
+// using system.reflection;
+// using unityeditor;
+// using unityengine;
 
-namespace Tool
-{
+// namespace tool
+// {
     
-    [CustomEditor(typeof(Transform), true)]
-    [CanEditMultipleObjects]
-    public class TransformEditor : Editor 
-    {
-        Editor defaultEditor;
-        Transform transform;
+//     [customeditor(typeof(transform), true)]
+//     [caneditmultipleobjects]
+//     public class transformeditor : editor 
+//     {
+//         editor defaulteditor;
+//         transform transform;
 
-        void OnEnable()
-        {
-            transform = target as Transform;
-            defaultEditor = Editor.CreateEditor(targets, Type.GetType("UnityEditor.TransformInspector, UnityEditor"));
-        }
+//         void onenable()
+//         {
+//             transform = target as transform;
+//             defaulteditor = editor.createeditor(targets, type.gettype("unityeditor.transformýnspector, unityeditor"));
+//         }
 
-        void OnDisable()
-        {
-            MethodInfo disableMethod = defaultEditor.GetType() //Type
-                .GetMethod("OnDisable", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-            if(disableMethod != null)
-                disableMethod.Invoke(defaultEditor, null);
-            DestroyImmediate(defaultEditor);
-        }
+//         void ondisable()
+//         {
+//             methodýnfo disablemethod = defaulteditor.gettype() //type
+//                 .getmethod("ondisable", bindingflags.ýnstance | bindingflags.nonpublic | bindingflags.public);
+//             if(disablemethod != null)
+//                 disablemethod.ýnvoke(defaulteditor, null);
+//             destroyýmmediate(defaulteditor);
+//         }
 
-        public override void OnInspectorGUI() 
-        {
-            defaultEditor.OnInspectorGUI();
-            GUILayout.Space(10f);
-            EditorGUILayout.BeginHorizontal();
+//         public override void onýnspectorguý() 
+//         {
+//             defaulteditor.onýnspectorguý();
+//             guýlayout.space(10f);
+//             editorguýlayout.beginhorizontal();
 
-            if(GUILayout.Button("Copy"))
-            {
-                UnityEditorInternal.ComponentUtility.CopyComponent(transform);
-            }
+//             if(guýlayout.button("copy"))
+//             {
+//                 unityeditorýnternal.componentutility.copycomponent(transform);
+//             }
 
-            if(GUILayout.Button("Paste"))
-            {
-                UnityEditorInternal.ComponentUtility.PasteComponentValues(transform);
-            }
+//             if(guýlayout.button("paste"))
+//             {
+//                 unityeditorýnternal.componentutility.pastecomponentvalues(transform);
+//             }
             
-            EditorGUILayout.EndHorizontal();
-        }
-    }
-}
+//             editorguýlayout.endhorizontal();
+//         }
+//     }
+// }
 

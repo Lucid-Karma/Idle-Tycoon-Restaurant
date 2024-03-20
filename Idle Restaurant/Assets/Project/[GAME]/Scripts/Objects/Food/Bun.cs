@@ -56,14 +56,16 @@ public class Bun : EdibleBase
 
     public override GameObject SetFood()
     {
-        progressBar.SetActive(true);
-
-        currentVersion.SetActive(false);
-        pool.GetObject(this.gameObject.transform, bunSlice, PoolingManager.bunBottomList);
-        currentVersion = pool.currentObject;
-        collider.size = slicedBunColSize;
-        collider.center = slicedBunColCenter;
-        isSlicedBun = true;
+        if (placeable is CookingBase)
+        {
+            progressBar.SetActive(true);
+            currentVersion.SetActive(false);
+            pool.GetObject(this.gameObject.transform, bunSlice, PoolingManager.bunBottomList);
+            currentVersion = pool.currentObject;
+            collider.size = slicedBunColSize;
+            collider.center = slicedBunColCenter;
+            isSlicedBun = true;
+        }
         return currentVersion;
     }
 
@@ -79,6 +81,7 @@ public class Bun : EdibleBase
         _currentBunState = 0;  
         bakeTimer = 0f;
         isOver = false;
+        isSlicedBun = false;
         progressBar.GetComponentInChildren<CookingProgressBar>().ResetProgressBar();
     }
 }

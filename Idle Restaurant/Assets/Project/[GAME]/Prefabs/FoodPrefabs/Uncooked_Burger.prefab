@@ -65,6 +65,7 @@ MonoBehaviour:
   untouchable: 0
   isLastPiece: 0
   collider: {fileID: 0}
+  defaultMaterial: {fileID: 2100000, guid: 9550a669a60a7844787629952a455304, type: 2}
   progressBar: {fileID: 8901986999711258304}
   cookedBurger: {fileID: 919132149155446097, guid: 0a7782d92e874f343b82bef30d49aea6, type: 3}
   overcookedBurger: {fileID: 919132149155446097, guid: f23698cdc551e92479cbf4baebe52a61, type: 3}

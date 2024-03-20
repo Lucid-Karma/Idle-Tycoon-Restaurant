@@ -5,6 +5,7 @@ using UnityEngine;
 public abstract class PlaceableBase : MonoBehaviour, IPlaceable, ISelectable
 {
     protected BoxCollider placeableCollider;
+    [SerializeField] protected Material defaultMaterial;
 
     protected virtual void OnEnable()
     {
@@ -28,4 +29,9 @@ public abstract class PlaceableBase : MonoBehaviour, IPlaceable, ISelectable
     public abstract void RemoveFood(EdibleBase ingredient);
 
     public abstract bool IsSuitable(EdibleBase ingredient);
+
+    public Material DefaultMaterial()
+    {
+        return defaultMaterial;
+    }
 }

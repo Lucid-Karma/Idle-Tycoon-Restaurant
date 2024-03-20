@@ -58,10 +58,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: be6145138cf218c4bb8972d326eb69d1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Name: 
   purePrefab: {fileID: 919132149155446097, guid: 7ff00a719e1bbd1498432e7469317e4a, type: 3}
-  ingredientPos: {x: 0, y: 0, z: 0}
-  isAdded: 0
-  totalPoint: 0
+  point: 0
+  untouchable: 0
   isLastPiece: 0
   collider: {fileID: 0}
+  defaultMaterial: {fileID: 2100000, guid: 9550a669a60a7844787629952a455304, type: 2}
+  isSliced: 0
   slicedTomato: {fileID: 919132149155446097, guid: 281a3d6454c2a624fa951a6e3ffe6976, type: 3}

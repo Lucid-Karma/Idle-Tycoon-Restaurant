@@ -9,6 +9,9 @@ public class IngredientsSource : MonoBehaviour, ISpawnable, ISelectable
     private DynamicFoodPool dynamicPool;
     private Transform playerTransform;
 
+    [SerializeField] private Material defaultMaterial;
+
+
     void Start()
     {
         dynamicPool = new DynamicFoodPool();
@@ -19,5 +22,10 @@ public class IngredientsSource : MonoBehaviour, ISpawnable, ISelectable
     public void Spawn()
     {   
         dynamicPool.GetObject(playerTransform, spawnPrefab, spawnPrefabList);
+    }
+
+    public Material DefaultMaterial()
+    {
+        return defaultMaterial;
     }
 }

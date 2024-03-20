@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class QuitButton : MonoBehaviour
@@ -7,12 +6,18 @@ public class QuitButton : MonoBehaviour
     public void Finish()
     {
         EventManager.OnGameEnd.Invoke();
+        //StartCoroutine(Quit());
         Invoke("QuitGame", 4.5f);
+    }
+
+    IEnumerator Quit()
+    {
+        yield return new WaitForSeconds(4.5f);
+        Application.Quit();
     }
 
     private void QuitGame()
     {
-        GameManager.Instance.EndGame();
         Application.Quit();
     }
 }

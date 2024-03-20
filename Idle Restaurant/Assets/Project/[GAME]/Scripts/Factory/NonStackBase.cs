@@ -40,6 +40,6 @@ public class NonStackBase : PlaceableBase
 
     public Hamburger GetHamburger()
     {
-        return currentObject.gameObject.GetComponent<Hamburger>();
+        return currentObject.GetComponent<Hamburger>(); 
     }
 }

@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Events;
@@ -156,8 +154,9 @@ public class NpcFsm : MonoBehaviour
         OnNpcSitChairStandUp.Invoke();
         ScoreManager.Instance.CalculateLevelScore(totalPoint);
         EventManager.OnScoreUpdate.Invoke();
+        _hamburger.gameObject.SetActive(false);
 
-        if(totalPoint < 2.5f)
+        if (totalPoint < 2.5f)
         {
             EventManager.OnScoreBad.Invoke();
         }
@@ -176,6 +175,9 @@ public class NpcFsm : MonoBehaviour
     public void Protest()
     {
         //Debug.Log("time so far: " + waitingTimer);
+        if(!chair.GetTableService().IsHaveFood())
+            chair.IsEmpty = true;
+
         ScoreManager.Instance.hostedCustomer ++;
         executingNpcState = ExecutingNpcState.GO;
     }

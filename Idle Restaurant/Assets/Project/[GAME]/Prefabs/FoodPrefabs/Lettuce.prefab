@@ -64,3 +64,4 @@ MonoBehaviour:
   untouchable: 0
   isLastPiece: 0
   collider: {fileID: 0}
+  defaultMaterial: {fileID: 2100000, guid: 9550a669a60a7844787629952a455304, type: 2}

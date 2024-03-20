@@ -1,8 +1,10 @@
+using System;
 using UnityEngine;
 
 public class GamePanels : Panel
 {
     public Panel WelcomePanel;
+    public Panel HelpPanel;
     public Panel InGamePanel;
     public Panel ScorePanel;
     public Panel LevelFinishPanel;
@@ -10,6 +12,7 @@ public class GamePanels : Panel
     private void Awake() 
     {
         WelcomePanel.HidePanel();
+        HelpPanel.HidePanel();
         //InGamePanel.HidePanel();
         ScorePanel.HidePanel();
         LevelFinishPanel.HidePanel();
@@ -19,15 +22,20 @@ public class GamePanels : Panel
     {
         EventManager.OnGameStart.AddListener(InitializeWelcomePanel);
         EventManager.OnLevelStart.AddListener(InitializeInGamePanel);
+        EventManager.OnLevelContine.AddListener(ReinitializeInGamePanel);
         EventManager.OnLevelFinish.AddListener(InitializeScorePanel);
         EventManager.OnGameEnd.AddListener(InitializeLevelFinishPanel);
+        EventManager.OnHelpRequest.AddListener(InitializeHelpPanel);
     }
+
     private void OnDisable()
     {
         EventManager.OnGameStart.RemoveListener(InitializeWelcomePanel);
         EventManager.OnLevelStart.RemoveListener(InitializeInGamePanel);
+        EventManager.OnLevelContine.RemoveListener(ReinitializeInGamePanel);
         EventManager.OnLevelFinish.RemoveListener(InitializeScorePanel);
         EventManager.OnGameEnd.RemoveListener(InitializeLevelFinishPanel);
+        EventManager.OnHelpRequest.RemoveListener(InitializeHelpPanel);
     }
 
     private void InitializeWelcomePanel()
@@ -43,6 +51,12 @@ public class GamePanels : Panel
         InGamePanel.ShowPanel();
         ShowPanel();
     }
+    private void ReinitializeInGamePanel()
+    {
+        HelpPanel.HidePanel();
+        InGamePanel.ShowPanel();
+        ShowPanel();
+    }
 
     private void InitializeScorePanel()
     {
@@ -55,6 +69,13 @@ public class GamePanels : Panel
     {
         ScorePanel.HidePanel();
         LevelFinishPanel.ShowPanel();
+        ShowPanel();
+    }
+
+    private void InitializeHelpPanel()
+    {
+        InGamePanel.HidePanel();
+        HelpPanel.ShowPanel();
         ShowPanel();
     }
 }

@@ -111,6 +111,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f213310946d87f34dafad9055b4ad36d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  defaultMaterial: {fileID: 2100000, guid: 9550a669a60a7844787629952a455304, type: 2}
   hamburger: {fileID: 6990269598080060478, guid: 30fe512474de0394a90c9385317f95a9, type: 3}
 --- !u!1 &6724136364798436845
 GameObject:

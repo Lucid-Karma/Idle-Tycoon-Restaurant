@@ -59,14 +59,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b2a2e2eec4ce00843b73ace26de9ac88, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Name: 
   purePrefab: {fileID: 919132149155446097, guid: 774a924cffb7a964c9bbd634f92647bb, type: 3}
   point: 0
   untouchable: 0
-  ingredientPos: {x: 0, y: 0, z: 0}
-  isAdded: 0
-  totalPoint: 0
   isLastPiece: 0
   collider: {fileID: 0}
+  defaultMaterial: {fileID: 2100000, guid: 9550a669a60a7844787629952a455304, type: 2}
   progressBar: {fileID: 8005066006825662644}
   bunSlice: {fileID: 919132149155446097, guid: 4af5f34694eb0d443a07ec0c6dcd900a, type: 3}
   maxCookingTime: 0

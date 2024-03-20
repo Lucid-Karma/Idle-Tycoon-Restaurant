@@ -7,6 +7,8 @@ public class ChefAnimationController : MonoBehaviour
     private Animator animator;
     public Animator Animator { get { return (animator == null) ? animator = GetComponent<Animator>() : animator; } }
 
+    private float waitForIdleTime;
+
     private void OnEnable()
     {
         EventManager.OnCustomerWent.AddListener(() => StartCoroutine(IdleAgain()));
@@ -44,7 +46,8 @@ public class ChefAnimationController : MonoBehaviour
 
     IEnumerator IdleAgain()
     {
-        yield return new WaitForSeconds(1f);
+        waitForIdleTime = Animator.GetCurrentAnimatorStateInfo(0).normalizedTime;
+        yield return new WaitForSeconds(waitForIdleTime);
         InvokeTrigger("Idle");
     }
 }

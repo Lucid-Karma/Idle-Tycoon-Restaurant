@@ -10,10 +10,7 @@ public class Hamburger : EdibleBase
     private Vector3 hamSize = new Vector3(0.95f, 0.1f, 0.95f);
     private Vector3 hamCenter = new Vector3(-1.490116e-08f, 0.05f, 0);
 
-    public override void OnEnable()
-    {
-        EventManager.OnScoreUpdate.AddListener(() => gameObject.SetActive(false));
-    }
+
     protected override void OnDisable()
     {
         collider.size = hamSize;
@@ -25,7 +22,10 @@ public class Hamburger : EdibleBase
         untouchable = false;
         point = 0;
 
-        EventManager.OnScoreUpdate.RemoveListener(() => gameObject.SetActive(false));
+        foreach (GameObject item in ingredients)
+        {
+            item.SetActive(false);
+        }
     }
 
     public override void Start()
@@ -48,6 +48,7 @@ public class Hamburger : EdibleBase
     {
         item.gameObject.transform.parent = transform;
         ExtendCollider(item);
+        ingredients.Add(item.gameObject);
 
         if(!ingredientPointSet.Contains(item.Name))
         {

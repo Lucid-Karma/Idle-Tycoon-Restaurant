@@ -16,6 +16,7 @@ public static class EventManager
     public static UnityEvent OnLevelFail = new();
 
     public static UnityEvent OnRestart = new();
+    public static UnityEvent OnHelpRequest = new();
 
     public static UnityEvent OnCustomerWent = new();
 

@@ -77,14 +77,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dcce81dfa37d1ea4aae50794087ae6db, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Name: 
   purePrefab: {fileID: 919132149155446097, guid: 9376473c7ca529b42bd8ee5d71281b36, type: 3}
   point: 0
   untouchable: 0
-  ingredientPos: {x: 0, y: 0, z: 0}
-  isAdded: 0
-  totalPoint: 0
   isLastPiece: 0
   collider: {fileID: 0}
+  defaultMaterial: {fileID: 2100000, guid: 9550a669a60a7844787629952a455304, type: 2}
   finishBun: {fileID: 919132149155446097, guid: c46cd77982d081d49804545b9a449660, type: 3}
   bunHolder: {fileID: 3943553502653941047}
 --- !u!65 &4041958219378826030

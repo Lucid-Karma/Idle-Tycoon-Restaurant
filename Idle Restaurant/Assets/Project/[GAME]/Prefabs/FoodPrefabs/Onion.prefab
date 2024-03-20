@@ -64,5 +64,6 @@ MonoBehaviour:
   untouchable: 0
   isLastPiece: 0
   collider: {fileID: 0}
+  defaultMaterial: {fileID: 2100000, guid: 9550a669a60a7844787629952a455304, type: 2}
   isSliced: 0
   slicedOnion: {fileID: 919132149155446097, guid: a94c68957739b5e4fabcc155452041b9, type: 3}

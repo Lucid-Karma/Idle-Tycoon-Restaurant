@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 
 public enum ExecutingState
 {
@@ -44,6 +45,8 @@ public class PlayerFSM : MonoBehaviour
     EdibleBase edible;
     ISelectable selectable;
 
+    Bin bin;
+
     #region Parameters
     Camera _playerCam;
     Ray ray;
@@ -67,6 +70,9 @@ public class PlayerFSM : MonoBehaviour
 
     void Update()
     {
+        if (EventSystem.current.IsPointerOverGameObject())
+            return;
+
         currentState.UpdateState(this);
     }
 
@@ -82,6 +88,7 @@ public class PlayerFSM : MonoBehaviour
                 placeable = hit.collider.GetComponent<PlaceableBase>();
                 edible = hit.collider.GetComponent<EdibleBase>();
                 selectable = hit.collider.GetComponent<ISelectable>();
+                bin = hit.collider.GetComponent<Bin>();
 
                 SelectObject();
                 UpdateStoppingDistance();
@@ -104,7 +111,8 @@ public class PlayerFSM : MonoBehaviour
 
             spawnable?.Spawn();
             EventManager.OnFoodHolded.Invoke();
-            currentFood = holdParent.transform.GetChild(0)? holdParent.transform.GetChild(0).gameObject.GetComponent<EdibleBase>(): null;
+            currentFood = holdParent.transform.GetChild(holdParent.transform.childCount - 1) ? 
+                holdParent.transform.GetChild(holdParent.transform.childCount - 1).gameObject.GetComponent<EdibleBase>(): null;
             isHolded = true;
         }
     }
@@ -140,6 +148,8 @@ public class PlayerFSM : MonoBehaviour
         currentFood.transform.position = holdParent.transform.position;
 
         isHolded = true;
+
+        Debug.Log("name: " + currentFood.gameObject.name);
     }
     void DropObject(PlaceableBase place)
     {
@@ -162,6 +172,20 @@ public class PlayerFSM : MonoBehaviour
         if(selectable != null)
         {
             EventManager.OnClick.Invoke();
+        }
+    }
+
+    public void TrashEdible()
+    {
+        if (bin != null)
+        {
+            if (isHolded)
+            {
+                if (currentFood == null) return;
+                bin.Junk(currentFood);
+                currentFood = null;
+                isHolded = false;
+            }
         }
     }
     #endregion

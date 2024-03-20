@@ -6,6 +6,7 @@ public class AudioButton : MonoBehaviour
 
     public void MusicOnOff()
     {
+        EventManager.OnClick.Invoke();
         if(isMusicOn)
         {
             EventManager.OnMusicOff.Invoke();

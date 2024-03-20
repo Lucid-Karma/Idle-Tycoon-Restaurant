@@ -34,9 +34,9 @@ public class Pan : CookingBase
     public override void UseFood(EdibleBase ingredient)
     {
         burger = ingredient.gameObject.GetComponent<Burger>();
-        maxCookingTime = burger.maxCookingTime;
-
         if(!IsSuitable(ingredient)) return;
+
+        maxCookingTime = burger.maxCookingTime;
 
         base.UseFood(ingredient);
         cookingTimer = burger.fryingTimer;

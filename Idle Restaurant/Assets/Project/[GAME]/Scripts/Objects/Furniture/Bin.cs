@@ -12,4 +12,9 @@ public class Bin : MonoBehaviour, ISelectable
     {
         edibleObject.gameObject.SetActive(false);
     }
+
+    public Vector3 SelectablePos()
+    {
+        return gameObject.transform.position;
+    }
 }

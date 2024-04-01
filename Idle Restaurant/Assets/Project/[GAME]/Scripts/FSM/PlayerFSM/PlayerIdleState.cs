@@ -13,6 +13,7 @@ public class PlayerIdleState : PlayerStates
         fsm.GetFood();
         fsm.PlaceFood();
         fsm.TrashEdible();
+        fsm.RotateToSelectable();
     }
 
     public override void UpdateState(PlayerFSM fsm)

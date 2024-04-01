@@ -92,4 +92,9 @@ public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
     {
         return defaultMaterial;
     }
+
+    public Vector3 SelectablePos()
+    {
+        return gameObject.transform.position;
+    }
 }

@@ -56,6 +56,11 @@ public class PlayerFSM : MonoBehaviour
     private bool isHolded;
     private EdibleBase currentFood;
     private float distance;
+
+    Vector3 _selectablePos;
+    Vector3 direction;
+    Quaternion lookRotation;
+    [SerializeField] private float rotationSpeed = 50f;
     #endregion
 
     void Start()
@@ -97,7 +102,9 @@ public class PlayerFSM : MonoBehaviour
 
                 distance = Vector3.Distance(Agent.transform.position, hit.point);
                 if(distance > 3.0f)
+                {
                     Agent.SetDestination(hit.point);
+                }
             }
         }
     }
@@ -213,6 +220,18 @@ public class PlayerFSM : MonoBehaviour
         {
             Agent.stoppingDistance = 0f;
         }
+    }
+
+    public void RotateToSelectable()
+    {
+        if(selectable != null)
+        {
+            _selectablePos = selectable.SelectablePos();
+            direction = (_selectablePos - Agent.transform.position).normalized;
+            lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0f, direction.z));
+            Agent.transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * rotationSpeed);
+        }
+        
     }
 
     public void SwitchState(PlayerStates nextState)

@@ -28,4 +28,9 @@ public class IngredientsSource : MonoBehaviour, ISpawnable, ISelectable
     {
         return defaultMaterial;
     }
+
+    public Vector3 SelectablePos()
+    {
+        return gameObject.transform.position;
+    }
 }

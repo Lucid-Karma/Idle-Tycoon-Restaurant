@@ -95,7 +95,7 @@ public class NpcSpawnController : MonoBehaviour
     {
         for (int i = 0; i < levelCustomerCount; i++)
         {
-            timeBreak = Random.Range(1, 5);
+            timeBreak = Random.Range(3, 20);
             yield return new WaitForSeconds(timeBreak);
             CreateNpc();
         }

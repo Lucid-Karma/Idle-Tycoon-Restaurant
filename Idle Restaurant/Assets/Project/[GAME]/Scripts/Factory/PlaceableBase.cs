@@ -34,4 +34,9 @@ public abstract class PlaceableBase : MonoBehaviour, IPlaceable, ISelectable
     {
         return defaultMaterial;
     }
+
+    public Vector3 SelectablePos()
+    {
+        return gameObject.transform.position;
+    }
 }

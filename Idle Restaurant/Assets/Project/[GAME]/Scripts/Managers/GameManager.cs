@@ -20,14 +20,14 @@ public class GameManager : Singleton<GameManager>
         EventManager.OnGameStart.Invoke();
     }
 
-    public void EndGame()
-    {
-        if (!IsGameStarted || applicationIsQuitting == true)
-            return;
+    //public void EndGame()
+    //{
+    //    if (!IsGameStarted || applicationIsQuitting == true)
+    //        return;
 
-        IsGameStarted = false;
-        EventManager.OnGameEnd.Invoke();
-    }
+    //    IsGameStarted = false;
+    //    EventManager.OnGameEnd.Invoke();
+    //}
 
     private void StartLevel()
     {
@@ -40,12 +40,12 @@ public class GameManager : Singleton<GameManager>
     private void OnEnable()
     {
         EventManager.OnRestart.AddListener(ContinueGame);
-        EventManager.OnLevelFinish.AddListener(PauseGame);
+        //EventManager.OnLevelFinish.AddListener(PauseGame);
     }
     private void OnDisable()
     {
         EventManager.OnRestart.RemoveListener(ContinueGame);
-        EventManager.OnLevelFinish.RemoveListener(PauseGame);
+        //EventManager.OnLevelFinish.RemoveListener(PauseGame);
     }
 
     void PauseGame()

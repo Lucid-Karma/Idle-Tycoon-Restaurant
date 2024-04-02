@@ -10,7 +10,7 @@ public class NpcGoState : NpcStates
         fsm.OnNpcEatEnd.Invoke();
         fsm.Agent.stoppingDistance = 1f;
         fsm.Agent.SetDestination(new Vector3(21.35f, 1.2f, 8.79f));
-        fsm.chair.IsEmpty = true;
+        fsm.chair.IsEmpty = true;   // !!!
     }
 
     public override void UpdateState(NpcFsm fsm)

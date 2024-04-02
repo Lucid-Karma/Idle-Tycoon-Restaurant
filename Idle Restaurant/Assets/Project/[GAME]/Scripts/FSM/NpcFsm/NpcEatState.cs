@@ -13,7 +13,7 @@ public class NpcEatState : NpcStates
     {
         if (fsm.executingNpcState == ExecutingNpcState.EAT)
         {
-            //fsm.Eat();
+            
         }
         else   ExitState(fsm);
     }

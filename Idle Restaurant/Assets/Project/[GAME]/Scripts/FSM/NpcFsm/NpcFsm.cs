@@ -125,14 +125,6 @@ public class NpcFsm : MonoBehaviour
         }
     }
 
-    public void Eat()
-    {
-        // start eating animation.
-        // add an animation event at the end to start REACT.
-        
-        //executingNpcState = ExecutingNpcState.REACT;
-    }
-
     public void React()
     {
         hamburgerPoint = _hamburger.CalculateScore();
@@ -169,15 +161,12 @@ public class NpcFsm : MonoBehaviour
             EventManager.OnScoreNotBad.Invoke();
         }
 
+        chair.IsEmpty = true;
         executingNpcState = ExecutingNpcState.GO;
     }
 
     public void Protest()
     {
-        //Debug.Log("time so far: " + waitingTimer);
-        if(!chair.GetTableService().IsHaveFood())
-            chair.IsEmpty = true;
-
         ScoreManager.Instance.hostedCustomer ++;
         executingNpcState = ExecutingNpcState.GO;
     }

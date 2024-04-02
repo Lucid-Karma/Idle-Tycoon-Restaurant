@@ -44,6 +44,7 @@ public class PlayerFSM : MonoBehaviour
     PlaceableBase placeable;
     EdibleBase edible;
     ISelectable selectable;
+    ISedile sedile;
 
     Bin bin;
 
@@ -71,6 +72,9 @@ public class PlayerFSM : MonoBehaviour
         executingState = ExecutingState.IDLE;
         currentState = playerIdleState;
         currentState.EnterState(this);
+
+        //path = new NavMeshPath();
+        //elapsed = 0.0f;
     }
 
     void Update()
@@ -80,6 +84,9 @@ public class PlayerFSM : MonoBehaviour
 
         currentState.UpdateState(this);
     }
+    //public Transform target;
+    //private NavMeshPath path;
+    //private float elapsed = 0.0f;
 
     public void MovePlayer()
     {
@@ -89,27 +96,57 @@ public class PlayerFSM : MonoBehaviour
 
             if(Physics.Raycast(ray, out hit, 100))
             {
-                spawnable = hit.collider.GetComponent<ISpawnable>();
-                placeable = hit.collider.GetComponent<PlaceableBase>();
-                edible = hit.collider.GetComponent<EdibleBase>();
-                selectable = hit.collider.GetComponent<ISelectable>();
-                bin = hit.collider.GetComponent<Bin>();
+                GatherInteractableComponents();
 
+                //target = hit.collider.transform;
                 SelectObject();
                 UpdateStoppingDistance();
 
-                executingState = ExecutingState.RUN;
+                //executingState = ExecutingState.RUN;
 
                 distance = Vector3.Distance(Agent.transform.position, hit.point);
-                if(distance > 3.0f)
+                if (distance > 3.0f)
                 {
+                    executingState = ExecutingState.RUN;
                     Agent.SetDestination(hit.point);
                 }
+                else
+                    Interact();
+
+                //elapsed += Time.deltaTime;
+                //if (elapsed > 1.0f)
+                //{
+                //    elapsed -= 1.0f;
+                //    NavMesh.CalculatePath(transform.position, target.position, NavMesh.AllAreas, path);
+                //}
+                //for (int i = 0; i < path.corners.Length - 1; i++)
+                //    Debug.DrawLine(path.corners[i], path.corners[i + 1], Color.red);
             }
         }
     }
 
+    private void GatherInteractableComponents()
+    {
+        spawnable = hit.collider.GetComponent<ISpawnable>();
+        placeable = hit.collider.GetComponent<PlaceableBase>();
+        edible = hit.collider.GetComponent<EdibleBase>();
+        selectable = hit.collider.GetComponent<ISelectable>();
+        sedile = hit.collider.GetComponent<ISedile>();
+        bin = hit.collider.GetComponent<Bin>();
+    }
+
     #region Selectables'Methods
+
+    public void Interact()
+    {
+        GetFoodFromSource();
+        GetFood();
+        PlaceFood();
+        TrashEdible();
+        RotateToSelectable();
+        UpdateSedile();
+    }
+
     public void GetFoodFromSource()
     {
         if(spawnable != null)
@@ -179,6 +216,14 @@ public class PlayerFSM : MonoBehaviour
         if(selectable != null)
         {
             EventManager.OnClick.Invoke();
+        }
+    }
+
+    public void UpdateSedile()
+    {
+        if(sedile != null)
+        {
+            sedile.UpdateChairState();
         }
     }
 

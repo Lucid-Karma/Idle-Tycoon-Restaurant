@@ -6,4 +6,6 @@ public interface ISedile
     Vector3 CalculateSitPos();
     Quaternion GetSedileRot();
     NonStackBase GetTableService();
+
+    void UpdateChairState();
 }

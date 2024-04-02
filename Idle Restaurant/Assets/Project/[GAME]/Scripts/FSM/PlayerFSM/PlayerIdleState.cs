@@ -8,12 +8,7 @@ public class PlayerIdleState : PlayerStates
     {
         //Debug.Log("IDLE");
         fsm.OnPlayerIdle.Invoke();
-        
-        fsm.GetFoodFromSource();
-        fsm.GetFood();
-        fsm.PlaceFood();
-        fsm.TrashEdible();
-        fsm.RotateToSelectable();
+        fsm.Interact();
     }
 
     public override void UpdateState(PlayerFSM fsm)
@@ -21,7 +16,6 @@ public class PlayerIdleState : PlayerStates
         if (fsm.executingState == ExecutingState.IDLE)
         {
             fsm.MovePlayer();
-            
         }
         else   ExitState(fsm);
     }

@@ -26,4 +26,9 @@ public class Chair : MonoBehaviour, ISedile
     {
         return service;
     }
+
+    public void UpdateChairState()
+    {
+        IsEmpty = !service.IsHaveFood();
+    }
 }

@@ -36,6 +36,6 @@ Customers will rate your hamburgers. The score is based on how quickly and accur
 ![ChibiR Gameplay SS](https://github.com/Lucid-Karma/Idle-Tycoon-Restaurant/assets/88732917/53e63ef7-5016-4107-8032-742f81d659f6)
 
 ## Assets and Audio
-- **Background music:** ** ** https://assetstore.unity.com/packages/audio/music/orchestral/a-symphony-of-disarray-game-music-pack-217536
-- **Restaurant models:** ** ** https://kaylousberg.itch.io/restaurant-bits
-- **Character models:** ** ** https://kaylousberg.itch.io/kaykit-skeletons
+- **Background music:**  https://assetstore.unity.com/packages/audio/music/orchestral/a-symphony-of-disarray-game-music-pack-217536
+- **Restaurant models:**  https://kaylousberg.itch.io/restaurant-bits
+- **Character models:**  https://kaylousberg.itch.io/kaykit-skeletons

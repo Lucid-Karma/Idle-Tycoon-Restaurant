@@ -2,8 +2,9 @@
 
 ## About the Game
 
-Chibi Burger Cafe is a fun idle game with cute chibi characters and simple mouse controls. The goal of the game is to get the highest score possible by serving hamburgers to 8 customers.
-**Gameplay Video:** https://youtu.be/uozDiteIXM8
+Chibi Burger Cafe is a fun idle game with cute chibi characters and simple mouse controls. The goal of the game is to get the highest score possible by serving hamburgers to 8 customers. <br>
+**Gameplay Video:** https://youtu.be/uozDiteIXM8 
+<br>
 **Play the Game ..**
 
 ![ChibiR Gameplay SS 1](https://github.com/Lucid-Karma/Idle-Tycoon-Restaurant/assets/88732917/361f8e87-cb20-4759-a76f-8584c35bce71)

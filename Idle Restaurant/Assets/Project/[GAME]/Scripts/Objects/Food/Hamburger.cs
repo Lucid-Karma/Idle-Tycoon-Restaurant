@@ -71,7 +71,7 @@ public class Hamburger : EdibleBase
         pool.currentObject.transform.localRotation = Quaternion.identity;
         pool.currentObject.transform.localPosition = desiredPos;
         pool.currentObject.transform.parent = transform; 
-        
+
 
         collider = GetComponent<BoxCollider>();
         collider.size = new Vector3(collider.size.x, collider.size.y + (0.3071972f * 10f), collider.size.z);

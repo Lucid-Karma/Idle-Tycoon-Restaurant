@@ -78,18 +78,19 @@ public class Plate : PlaceableBase
     {
         if(doesHaveHamburger)   return;
 
-        if(ingredients.Count <= 5)
+        if (ingredients.Count <= 5)
         {
             SetDistanceBetweenIngredients();
-            
+
+            ShowTopBun(ingredient);
             ingredients.Add(ingredient);
             ingredient.SetPlaceable(this);
 
-            ExtendCollider(ingredient.gameObject);
+            ExtendCollider(ingredient.SetFood());
             SetIngredientPos(ingredient);
 
             refTransform.position = ingredient.gameObject.transform.position;
-            
+              
             GenerateHamburger();
         }
     }
@@ -114,8 +115,11 @@ public class Plate : PlaceableBase
             ResetColAndRef();
             doesHaveHamburger = false;
         }
-    }
 
+        if (ingredient is Bun)
+            HideTopBun();
+    }
+    Hamburger _hamburger;
     private void GenerateHamburger()
     {
         if(ingredients.Count == 6)
@@ -124,14 +128,15 @@ public class Plate : PlaceableBase
             placeableCollider.enabled = false;
             PoolingManager.HamburgerPool.GetObject(transform, hamburger, PoolingManager.HamburgerList);
             GameObject obj = PoolingManager.HamburgerPool.currentObject;
-            Hamburger _hamburger = obj.GetComponent<Hamburger>();
+            _hamburger = obj.GetComponent<Hamburger>();
             foreach (EdibleBase item in ingredients)
             {
                 _hamburger.AddIngredient(item);
             }
-            if(ingredients.Any(x => x.IsBun()))
+            if (ingredients.Any(x => x.IsBun()))
             {
                 _hamburger.PutLastBun(refTransform, parentTransform, distanceBetweenObjects);
+                HideTopBun();
             }
 
             EdibleBase _edibleHam = obj.GetComponent<EdibleBase>();
@@ -148,4 +153,29 @@ public class Plate : PlaceableBase
     {
         return true;
     }
+
+    #region Additional Features
+    /// <summary>
+    /// Following codes should be perform in the Bun script actually. I just felt lazy ^d^
+    /// </summary>
+    [SerializeField] private GameObject guestTopBunPrefab;
+    GameObject guestTopBun;
+    private void ShowTopBun(EdibleBase ingredient)
+    {
+        if(ingredient is Bun)
+        {
+            if (!ingredients.Any(x => x.IsBun()))
+            {
+                PoolingManager.HamburgerPool.GetObject(transform, guestTopBunPrefab, PoolingManager.bunTopList);
+                guestTopBun = PoolingManager.HamburgerPool.currentObject;
+                guestTopBun.transform.localPosition = new Vector3(0.5f, 0f, 0.7f);
+            }
+        }
+    }
+    private void HideTopBun()
+    {
+        if(guestTopBun != null)
+            guestTopBun?.SetActive(false);
+    }
+    #endregion
 }

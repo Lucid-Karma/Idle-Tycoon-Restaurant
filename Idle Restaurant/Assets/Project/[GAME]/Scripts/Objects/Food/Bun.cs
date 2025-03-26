@@ -59,6 +59,9 @@ public class Bun : EdibleBase
         if (placeable is CookingBase)
         {
             progressBar.SetActive(true);
+        }
+        else if (placeable is Plate)
+        {
             currentVersion.SetActive(false);
             pool.GetObject(this.gameObject.transform, bunSlice, PoolingManager.bunBottomList);
             currentVersion = pool.currentObject;

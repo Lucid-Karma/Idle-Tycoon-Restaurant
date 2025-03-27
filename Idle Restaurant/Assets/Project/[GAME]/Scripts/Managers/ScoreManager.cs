@@ -11,7 +11,8 @@ public class ScoreManager : Singleton<ScoreManager>
     [HideInInspector]
     public static UnityEvent OnTotalScoreNotBad = new();
     #endregion
-    
+
+    [HideInInspector] public float currentBurgerScore;
     [HideInInspector] public int HostedCustomerCount;
     [HideInInspector] public int totalLevelEarning;
     [HideInInspector] public float totalLevelScore;
@@ -23,6 +24,8 @@ public class ScoreManager : Singleton<ScoreManager>
         hostedCustomer ++;
         totalLevelScore += point;
         totalLevelScore /= hostedCustomer;
+
+        currentBurgerScore = point;
 
         CalculateIncome();
         DoPointExpression();
@@ -43,11 +46,11 @@ public class ScoreManager : Singleton<ScoreManager>
 
     private void DoPointExpression()
     {
-        if(totalLevelScore < 1.5f)
+        if(currentBurgerScore < 1.5f)
         {
             OnTotalScoreBad.Invoke();
         }
-        else if(totalLevelScore >= 3.5)
+        else if(currentBurgerScore >= 3.5)
         {
             OnTotalScoreGood.Invoke();
         }
@@ -56,6 +59,22 @@ public class ScoreManager : Singleton<ScoreManager>
             OnTotalScoreNotBad.Invoke();
         }
     }
+
+    //private void DoPointExpression()
+    //{
+    //    if (totalLevelScore < 1.5f)
+    //    {
+    //        OnTotalScoreBad.Invoke();
+    //    }
+    //    else if (totalLevelScore >= 3.5)
+    //    {
+    //        OnTotalScoreGood.Invoke();
+    //    }
+    //    else
+    //    {
+    //        OnTotalScoreNotBad.Invoke();
+    //    }
+    //}
 }
 
 

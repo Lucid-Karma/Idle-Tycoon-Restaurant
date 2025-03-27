@@ -135,8 +135,8 @@ public class Plate : PlaceableBase
             }
             if (ingredients.Any(x => x.IsBun()))
             {
-                _hamburger.PutLastBun(refTransform, parentTransform, distanceBetweenObjects);
                 HideTopBun();
+                _hamburger.PutLastBun(refTransform, parentTransform, distanceBetweenObjects);
             }
 
             EdibleBase _edibleHam = obj.GetComponent<EdibleBase>();

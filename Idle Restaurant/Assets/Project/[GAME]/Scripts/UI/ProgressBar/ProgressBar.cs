@@ -24,11 +24,9 @@ public class ProgressBar : MonoBehaviour
 
     void GetCurrentFill()
     {
-        current = ScoreManager.Instance.totalLevelScore;
-        // float currentOffset = current - minumum;
-        // float maximumOffset = maximum - minumum;
-        // float fillAmount = currentOffset / maximumOffset;
-        fillAmount = (float)current / (float)maximum;
+        current = ScoreManager.Instance.currentBurgerScore;
+
+        fillAmount = (float)current / 5f;// (float)maximum;
         mask.fillAmount = fillAmount;
     }
 }

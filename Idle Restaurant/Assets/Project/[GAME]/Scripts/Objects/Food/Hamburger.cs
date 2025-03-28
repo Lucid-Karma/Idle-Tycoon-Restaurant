@@ -26,6 +26,7 @@ public class Hamburger : EdibleBase
         {
             item.SetActive(false);
         }
+        ingredients.Clear();
     }
 
     public override void Start()

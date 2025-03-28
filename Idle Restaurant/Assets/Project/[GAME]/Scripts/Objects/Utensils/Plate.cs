@@ -119,7 +119,7 @@ public class Plate : PlaceableBase
         if (ingredient is Bun)
             HideTopBun();
     }
-    Hamburger _hamburger;
+   
     private void GenerateHamburger()
     {
         if(ingredients.Count == 6)
@@ -128,7 +128,7 @@ public class Plate : PlaceableBase
             placeableCollider.enabled = false;
             PoolingManager.HamburgerPool.GetObject(transform, hamburger, PoolingManager.HamburgerList);
             GameObject obj = PoolingManager.HamburgerPool.currentObject;
-            _hamburger = obj.GetComponent<Hamburger>();
+            Hamburger _hamburger = obj.GetComponent<Hamburger>();
             foreach (EdibleBase item in ingredients)
             {
                 _hamburger.AddIngredient(item);

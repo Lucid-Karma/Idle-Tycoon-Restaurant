@@ -27,6 +27,7 @@ public class DynamicFoodPool
                 {
                     if (!_pooledObjects[i].activeInHierarchy) 
                     {
+                        _pooledObjects[i].transform.parent = null;
                         return _pooledObjects[i];
                     }
                 }

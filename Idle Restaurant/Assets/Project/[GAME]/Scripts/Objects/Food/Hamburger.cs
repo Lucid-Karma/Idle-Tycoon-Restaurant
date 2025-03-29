@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using static UnityEditor.Progress;
 
 public class Hamburger : EdibleBase
 {
@@ -16,7 +17,7 @@ public class Hamburger : EdibleBase
         collider.size = hamSize;
         collider.center = hamCenter;
 
-        pool._pooledObjects.Clear();
+        //pool._pooledObjects.Clear();
         ingredientPointSet.Clear();
 
         untouchable = false;
@@ -71,7 +72,8 @@ public class Hamburger : EdibleBase
         desiredPos.y += distanceBetweenObjects;    
         pool.currentObject.transform.localRotation = Quaternion.identity;
         pool.currentObject.transform.localPosition = desiredPos;
-        pool.currentObject.transform.parent = transform; 
+        pool.currentObject.transform.parent = transform;
+        ingredients.Add(pool.currentObject);
 
 
         collider = GetComponent<BoxCollider>();

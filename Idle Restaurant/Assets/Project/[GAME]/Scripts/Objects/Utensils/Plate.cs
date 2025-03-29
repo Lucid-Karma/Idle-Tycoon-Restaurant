@@ -131,6 +131,7 @@ public class Plate : PlaceableBase
             Hamburger _hamburger = obj.GetComponent<Hamburger>();
             foreach (EdibleBase item in ingredients)
             {
+                print(item);
                 _hamburger.AddIngredient(item);
             }
             if (ingredients.Any(x => x.IsBun()))
@@ -166,6 +167,15 @@ public class Plate : PlaceableBase
         {
             if (!ingredients.Any(x => x.IsBun()))
             {
+                //if (guestTopBun != null)    guestTopBun.SetActive(true);
+                //else
+                //{
+                //    GameObject obj = Object.Instantiate(guestTopBunPrefab);
+                //    obj.transform.parent = transform;
+                //    obj.transform.localPosition = new Vector3(0.5f, 0f, 0.7f);
+                //    guestTopBun = obj;
+                //}
+
                 PoolingManager.HamburgerPool.GetObject(transform, guestTopBunPrefab, PoolingManager.bunTopList);
                 guestTopBun = PoolingManager.HamburgerPool.currentObject;
                 guestTopBun.transform.localPosition = new Vector3(0.5f, 0f, 0.7f);
@@ -175,7 +185,10 @@ public class Plate : PlaceableBase
     private void HideTopBun()
     {
         if(guestTopBun != null)
+        {
+            guestTopBun.transform.parent = null;
             guestTopBun?.SetActive(false);
+        }
     }
     #endregion
 }

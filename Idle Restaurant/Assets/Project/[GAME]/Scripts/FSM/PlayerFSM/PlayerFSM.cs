@@ -193,7 +193,7 @@ public class PlayerFSM : MonoBehaviour
 
         isHolded = true;
 
-        Debug.Log("name: " + currentFood.gameObject.name);
+        //Debug.Log("name: " + currentFood.gameObject.name);
     }
     void DropObject(PlaceableBase place)
     {

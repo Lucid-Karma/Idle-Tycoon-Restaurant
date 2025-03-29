@@ -128,19 +128,25 @@ public class NpcFsm : MonoBehaviour
     public void React()
     {
         hamburgerPoint = _hamburger.CalculateScore();
-        if(waitingTimer <= 75f)
+        //if(waitingTimer <= 75f)
+        //{
+        //    if(hamburgerPoint < 1f)
+        //    {
+        //        timeScore = 0.6f;
+        //    }
+        //    else
+        //        timeScore = 2;
+        //}
+        //else
+        //{
+        //    timeScore = (240f - waitingTimer) * 2 / 165f;
+        //}
+        if (hamburgerPoint < 1f)
         {
-            if(hamburgerPoint < 1f)
-            {
-                timeScore = 0.6f;
-            }
-            else
-                timeScore = 2;
+            timeScore = 0.6f;
         }
         else
-        {
-            timeScore = (240f - waitingTimer) * 2 / 165f;
-        }
+            timeScore = 2;
         totalPoint = (hamburgerPoint + timeScore);
 
         OnNpcSitChairStandUp.Invoke();
@@ -194,5 +200,10 @@ public class NpcFsm : MonoBehaviour
     {
         currentState = nextState;
         currentState.EnterState(this);
+    }
+
+    private void OnDisable()
+    {
+        waitingTimer = 0;
     }
 }

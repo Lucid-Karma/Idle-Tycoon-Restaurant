@@ -23,7 +23,6 @@ public class ScoreManager : Singleton<ScoreManager>
     {
         hostedCustomer ++;
         totalLevelScore += point;
-        totalLevelScore /= hostedCustomer;
 
         currentBurgerScore = point;
 
@@ -35,6 +34,7 @@ public class ScoreManager : Singleton<ScoreManager>
     {
         if(hostedCustomer >= _levelUpdateCount)
         {
+            totalLevelScore /= HostedCustomerCount;
             EventManager.OnLevelFinish.Invoke();
         }
     }
@@ -58,6 +58,12 @@ public class ScoreManager : Singleton<ScoreManager>
         {
             OnTotalScoreNotBad.Invoke();
         }
+    }
+
+    public float GetLevelFinalScore()
+    {
+        //print("Total point: " + totalLevelScore);
+        return totalLevelScore;
     }
 
     //private void DoPointExpression()

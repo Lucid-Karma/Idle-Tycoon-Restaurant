@@ -20,9 +20,9 @@ public class FinalProgressBar : MonoBehaviour
 
     void GetCurrentFill()
     {
-        current = ScoreManager.Instance.totalLevelScore;
+        current = ScoreManager.Instance.GetLevelFinalScore();
 
-        fillAmount = (float)current / (float)maximum;
+        fillAmount = (float)current / 5f; //(float)maximum;
         mask.fillAmount = fillAmount;
     }
 }

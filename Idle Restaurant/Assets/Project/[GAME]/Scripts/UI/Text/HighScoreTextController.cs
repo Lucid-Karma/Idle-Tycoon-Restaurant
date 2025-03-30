@@ -30,18 +30,20 @@ public class HighScoreTextController : MonoBehaviour
 
     void Start()
     {
-        HighScoreText.text = PlayerPrefs.GetFloat("HighScore", 0).ToString();
+        //HighScoreText.text = PlayerPrefs.GetFloat("HighScore", 0).ToString();
     }
 
     private float point = 0;
     private void UpdateScoreText()
     {
-        point = ScoreManager.Instance.totalLevelScore;
+        point = ScoreManager.Instance.GetLevelFinalScore();
 
         if(point > PlayerPrefs.GetFloat("HighScore", 0))
         {
             PlayerPrefs.SetFloat("HighScore", point);
-            HighScoreText.text = point.ToString("F3");
+            //print("NEW RECORD !!!");
+            //HighScoreText.text = point.ToString("F3");
         }
+        HighScoreText.text = PlayerPrefs.GetFloat("HighScore", 0).ToString("F2");
     }
 }

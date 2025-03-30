@@ -31,7 +31,7 @@ public class LevelScoreTextController : MonoBehaviour
     private float point = 0;
     private void UpdateScoreText()
     {
-        point = ScoreManager.Instance.totalLevelScore;
+        point = ScoreManager.Instance.GetLevelFinalScore();
         ScoreText.text = point.ToString("F2") + " pt";
     }
 }

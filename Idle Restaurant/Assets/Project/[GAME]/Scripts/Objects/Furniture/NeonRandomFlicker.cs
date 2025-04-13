@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UIElements;
 
 public class NeonRandomFlicker : MonoBehaviour
 {
@@ -10,6 +11,7 @@ public class NeonRandomFlicker : MonoBehaviour
 
     private float nextFlickerTime;
     private bool isOn = true;
+    private bool isMusicOn;
 
     void Start()
     {
@@ -24,17 +26,43 @@ public class NeonRandomFlicker : MonoBehaviour
             Color finalColor = isOn ? baseColor * Mathf.LinearToGammaSpace(2.0f) : Color.black;
             neonMaterial.SetColor("_EmissionColor", finalColor);
 
-            if (isOn && flickerSound != null)
+            if(isMusicOn)
             {
-                flickerSound.Play();
+                if (isOn && flickerSound != null)
+                {
+                    flickerSound.Play();
+                }
             }
 
             nextFlickerTime = Time.time + Random.Range(minTime, maxTime);
         }
     }
 
+    void OnEnable()
+    {
+        isMusicOn = true;
+
+        EventManager.OnMusicOn.AddListener(PlayMusic);
+        EventManager.OnMusicOff.AddListener(PauseMusic);
+        EventManager.OnGameEnd.AddListener(PauseMusic);
+    }
     private void OnDisable()
     {
         neonMaterial.SetColor("_EmissionColor", baseColor);
+
+        EventManager.OnMusicOn.RemoveListener(PlayMusic);
+        EventManager.OnMusicOff.RemoveListener(PauseMusic);
+        EventManager.OnGameEnd.RemoveListener(PauseMusic);
+    }
+
+    public void PlayMusic()
+    {
+        flickerSound.Play();
+        isMusicOn = true;
+    }
+    public void PauseMusic()
+    {
+        flickerSound.Pause();
+        isMusicOn = false;
     }
 }

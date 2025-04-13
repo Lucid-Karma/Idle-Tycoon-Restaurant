@@ -66,6 +66,11 @@ public class ScoreManager : Singleton<ScoreManager>
         return totalLevelScore;
     }
 
+    public void SpendEarnings(int amount)
+    {
+        totalLevelEarning -= amount;
+    }
+
     //private void DoPointExpression()
     //{
     //    if (totalLevelScore < 1.5f)

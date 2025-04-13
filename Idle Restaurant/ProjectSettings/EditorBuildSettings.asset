@@ -6,6 +6,15 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Project/[GAME]/Scenes/LoadingScene.unity
+    guid: d34c3ed37bb0fd745b38d55bc61e21c8
+  - enabled: 1
     path: Assets/Project/[GAME]/Scenes/GameScene.unity
     guid: 9fc0d4010bbf28b4594072e72b8655ab
+  - enabled: 1
+    path: Assets/CrazySDK/Demo/BannerModule.unity
+    guid: b3e9d46ebd5a0a140811b729c26bb42f
+  - enabled: 1
+    path: Assets/CrazySDK/Demo/AdModule.unity
+    guid: 39797e3c07a9e4149b88e4c1b76b586a
   m_configObjects: {}

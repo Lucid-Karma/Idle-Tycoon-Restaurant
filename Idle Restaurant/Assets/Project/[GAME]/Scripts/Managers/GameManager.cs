@@ -41,11 +41,15 @@ public class GameManager : Singleton<GameManager>
     {
         EventManager.OnRestart.AddListener(ContinueGame);
         EventManager.OnLevelFinish.AddListener(PauseGame);
+        EventManager.OnHelpRequest.AddListener(PauseGame);
+        EventManager.OnLevelContine.AddListener(ContinueGame);
     }
     private void OnDisable()
     {
         EventManager.OnRestart.RemoveListener(ContinueGame);
         EventManager.OnLevelFinish.RemoveListener(PauseGame);
+        EventManager.OnHelpRequest.RemoveListener(PauseGame);
+        EventManager.OnLevelContine.RemoveListener(ContinueGame);
     }
 
     void PauseGame()

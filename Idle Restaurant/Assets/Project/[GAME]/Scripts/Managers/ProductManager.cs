@@ -7,6 +7,7 @@ public class ProductManager : Singleton<ProductManager>
     //kitchenApron etc.
     [SerializeField] private GameObject[] products;
     [SerializeField] private ParticleSystem[] vfxs;
+    [SerializeField] private AudioSource[] fxsSources;
 
     private void OnEnable()
     {
@@ -21,5 +22,6 @@ public class ProductManager : Singleton<ProductManager>
         products[purchasedItemIndex].SetActive(true);
         vfxs[purchasedItemIndex].Play();
         vfxs[purchasedItemIndex].transform.parent = null;
+        fxsSources[purchasedItemIndex].Play();
     }
 }

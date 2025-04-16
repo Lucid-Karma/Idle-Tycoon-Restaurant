@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.UIElements;
 
 public class NeonRandomFlicker : MonoBehaviour
 {
@@ -15,6 +14,7 @@ public class NeonRandomFlicker : MonoBehaviour
 
     void Start()
     {
+        isMusicOn = true;
         nextFlickerTime = Time.time + Random.Range(minTime, maxTime);
     }
 
@@ -40,8 +40,6 @@ public class NeonRandomFlicker : MonoBehaviour
 
     void OnEnable()
     {
-        isMusicOn = true;
-
         EventManager.OnMusicOn.AddListener(PlayMusic);
         EventManager.OnMusicOff.AddListener(PauseMusic);
         EventManager.OnGameEnd.AddListener(PauseMusic);

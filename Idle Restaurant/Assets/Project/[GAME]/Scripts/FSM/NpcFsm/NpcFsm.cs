@@ -1,3 +1,4 @@
+using CrazyGames;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Events;
@@ -161,6 +162,8 @@ public class NpcFsm : MonoBehaviour
         else if(totalPoint >= 4)
         {
             EventManager.OnScoreGood.Invoke();
+            if (totalPoint >= 4.5f)
+                CrazySDK.Game.HappyTime();
         }
         else
         {

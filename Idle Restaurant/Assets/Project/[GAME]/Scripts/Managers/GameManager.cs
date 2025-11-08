@@ -1,5 +1,5 @@
 using UnityEngine;
-using CrazyGames;
+//using CrazyGames;
 
 public class GameManager : Singleton<GameManager>
 {
@@ -56,12 +56,12 @@ public class GameManager : Singleton<GameManager>
     void PauseGame()
     {
         Time.timeScale = 0;
-        CrazySDK.Game.GameplayStop();
+        //CrazySDK.Game.GameplayStop();
     }
 
     void ContinueGame()
     {
         Time.timeScale = 1;
-        CrazySDK.Game.GameplayStart();
+        //CrazySDK.Game.GameplayStart();
     }
 }

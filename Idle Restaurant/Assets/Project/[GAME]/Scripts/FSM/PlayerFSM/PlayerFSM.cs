@@ -53,6 +53,14 @@ public class PlayerFSM : MonoBehaviour
     private ServiceBase[] services;
     private Vector3 destination;
 
+    // Read by HighlightController (tap feedback and "where can this go" hints) and CarryWobble.
+    public EdibleBase HeldFood => isHolded ? currentFood : null;
+    public Transform Hand => holdParent.transform;
+    public Component LastTapped { get; private set; }       // selectable the chef was last sent to
+    public float LastTappedAt { get; private set; }         // unscaled time of that tap
+    public bool IsHeadingTo(Component target) => target != null && target == walkTarget;
+    private Component walkTarget;                           // cleared once the chef interacts
+
     #region Parameters
     Camera _playerCam;
     Ray ray;
@@ -154,6 +162,13 @@ public class PlayerFSM : MonoBehaviour
         SelectObject();
         UpdateStoppingDistance();
 
+        walkTarget = selectable as Component;
+        if (walkTarget != null)
+        {
+            LastTapped = walkTarget;
+            LastTappedAt = Time.unscaledTime;
+        }
+
         distance = Vector3.Distance(Agent.transform.position, destination);
         if (distance > 3.0f)
         {
@@ -206,6 +221,7 @@ public class PlayerFSM : MonoBehaviour
 
     public void Interact()
     {
+        walkTarget = null;
         GetFoodFromSource();
         GetFood();
         PlaceFood();

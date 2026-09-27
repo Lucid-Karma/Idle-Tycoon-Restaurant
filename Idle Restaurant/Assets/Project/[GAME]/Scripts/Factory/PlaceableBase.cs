@@ -7,17 +7,21 @@ public abstract class PlaceableBase : MonoBehaviour, IPlaceable, ISelectable
     protected BoxCollider placeableCollider;
     [SerializeField] protected Material defaultMaterial;
 
+    // EventManager events are static and outlive a Replay (scene reload): listeners must be named methods
+    // so OnDisable really removes them. A lambda stayed subscribed, and after Replay the destroyed
+    // placeable's collider threw inside OnFoodDropped and aborted the drop.
     protected virtual void OnEnable()
     {
         EventManager.OnFoodHolded.AddListener(EnableCollider);
-        EventManager.OnFoodDropped.AddListener(() => placeableCollider.enabled = false);
+        EventManager.OnFoodDropped.AddListener(DisableCollider);
     }
     protected virtual void OnDisable()
     {
         EventManager.OnFoodHolded.RemoveListener(EnableCollider);
-        EventManager.OnFoodDropped.RemoveListener(() => placeableCollider.enabled = false);
+        EventManager.OnFoodDropped.RemoveListener(DisableCollider);
     }
     public abstract void EnableCollider();
+    private void DisableCollider() => placeableCollider.enabled = false;
 
     public virtual void Start()
     {

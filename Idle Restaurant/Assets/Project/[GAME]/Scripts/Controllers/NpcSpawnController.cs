@@ -93,9 +93,15 @@ public class NpcSpawnController : MonoBehaviour
         }
     }
 
+    // Rush-hour pacing: the first customer is at the door almost at once, the opening wave builds quickly,
+    // and a free seat is taken again soon after (used to be 3–20 s and 10–30 s: long idle stretches).
+    [SerializeField] private Vector2 firstArrival = new Vector2(2f, 4f);
+    [SerializeField] private Vector2 openingGap = new Vector2(10f, 16f);
+    [SerializeField] private Vector2 refillGap = new Vector2(5f, 11f);
+
     IEnumerator DelayedCreation()
     {
-        timeBreak = Random.Range(10, 30);
+        timeBreak = Random.Range(refillGap.x, refillGap.y);
         yield return new WaitForSeconds(timeBreak);
         CreateNpc();
     }
@@ -104,7 +110,7 @@ public class NpcSpawnController : MonoBehaviour
     {
         for (int i = 0; i < levelCustomerCount; i++)
         {
-            timeBreak = Random.Range(3, 20);
+            timeBreak = i == 0 ? Random.Range(firstArrival.x, firstArrival.y) : Random.Range(openingGap.x, openingGap.y);
             yield return new WaitForSeconds(timeBreak);
             CreateNpc();
         }

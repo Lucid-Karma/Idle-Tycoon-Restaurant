@@ -33,6 +33,8 @@ public class Bun : EdibleBase
         base.Start();
     }
 
+    public override Prep Preparation => _currentBunState == 0 ? Prep.Raw : _currentBunState == 1 ? Prep.Good : Prep.Burnt;
+
     public void SetCookedBun()
     {
         switch (_currentBunState)

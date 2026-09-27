@@ -24,6 +24,8 @@ public class CuttableBase : EdibleBase
         return currentVersion;
     }
 
+    public override Prep Preparation => isSliced ? Prep.Good : Prep.Whole;
+
     protected override void OnDisable()
     {
         base.OnDisable();

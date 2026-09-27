@@ -9,23 +9,31 @@ public class ChefAnimationController : MonoBehaviour
 
     private float waitForIdleTime;
 
+    // Named methods, not lambdas: EventManager events are static, and a lambda can't be removed, so after a
+    // Replay the destroyed chef card kept reacting (and threw, aborting the rest of the event).
     private void OnEnable()
     {
-        EventManager.OnCustomerWent.AddListener(() => StartCoroutine(IdleAgain()));
-        EventManager.OnScoreGood.AddListener(() => InvokeTrigger("Happy"));
-        EventManager.OnScoreNotBad.AddListener(() => InvokeTrigger("HappyIdle"));
-        EventManager.OnScoreBad.AddListener(() => InvokeTrigger("Angry"));
-        EventManager.OnCustomerProtest.AddListener(() => InvokeTrigger("Sad"));
+        EventManager.OnCustomerWent.AddListener(OnCustomerWent);
+        EventManager.OnScoreGood.AddListener(OnScoreGood);
+        EventManager.OnScoreNotBad.AddListener(OnScoreNotBad);
+        EventManager.OnScoreBad.AddListener(OnScoreBad);
+        EventManager.OnCustomerProtest.AddListener(OnCustomerProtest);
     }
 
     private void OnDisable()
     {
-        EventManager.OnCustomerWent.RemoveListener(() => StartCoroutine(IdleAgain()));
-        EventManager.OnScoreGood.RemoveListener(() => InvokeTrigger("Happy"));
-        EventManager.OnScoreNotBad.RemoveListener(() => InvokeTrigger("HappyIdle"));
-        EventManager.OnScoreBad.RemoveListener(() => InvokeTrigger("Angry"));
-        EventManager.OnCustomerProtest.RemoveListener(() => InvokeTrigger("Sad"));
+        EventManager.OnCustomerWent.RemoveListener(OnCustomerWent);
+        EventManager.OnScoreGood.RemoveListener(OnScoreGood);
+        EventManager.OnScoreNotBad.RemoveListener(OnScoreNotBad);
+        EventManager.OnScoreBad.RemoveListener(OnScoreBad);
+        EventManager.OnCustomerProtest.RemoveListener(OnCustomerProtest);
     }
+
+    private void OnCustomerWent() => StartCoroutine(IdleAgain());
+    private void OnScoreGood() => InvokeTrigger("Happy");
+    private void OnScoreNotBad() => InvokeTrigger("HappyIdle");
+    private void OnScoreBad() => InvokeTrigger("Angry");
+    private void OnCustomerProtest() => InvokeTrigger("Sad");
 
     private void InvokeTrigger(string value)
     {

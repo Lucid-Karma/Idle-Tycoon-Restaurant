@@ -36,6 +36,8 @@ public class Burger : EdibleBase
         return currentVersion;
     }
 
+    public override Prep Preparation => _currentBurgerState == 0 ? Prep.Raw : _currentBurgerState == 1 ? Prep.Good : Prep.Burnt;
+
     public void SetCooked()
     {
         switch (_currentBurgerState)

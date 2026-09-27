@@ -3,21 +3,22 @@ using UnityEngine;
 
 public class Hamburger : EdibleBase
 {
-    HashSet<string> ingredientPointSet = new();
     List<GameObject> ingredients = new();
+    readonly List<BurgerLayer> layers = new();
+    private BurgerReview review;
     [SerializeField] private GameObject finishBun;
     public GameObject bunHolder;
     private Vector3 hamSize = new Vector3(0.95f, 0.1f, 0.95f);
     private Vector3 hamCenter = new Vector3(-1.490116e-08f, 0.05f, 0);
 
+    // The six layers as they were stacked, with how each was prepared (read by the customer who eats it).
+    public IReadOnlyList<BurgerLayer> Layers => layers;
+    public BurgerReview Review => review ??= BurgerReview.Of(layers);
 
     protected override void OnDisable()
     {
         collider.size = hamSize;
         collider.center = hamCenter;
-
-        //pool._pooledObjects.Clear();
-        ingredientPointSet.Clear();
 
         untouchable = false;
         point = 0;
@@ -27,6 +28,8 @@ public class Hamburger : EdibleBase
             item.SetActive(false);
         }
         ingredients.Clear();
+        layers.Clear();
+        review = null;
     }
 
     public override void Start()
@@ -50,15 +53,9 @@ public class Hamburger : EdibleBase
         item.gameObject.transform.parent = transform;
         ExtendCollider(item);
         ingredients.Add(item.gameObject);
+        layers.Add(new BurgerLayer(item.Name, item.Preparation));
+        review = null;
 
-        if(!ingredientPointSet.Contains(item.Name))
-        {
-            point += item.point;
-            defaultPoint = point;
-            //Debug.Log("item's point: " + item.point);
-        }
-        ingredientPointSet.Add(item.Name);
-        
         item.gameObject.GetComponent<Collider>().enabled = false;
     }
 
@@ -68,7 +65,7 @@ public class Hamburger : EdibleBase
         pool.currentObject.transform.parent = parentTransform;
 
         Vector3 desiredPos = refTransform.localPosition;
-        desiredPos.y += distanceBetweenObjects;    
+        desiredPos.y += distanceBetweenObjects;
         pool.currentObject.transform.localRotation = Quaternion.identity;
         pool.currentObject.transform.localPosition = desiredPos;
         pool.currentObject.transform.parent = transform;
@@ -84,13 +81,4 @@ public class Hamburger : EdibleBase
     {
         return gameObject;
     }
-
-    public float CalculateScore()
-    {
-        point = point / 6;
-        point *= (float)3 / 10;
-        //Debug.Log("point: " + point);
-        return point;
-    }
-
 }

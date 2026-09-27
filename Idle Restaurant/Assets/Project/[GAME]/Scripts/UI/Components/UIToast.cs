@@ -2,14 +2,15 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-// Top-center, short-lived feedback line: order verdict + money earned, purchases,
-// customers leaving, and the shift objective. One message at a time; a new one replaces the old.
+// Top-center, short-lived feedback line: the served burger's name + money earned (+ rush streak),
+// purchases, customers leaving, and the shift objective. One message at a time; a new one replaces the old.
 [RequireComponent(typeof(CanvasGroup))]
 public class UIToast : MonoBehaviour
 {
     [SerializeField] private TMP_Text label;
     [SerializeField] private Image icon;
     [SerializeField] private Sprite starIcon, checkIcon, crossIcon, cartIcon, personIcon;
+    [SerializeField] private Sprite faceLove, faceLaugh, faceShock, boltIcon;
     [SerializeField] private float holdTime = 1.8f;
 
     private CanvasGroup group;
@@ -30,9 +31,7 @@ public class UIToast : MonoBehaviour
     {
         EventManager.OnLevelStart.AddListener(ShowObjective);
         EventManager.OnScoreUpdate.AddListener(OnScoreUpdate);
-        EventManager.OnScoreGood.AddListener(OnGreat);
-        EventManager.OnScoreNotBad.AddListener(OnGood);
-        EventManager.OnScoreBad.AddListener(OnPoor);
+        EventManager.OnOrderRated.AddListener(OnOrderRated);
         EventManager.OnCustomerProtest.AddListener(OnProtest);
     }
 
@@ -40,18 +39,16 @@ public class UIToast : MonoBehaviour
     {
         EventManager.OnLevelStart.RemoveListener(ShowObjective);
         EventManager.OnScoreUpdate.RemoveListener(OnScoreUpdate);
-        EventManager.OnScoreGood.RemoveListener(OnGreat);
-        EventManager.OnScoreNotBad.RemoveListener(OnGood);
-        EventManager.OnScoreBad.RemoveListener(OnPoor);
+        EventManager.OnOrderRated.RemoveListener(OnOrderRated);
         EventManager.OnCustomerProtest.RemoveListener(OnProtest);
     }
 
     private void Start() => lastEarning = ScoreManager.Instance.totalLevelEarning;
 
     private void ShowObjective() =>
-        Show($"Serve {ScoreManager.Instance.CustomersPerLevel} customers to finish the shift", personIcon, UITokens.Colors.Berry);
+        Show($"Rush hour! Serve {ScoreManager.Instance.CustomersPerLevel} customers", boltIcon ? boltIcon : personIcon, UITokens.Colors.Berry);
 
-    // Spending fires OnScoreUpdate without a verdict event, so a negative delta means a purchase.
+    // Spending fires OnScoreUpdate without an order, so a negative delta means a purchase.
     private void OnScoreUpdate()
     {
         int delta = ScoreManager.Instance.totalLevelEarning - lastEarning;
@@ -60,19 +57,30 @@ public class UIToast : MonoBehaviour
         Show($"Purchased  <color=#{Hex(UITokens.Colors.Tomato)}>-${-delta}</color>", cartIcon, UITokens.Colors.Teal);
     }
 
-    private void OnGreat() => ShowVerdict("Loved it!", starIcon, UITokens.Colors.DeepYellow);
-    private void OnGood() => ShowVerdict("Tasty!", checkIcon, UITokens.Colors.Teal);
-    private void OnPoor() => ShowVerdict("Not quite right", crossIcon, UITokens.Colors.Tomato);
-    private void OnProtest() => Show("A customer left hungry", personIcon, UITokens.Colors.Tomato);
-
-    private void ShowVerdict(string verdict, Sprite sprite, Color tint)
+    // "Charcoal Special  +$7  RUSH x2"
+    private void OnOrderRated()
     {
-        int earning = ScoreManager.Instance.totalLevelEarning;
-        int delta = earning - lastEarning;
-        lastEarning = earning;
-        string reward = delta > 0 ? $"   <color=#{Hex(UITokens.Colors.DarkTeal)}>+${delta}</color>" : "";
-        Show(verdict + reward, sprite, tint);
+        var order = ScoreManager.Instance.LastOrder;
+        lastEarning = ScoreManager.Instance.totalLevelEarning;
+
+        string text = order.Review.Title + $"   <color=#{Hex(UITokens.Colors.DarkTeal)}>+${order.Earned}</color>";
+        if (order.RushStreak >= 2)
+            text += $"   <color=#{Hex(UITokens.Colors.DeepYellow)}>RUSH x{order.RushStreak}</color>";
+        else if (order.Speedy)
+            text += $"   <color=#{Hex(UITokens.Colors.DeepYellow)}>SPEEDY</color>";
+
+        var (sprite, tint) = MoodIcon(order.Review.Mood);
+        Show(text, sprite, tint);
     }
+
+    private (Sprite, Color) MoodIcon(Mood mood) => mood switch
+    {
+        Mood.Delighted => (faceLove ? faceLove : starIcon, UITokens.MoodColor(mood)),
+        Mood.Amused => (faceLaugh ? faceLaugh : checkIcon, UITokens.MoodColor(mood)),
+        _ => (faceShock ? faceShock : crossIcon, UITokens.MoodColor(mood)),
+    };
+
+    private void OnProtest() => Show("A customer left hungry", personIcon, UITokens.Colors.Tomato);
 
     private void Show(string text, Sprite sprite, Color tint)
     {

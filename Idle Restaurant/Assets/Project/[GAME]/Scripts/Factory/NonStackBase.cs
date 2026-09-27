@@ -29,9 +29,13 @@ public class NonStackBase : PlaceableBase
             placeableCollider.enabled = true;
     }
 
+    // The food item on this utensil (currentObject is only its current visual).
+    public EdibleBase Food { get; private set; }
+
     public override void UseFood(EdibleBase ingredient)
     {
         ingredient.SetPlaceable(this);
+        Food = ingredient;
         currentObject = ingredient.SetFood();
 
         var food = ingredient.gameObject.transform;
@@ -43,6 +47,7 @@ public class NonStackBase : PlaceableBase
     public override void RemoveFood(EdibleBase ingredient)
     {
         currentObject = null;
+        Food = null;
     }
 
     public override bool IsSuitable(EdibleBase ingredient)

@@ -2,6 +2,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// How well an ingredient was prepared when it went into a burger (see BurgerReview).
+public enum Prep
+{
+    Good,   // cooked / baked / sliced as intended
+    Whole,  // never went on the chopping board
+    Raw,    // never cooked or baked
+    Burnt   // left too long on the pan / in the oven
+}
+
 public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
 {
     [HideInInspector] public string Name;
@@ -65,6 +74,8 @@ public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
     {
         return false;
     }
+
+    public virtual Prep Preparation => Prep.Good;
 
     public bool IsPlaced()
     {

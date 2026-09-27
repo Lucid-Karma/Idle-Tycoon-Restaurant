@@ -1,8 +1,8 @@
 using TMPro;
 using UnityEngine;
 
-// One-word verdict for the last served order, shown next to the star rating on the chef card.
-// Driven by the same events the chef portrait reacts to, so text, stars and chef always agree.
+// Name of the last served burger ("Chef's Classic", "Charcoal Special", "Chaos Burger"...), shown next to
+// the star rating on the chef card. Ink for a good rating, tomato for a poor one.
 [RequireComponent(typeof(TMP_Text))]
 public class UIOrderVerdict : MonoBehaviour
 {
@@ -16,23 +16,15 @@ public class UIOrderVerdict : MonoBehaviour
         Set(waitingText, UITokens.Colors.InkMuted);
     }
 
-    private void OnEnable()
-    {
-        EventManager.OnScoreGood.AddListener(OnGreat);
-        EventManager.OnScoreNotBad.AddListener(OnGood);
-        EventManager.OnScoreBad.AddListener(OnPoor);
-    }
+    private void OnEnable() => EventManager.OnOrderRated.AddListener(OnOrderRated);
 
-    private void OnDisable()
-    {
-        EventManager.OnScoreGood.RemoveListener(OnGreat);
-        EventManager.OnScoreNotBad.RemoveListener(OnGood);
-        EventManager.OnScoreBad.RemoveListener(OnPoor);
-    }
+    private void OnDisable() => EventManager.OnOrderRated.RemoveListener(OnOrderRated);
 
-    private void OnGreat() => Set("Loved it!", UITokens.Colors.Ink);
-    private void OnGood() => Set("Tasty!", UITokens.Colors.Ink);
-    private void OnPoor() => Set("Not quite", UITokens.Colors.Tomato);
+    private void OnOrderRated()
+    {
+        var order = ScoreManager.Instance.LastOrder;
+        Set(order.Review.Title, order.Rating < 2.5f ? UITokens.Colors.Tomato : UITokens.Colors.Ink);
+    }
 
     private void Set(string text, Color color)
     {

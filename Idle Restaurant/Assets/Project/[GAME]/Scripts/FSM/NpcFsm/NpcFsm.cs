@@ -1,4 +1,5 @@
 //using CrazyGames;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Events;
@@ -43,7 +44,13 @@ public class NpcFsm : MonoBehaviour
     public UnityEvent OnNpcEatEnd = new();
     [HideInInspector]
     public UnityEvent OnNpcWaitEnd = new();
-    
+    // The burger arrived: LastReview holds what they think of it (before eating).
+    [HideInInspector]
+    public UnityEvent OnNpcServed = new();
+    // They finished eating and paid: ScoreManager.LastOrder holds the rating and the money.
+    [HideInInspector]
+    public UnityEvent OnNpcPaid = new();
+
     #endregion
 
     #region Components
@@ -51,13 +58,22 @@ public class NpcFsm : MonoBehaviour
     public NavMeshAgent Agent{ get { return (agent == null) ? agent = GetComponent<UnityEngine.AI.NavMeshAgent>() : agent; } }
     #endregion
 
+    // Customers in the restaurant right now (for hints and serving; avoids scene searches every frame).
+    public static readonly List<NpcFsm> Active = new();
+
     #region Parameters
     private Vector3 nextPos;
 
+    // Rush-hour pacing: each customer waits this long (seconds) before leaving hungry. It used to be a flat
+    // 240 s, which left no reason to hurry — and no reason to cut corners.
+    // (80-110 s felt too tight in play tests: two burgers in a row already cost customers.)
+    [SerializeField] private Vector2 patienceRange = new Vector2(100f, 130f);
+    public float Patience { get; private set; } = 115f;
+    public float WaitedSeconds => waitingTimer;
+    public BurgerReview LastReview { get; private set; }
+
     private float waitingTimer;
-    private float timeScore;
-    private float hamburgerPoint;
-    private float totalPoint;
+    private float servedAfter;
 
     Hamburger _hamburger;
     [HideInInspector] public ISedile chair;
@@ -65,6 +81,10 @@ public class NpcFsm : MonoBehaviour
 
     void OnEnable()
     {
+        Active.Add(this);
+        Patience = Random.Range(patienceRange.x, patienceRange.y);
+        LastReview = null;
+
         executingNpcState = ExecutingNpcState.COME;
         currentState = comeState;
         currentState.EnterState(this);
@@ -76,14 +96,14 @@ public class NpcFsm : MonoBehaviour
     }
 
     public void MoveNpc()
-    {   
+    {
         if(chair != null)
         {
             nextPos = chair.CalculateSitPos();
             Agent.SetDestination(nextPos);
             chair.IsEmpty = false;
         }
-        
+
     }
 
     public void DoneWithPath()
@@ -104,14 +124,14 @@ public class NpcFsm : MonoBehaviour
             executingNpcState = ExecutingNpcState.WAIT;
         }
     }
-    
+
     public void Wait()
     {
         waitingTimer += Time.deltaTime;
-        if (waitingTimer > 240f)
+        if (waitingTimer > Patience)
         {
             executingNpcState = ExecutingNpcState.PROTEST;
-            return;    
+            return;
         }
 
         if(chair.GetTableService().IsHaveFood())
@@ -119,6 +139,9 @@ public class NpcFsm : MonoBehaviour
             _hamburger = chair.GetTableService().GetHamburger();
             if(_hamburger != null)
             {
+                servedAfter = waitingTimer;
+                LastReview = _hamburger.Review;
+                OnNpcServed.Invoke();
                 OnNpcEatStart.Invoke();
                 executingNpcState = ExecutingNpcState.EAT;
             }
@@ -129,39 +152,21 @@ public class NpcFsm : MonoBehaviour
 
     public void React()
     {
-        hamburgerPoint = _hamburger.CalculateScore();
-        //if(waitingTimer <= 75f)
-        //{
-        //    if(hamburgerPoint < 1f)
-        //    {
-        //        timeScore = 0.6f;
-        //    }
-        //    else
-        //        timeScore = 2;
-        //}
-        //else
-        //{
-        //    timeScore = (240f - waitingTimer) * 2 / 165f;
-        //}
-        if (hamburgerPoint < 1f)
-        {
-            timeScore = 0.6f;
-        }
-        else
-            timeScore = 2;
-        totalPoint = (hamburgerPoint + timeScore);
+        // Quality (how it was made) and speed (how long they waited) both count; see ScoreManager.RateOrder.
+        var order = ScoreManager.Instance.RateOrder(LastReview, servedAfter, Patience);
 
         OnNpcSitChairStandUp.Invoke();
-        ScoreManager.Instance.CalculateLevelScore(totalPoint);
+        OnNpcPaid.Invoke();
+        EventManager.OnOrderRated.Invoke();
         EventManager.OnScoreUpdate.Invoke();
         chair.GetTableService().RemoveFood(_hamburger); // free only this table
         _hamburger.gameObject.SetActive(false);
 
-        if (totalPoint < 2.5f)
+        if (order.Rating < 2.5f)
         {
             EventManager.OnScoreBad.Invoke();
         }
-        else if(totalPoint >= 4)
+        else if(order.Rating >= 4)
         {
             EventManager.OnScoreGood.Invoke();
             //if (totalPoint >= 4.5f)
@@ -177,8 +182,7 @@ public class NpcFsm : MonoBehaviour
     }
 
     public void Protest()
-    {
-        ScoreManager.Instance.hostedCustomer ++;
+    {        ScoreManager.Instance.RegisterWalkout();
         executingNpcState = ExecutingNpcState.GO;
     }
 
@@ -209,6 +213,7 @@ public class NpcFsm : MonoBehaviour
 
     private void OnDisable()
     {
+        Active.Remove(this);
         waitingTimer = 0;
     }
 }

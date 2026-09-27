@@ -74,9 +74,29 @@ public class Plate : PlaceableBase
         ingredient.gameObject.transform.localPosition = desiredPos; 
     }
 
-    public override void UseFood(EdibleBase ingredient) 
+    public bool HasHamburger => doesHaveHamburger;
+    public Hamburger FinishedBurger => doesHaveHamburger ? placedHamburger : null;
+    public int LayerCount => ingredients.Count;
+
+    // A finished burger in hand can be set down on an empty plate (to free the chef's hands). It used to be
+    // stacked as a 7th "ingredient" of a new burger.
+    private Hamburger placedHamburger;
+
+    public override void UseFood(EdibleBase ingredient)
     {
         if(doesHaveHamburger)   return;
+
+        if (ingredient is Hamburger burger)
+        {
+            if (ingredients.Count > 0) return;
+            burger.transform.SetParent(transform, true);
+            burger.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
+            burger.SetPlaceable(this);
+            placedHamburger = burger;
+            doesHaveHamburger = true;
+            placeableCollider.enabled = false;
+            return;
+        }
 
         if (ingredients.Count <= 5)
         {
@@ -114,6 +134,7 @@ public class Plate : PlaceableBase
         {
             ResetColAndRef();
             doesHaveHamburger = false;
+            placedHamburger = null;
         }
 
         if (ingredient is Bun)
@@ -144,16 +165,24 @@ public class Plate : PlaceableBase
             ingredients.Add(_edibleHam);
             _edibleHam.SetPlaceable(this);
             doesHaveHamburger = true;
+            placedHamburger = _hamburger;
 
             ingredients.Clear();
             refTransform.position = transform.position;
         }
     }
 
+    // PlayerFSM.DropObject asks this right after UseFood, so "just placed this burger here" counts too.
     public override bool IsSuitable(EdibleBase ingredient)
     {
+        if (ingredient is Hamburger)
+            return placedHamburger == ingredient || (!doesHaveHamburger && ingredients.Count == 0);
         return true;
     }
+
+    // For hints: would this plate take the food the chef is holding?
+    public bool Accepts(EdibleBase food) =>
+        !doesHaveHamburger && (food is Hamburger ? ingredients.Count == 0 : ingredients.Count < 6);
 
     #region Additional Features
     /// <summary>

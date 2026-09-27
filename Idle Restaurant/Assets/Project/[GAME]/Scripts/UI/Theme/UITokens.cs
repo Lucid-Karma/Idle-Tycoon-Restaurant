@@ -64,6 +64,15 @@ public static class UITokens
         return Color.Lerp(color, Colors.Tomato, toTomato);
     }
 
+    // Customer mood faces (reaction bubble, order toast): teal = loved it, berry = laughing at the mess,
+    // tomato = shocked.
+    public static Color MoodColor(Mood mood) => mood switch
+    {
+        Mood.Delighted => Colors.Teal,
+        Mood.Amused => Colors.Berry,
+        _ => Colors.Tomato,
+    };
+
     // Simple damped spring step (unscaled time friendly).
     public static void Spring(ref float value, ref float velocity, float target, float dt)
     {

@@ -18,6 +18,7 @@ public class NpcWaitProgressBar : MonoBehaviour, IProgress01
     void OnEnable()
     {
         mask = GetComponent<Image>();
+        maximum = NpcFsm.Patience; // shown when they sit down; the customer owns the patience value
     }
 
     void Update()

@@ -26,6 +26,7 @@ public static class EventManager
     public static UnityEvent OnFoodDropped = new();
 
     public static UnityEvent OnScoreUpdate = new();
+    public static UnityEvent OnOrderRated = new();      // ScoreManager.LastOrder was just set
     public static UnityEvent OnScoreBad = new();
     public static UnityEvent OnScoreNotBad = new();
     public static UnityEvent OnScoreGood = new();

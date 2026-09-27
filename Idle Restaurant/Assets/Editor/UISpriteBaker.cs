@@ -68,11 +68,54 @@ public static class UISpriteBaker
             return Mathf.Max(outer, -inner);
         }, 0, true);
 
+        // Customer moods: a filled face with the features cut out (reads at ~28 px), tinted by UITokens.MoodColor.
+        Func<V, float> head = p => Circle(p, new V(64, 64), 58);
+        Bake("icon_face_love", 128, p =>
+        {
+            // Happy closed eyes (∩ ∩) and a wide smile.
+            float eyes = Mathf.Min(ArcDir(p, new V(44, 72), 11, 5.5f, 90, 75), ArcDir(p, new V(84, 72), 11, 5.5f, 90, 75));
+            float smile = ArcDir(p, new V(64, 56), 26, 6, -90, 62);
+            return Mathf.Max(head(p), -Mathf.Min(eyes, smile));
+        }, 0, true);
+        Bake("icon_face_laugh", 128, p =>
+        {
+            // Squeezed eyes (> <) and a big open laugh.
+            float left = Mathf.Min(Seg(p, new V(34, 84), new V(50, 76), 5), Seg(p, new V(50, 76), new V(34, 68), 5));
+            float right = Mathf.Min(Seg(p, new V(94, 84), new V(78, 76), 5), Seg(p, new V(78, 76), new V(94, 68), 5));
+            float mouth = Mathf.Max(Circle(p, new V(64, 50), 25), p.y - 50);
+            return Mathf.Max(head(p), -Mathf.Min(Mathf.Min(left, right), mouth));
+        }, 0, true);
+        Bake("icon_face_shock", 128, p =>
+        {
+            // Wide eyes and a round "O" mouth.
+            float eyes = Mathf.Min(Circle(p, new V(44, 76), 9), Circle(p, new V(84, 76), 9));
+            float mouth = Mathf.Abs(Circle(p, new V(64, 40), 13)) - 5.5f;
+            return Mathf.Max(head(p), -Mathf.Min(eyes, mouth));
+        }, 0, true);
+        Bake("icon_bolt", 128, p => Poly(p, new[] { new V(74, 120), new V(30, 58), new V(60, 58), new V(50, 8), new V(98, 74), new V(68, 74) }) - 5, 0, true);
+
+        // Title / poster effects: radiating burst behind the hero, speed streaks, sweat drops.
+        // Rays fade out towards the rim, so the burst never shows an edge however it is sized.
+        Bake("fx_sunburst", 512, p =>
+        {
+            V q = p - new V(256, 256);
+            float r = q.magnitude;
+            return -Mathf.Sin(16f * Mathf.Atan2(q.y, q.x)) * r / 16f;
+        }, 0, true, fade: p => 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(90f, 250f, (p - new V(256, 256)).magnitude)));
+        Bake("fx_speedline", 256, p =>
+        {
+            // Thick at the leading (right) end, tapering to a point behind.
+            V a = new V(14, 128), b = new V(236, 128), pa = p - a, ba = b - a;
+            float h = Mathf.Clamp01(V.Dot(pa, ba) / V.Dot(ba, ba));
+            return (pa - ba * h).magnitude - Mathf.Lerp(2f, 16f, h);
+        }, 0, true);
+        Bake("fx_drop", 128, p => SMin(Circle(p, new V(64, 46), 30), Poly(p, new[] { new V(42, 60), new V(86, 60), new V(64, 118) }) - 2, 10), 0, true);
+
         AssetDatabase.Refresh();
         Debug.Log("[UISpriteBaker] UI sprites baked to " + Dir);
     }
 
-    static void Bake(string name, int size, Func<V, float> sdf, int border, bool mips, float soft = 0)
+    static void Bake(string name, int size, Func<V, float> sdf, int border, bool mips, float soft = 0, Func<V, float> fade = null)
     {
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         var px = new Color32[size * size];
@@ -83,6 +126,7 @@ public static class UISpriteBaker
                 float a;
                 if (soft > 0) { float t = Mathf.Clamp01(.5f - d / (2 * soft)); a = t * t * (3 - 2 * t); }
                 else a = Mathf.Clamp01(.5f - d);
+                if (fade != null) a *= fade(new V(x + .5f, y + .5f));
                 px[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255));
             }
         tex.SetPixels32(px);
@@ -150,6 +194,15 @@ public static class UISpriteBaker
         if (Mathf.Abs(Mathf.Atan2(q.y, q.x)) <= a0) return Mathf.Abs(q.magnitude - r) - w;
         V end = new V(Mathf.Cos(a0), Mathf.Sin(a0) * (q.y >= 0 ? 1 : -1)) * r;
         return (q - end).magnitude - w;
+    }
+
+    // Arc like Arc() but centred on direction dirDeg (0 = +x, 90 = up).
+    static float ArcDir(V p, V c, float r, float w, float dirDeg, float halfAngle)
+    {
+        float a = -dirDeg * Mathf.Deg2Rad;
+        V q = p - c;
+        V rotated = new V(q.x * Mathf.Cos(a) - q.y * Mathf.Sin(a), q.x * Mathf.Sin(a) + q.y * Mathf.Cos(a));
+        return Arc(rotated + c, c, r, w, halfAngle);
     }
 
     static V[] StarPoints(V c, float outer, float inner)

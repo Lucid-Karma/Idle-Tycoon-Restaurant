@@ -88,7 +88,8 @@ public class NpcFsm : MonoBehaviour
 
     public void DoneWithPath()
     {
-        if(Agent.remainingDistance <= Agent.stoppingDistance)
+        // While a new path is being computed remainingDistance can still hold the old (arrived) value.
+        if(!Agent.pathPending && Agent.remainingDistance <= Agent.stoppingDistance)
         {
             executingNpcState = ExecutingNpcState.ORDER;
         }
@@ -153,6 +154,7 @@ public class NpcFsm : MonoBehaviour
         OnNpcSitChairStandUp.Invoke();
         ScoreManager.Instance.CalculateLevelScore(totalPoint);
         EventManager.OnScoreUpdate.Invoke();
+        chair.GetTableService().RemoveFood(_hamburger); // free only this table
         _hamburger.gameObject.SetActive(false);
 
         if (totalPoint < 2.5f)
@@ -194,7 +196,7 @@ public class NpcFsm : MonoBehaviour
 
     private bool IsPathEnd()
     {
-        if(Agent.remainingDistance <= Agent.stoppingDistance)
+        if(!Agent.pathPending && Agent.remainingDistance <= Agent.stoppingDistance)
             return true;
         return false;
     }

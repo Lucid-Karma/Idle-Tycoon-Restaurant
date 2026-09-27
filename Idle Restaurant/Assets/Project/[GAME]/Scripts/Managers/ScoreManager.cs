@@ -19,6 +19,8 @@ public class ScoreManager : Singleton<ScoreManager>
     [HideInInspector] public int hostedCustomer;
     private int _levelUpdateCount = 8;
 
+    public int CustomersPerLevel => _levelUpdateCount;
+
     public void CalculateLevelScore(float point)
     {
         hostedCustomer ++;
@@ -30,13 +32,19 @@ public class ScoreManager : Singleton<ScoreManager>
         DoPointExpression();
     }
 
+    private bool levelFinished;
+
+    // Called whenever a customer walks out. The shift ends once, when every customer of the shift has left.
+    // (It used to end as soon as 8 customers had been *rated* while another was still walking out, dividing
+    // the 8 scores by 7 — averages above 5 — and could fire again for later departures.)
     public void FinishLevel()
     {
-        if(hostedCustomer >= _levelUpdateCount)
-        {
-            totalLevelScore /= HostedCustomerCount;
-            EventManager.OnLevelFinish.Invoke();
-        }
+        if (levelFinished || HostedCustomerCount < _levelUpdateCount) return;
+        levelFinished = true;
+
+        // Average over every customer that was rated or left unserved (a protest adds 0 to the total).
+        totalLevelScore /= Mathf.Max(1, hostedCustomer);
+        EventManager.OnLevelFinish.Invoke();
     }
 
     private void CalculateIncome()

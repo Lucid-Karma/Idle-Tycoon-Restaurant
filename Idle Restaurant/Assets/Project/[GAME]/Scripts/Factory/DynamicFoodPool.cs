@@ -25,7 +25,9 @@ public class DynamicFoodPool
             {
                 if(_pooledObjects[i] != null)
                 {
-                    if (!_pooledObjects[i].activeInHierarchy) 
+                    // Free only if it was switched off itself. activeInHierarchy also treated objects that are
+                    // still in use under an inactive parent as free (e.g. an eaten burger's plate) and moved them.
+                    if (!_pooledObjects[i].activeSelf)
                     {
                         _pooledObjects[i].transform.parent = null;
                         return _pooledObjects[i];

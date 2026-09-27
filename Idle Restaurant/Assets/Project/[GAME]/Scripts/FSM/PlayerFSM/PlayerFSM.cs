@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Events;
-using UnityEngine.EventSystems;
 
 public enum ExecutingState
 {
@@ -44,9 +43,15 @@ public class PlayerFSM : MonoBehaviour
     PlaceableBase placeable;
     EdibleBase edible;
     ISelectable selectable;
-    ISedile sedile;
 
     Bin bin;
+
+    // Serving with a finished burger in hand: a tap within this fraction of the screen height of a customer,
+    // or within serveSnapRadius (world units) of a free service point on their chair/table, serves there.
+    [SerializeField] private float customerTapRadius = 0.09f;
+    [SerializeField] private float serveSnapRadius = 2.2f;
+    private ServiceBase[] services;
+    private Vector3 destination;
 
     #region Parameters
     Camera _playerCam;
@@ -77,52 +82,86 @@ public class PlayerFSM : MonoBehaviour
         //elapsed = 0.0f;
     }
 
+    // The UI check only gates new taps (MovePlayer), so the chef keeps walking while the pointer is over UI.
     void Update()
     {
-        if (EventSystem.current.IsPointerOverGameObject())
-            return;
-
         currentState.UpdateState(this);
     }
-    //public Transform target;
-    //private NavMeshPath path;
-    //private float elapsed = 0.0f;
 
     public void MovePlayer()
     {
-        if(Input.GetMouseButtonDown(0))
+        if(Input.GetMouseButtonDown(0) && !PointerUtility.IsOverUI())
+            HandleScreenTap(Input.mousePosition);
+    }
+
+    public void HandleScreenTap(Vector3 screenPosition)
+    {
+        ray = _playerCam.ScreenPointToRay(screenPosition);
+        bool hitSomething = Physics.Raycast(ray, out RaycastHit tapHit, 100);
+
+        // An interactive object under the finger always wins; otherwise a tap near a customer serves them.
+        if (!(hitSomething && IsInteractive(tapHit.collider)) && TryServeCustomerAt(screenPosition)) return;
+        if (!hitSomething) return;
+
+        hit = tapHit;
+        GatherInteractableComponents();
+        SnapToNearbyService();
+        GoToTarget();
+    }
+
+    private static bool IsInteractive(Collider col) =>
+        col.GetComponent<PlaceableBase>() != null || col.GetComponent<ISpawnable>() != null ||
+        col.GetComponent<EdibleBase>() != null || col.GetComponent<Bin>() != null;
+
+    // Customers have no collider (a tap on one hits nothing), so with a burger in hand a tap close to a
+    // customer on screen serves them: the chef walks to that customer's service point.
+    private bool TryServeCustomerAt(Vector3 screenPosition)
+    {
+        if (!isHolded || currentFood is not Hamburger) return false;
+
+        ServiceBase target = null;
+        float nearest = Screen.height * customerTapRadius;
+        foreach (var npc in FindObjectsByType<NpcFsm>(FindObjectsSortMode.None))
         {
-            ray = _playerCam.ScreenPointToRay(Input.mousePosition);
+            var state = npc.executingNpcState;
+            if (npc.chair == null || (state != ExecutingNpcState.COME && state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT))
+                continue;
+            if (npc.chair.GetTableService() is not ServiceBase service || !service.IsSuitable(currentFood))
+                continue;
 
-            if(Physics.Raycast(ray, out hit, 100))
+            Vector3 onScreen = _playerCam.WorldToScreenPoint(npc.transform.position + Vector3.up);
+            float distanceOnScreen = Vector2.Distance(onScreen, screenPosition);
+            if (distanceOnScreen < nearest)
             {
-                GatherInteractableComponents();
-
-                //target = hit.collider.transform;
-                SelectObject();
-                UpdateStoppingDistance();
-
-                //executingState = ExecutingState.RUN;
-
-                distance = Vector3.Distance(Agent.transform.position, hit.point);
-                if (distance > 3.0f)
-                {
-                    executingState = ExecutingState.RUN;
-                    Agent.SetDestination(hit.point);
-                }
-                else
-                    Interact();
-
-                //elapsed += Time.deltaTime;
-                //if (elapsed > 1.0f)
-                //{
-                //    elapsed -= 1.0f;
-                //    NavMesh.CalculatePath(transform.position, target.position, NavMesh.AllAreas, path);
-                //}
-                //for (int i = 0; i < path.corners.Length - 1; i++)
-                //    Debug.DrawLine(path.corners[i], path.corners[i + 1], Color.red);
+                nearest = distanceOnScreen;
+                target = service;
             }
         }
+        if (target == null) return false;
+
+        spawnable = null;
+        edible = null;
+        bin = null;
+        placeable = target;
+        selectable = target;
+        destination = target.transform.position;
+        GoToTarget();
+        return true;
+    }
+
+    private void GoToTarget()
+    {
+        SelectObject();
+        UpdateStoppingDistance();
+
+        distance = Vector3.Distance(Agent.transform.position, destination);
+        if (distance > 3.0f)
+        {
+            executingState = ExecutingState.RUN;
+            Agent.SetDestination(destination);
+        }
+        else
+            Interact();
     }
 
     private void GatherInteractableComponents()
@@ -131,8 +170,36 @@ public class PlayerFSM : MonoBehaviour
         placeable = hit.collider.GetComponent<PlaceableBase>();
         edible = hit.collider.GetComponent<EdibleBase>();
         selectable = hit.collider.GetComponent<ISelectable>();
-        sedile = hit.collider.GetComponent<ISedile>();
         bin = hit.collider.GetComponent<Bin>();
+        destination = hit.point;
+    }
+
+    // The service point is a small white spot; with a burger in hand, a tap on anything non-interactive
+    // near a free one (the chair or table) serves there.
+    private void SnapToNearbyService()
+    {
+        if (!isHolded || currentFood is not Hamburger) return;
+        if (placeable != null || spawnable != null || edible != null || bin != null) return;
+
+        services ??= FindObjectsByType<ServiceBase>(FindObjectsSortMode.None);
+        ServiceBase nearest = null;
+        float nearestDistance = serveSnapRadius;
+        foreach (var service in services)
+        {
+            if (!service.IsSuitable(currentFood)) continue;
+            Vector3 offset = service.transform.position - hit.point;
+            offset.y = 0f;
+            if (offset.magnitude < nearestDistance)
+            {
+                nearestDistance = offset.magnitude;
+                nearest = service;
+            }
+        }
+        if (nearest == null) return;
+
+        placeable = nearest;
+        selectable = nearest;
+        destination = nearest.transform.position;
     }
 
     #region Selectables'Methods
@@ -144,7 +211,6 @@ public class PlayerFSM : MonoBehaviour
         PlaceFood();
         TrashEdible();
         RotateToSelectable();
-        UpdateSedile();
     }
 
     public void GetFoodFromSource()
@@ -219,14 +285,6 @@ public class PlayerFSM : MonoBehaviour
         }
     }
 
-    public void UpdateSedile()
-    {
-        if(sedile != null)
-        {
-            sedile.UpdateChairState();
-        }
-    }
-
     public void TrashEdible()
     {
         if (bin != null)
@@ -244,7 +302,7 @@ public class PlayerFSM : MonoBehaviour
 
     public void DoneWithPath()
     {
-        if(Agent.remainingDistance <= Agent.stoppingDistance)
+        if(!Agent.pathPending && Agent.remainingDistance <= Agent.stoppingDistance)
         {
             executingState = ExecutingState.IDLE;
         }

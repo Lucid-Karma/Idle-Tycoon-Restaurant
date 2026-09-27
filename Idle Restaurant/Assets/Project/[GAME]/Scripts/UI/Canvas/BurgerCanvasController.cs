@@ -1,16 +1,12 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class BurgerCanvasController : MonoBehaviour
 {
+    // Kept at a fixed world offset from the patty every frame (see BunCanvasController for why).
+    [SerializeField] private Vector3 worldOffset = new Vector3(0.5f, 2.062f, 0f);
+
     Burger burger;
     Burger Burger{ get { return (burger == null) ? burger = GetComponentInParent<Burger>() : burger;}}
-
-    void OnEnable()
-    {
-        transform.position += new Vector3(0.5f, 0f, 0f);
-    }
 
     void Update()
     {
@@ -18,8 +14,8 @@ public class BurgerCanvasController : MonoBehaviour
         if(Burger.isOver)   gameObject.SetActive(false);
     }
 
-    void OnDisable()
+    void LateUpdate()
     {
-        transform.position -= new Vector3(0.5f, 0f, 0f);
+        transform.position = Burger.transform.position + worldOffset;
     }
 }

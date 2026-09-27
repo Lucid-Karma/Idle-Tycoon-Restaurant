@@ -32,6 +32,8 @@ public class LevelScoreTextController : MonoBehaviour
     private void UpdateScoreText()
     {
         point = ScoreManager.Instance.GetLevelFinalScore();
-        ScoreText.text = point.ToString("F2") + " pt";
+        // Average order rating out of 5 (same scale as the stars above it).
+        ScoreText.text = point.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)
+            + "<size=50%><color=#" + ColorUtility.ToHtmlStringRGBA(UITokens.Colors.InkMuted) + "> / 5</color></size>";
     }
 }

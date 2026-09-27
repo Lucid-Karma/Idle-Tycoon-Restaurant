@@ -14,7 +14,7 @@ public class NeonRandomFlicker : MonoBehaviour
 
     void Start()
     {
-        isMusicOn = true;
+        isMusicOn = Audio.IsMusicOn;
         nextFlickerTime = Time.time + Random.Range(minTime, maxTime);
     }
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class NpcEatProgressBar : MonoBehaviour
+public class NpcEatProgressBar : MonoBehaviour, IProgress01
 {
     NpcFsm npcFsm;
     NpcFsm NpcFsm { get { return (npcFsm == null) ? npcFsm = GetComponentInParent<NpcFsm>() : npcFsm; } }
@@ -11,6 +11,8 @@ public class NpcEatProgressBar : MonoBehaviour
     public float maximum = 3f;
     //[Range(0.0f, 5.0f)]
     private float current = 0;
+
+    public float Progress01 => Mathf.Clamp01(current / maximum);
     private Image mask;
     private float fillAmount;
 

@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 //[ExecuteInEditMode()]
-public class CookingProgressBar : MonoBehaviour
+public class CookingProgressBar : MonoBehaviour, IProgress01
 {
     private Image mask;
     public Color color;
@@ -10,6 +10,10 @@ public class CookingProgressBar : MonoBehaviour
     private float minumum = 10f;
     private float maximum = 20f;
     private float current = 0;
+
+    // Mirrors the Pan/Oven timing: cooked at `minumum`, burned at `maximum`.
+    public float Progress01 => Mathf.Clamp01(current / maximum);
+    public float DoneAt01 => minumum / maximum;
 
     private float fillAmount;
 

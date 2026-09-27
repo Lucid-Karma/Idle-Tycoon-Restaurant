@@ -4,17 +4,23 @@ public class ClickFx : MonoBehaviour
 {
     private AudioSource clickFx;
 
-    void Start()
+    void Awake()
     {
         clickFx = gameObject.GetComponent<AudioSource>();
     }
 
+    // A named method (not a lambda) so RemoveListener matches what AddListener registered.
     void OnEnable()
     {
-        EventManager.OnClick.AddListener(() => clickFx.Play());
+        EventManager.OnClick.AddListener(PlayClick);
     }
     void OnDisable()
     {
-        EventManager.OnClick.RemoveListener(() => clickFx.Play());
+        EventManager.OnClick.RemoveListener(PlayClick);
+    }
+
+    private void PlayClick()
+    {
+        clickFx.Play();
     }
 }

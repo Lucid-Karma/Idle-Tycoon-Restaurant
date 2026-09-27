@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 
 public class HighlightController : MonoBehaviour
 {
@@ -20,11 +19,10 @@ public class HighlightController : MonoBehaviour
         _camera = Camera.main;
     }
 
+    private bool usesTouch;
+
     private void Update()
     {
-        if (EventSystem.current.IsPointerOverGameObject())
-            return;
-
         if (_selection != null)
         {
             selectionRenderer = _selection.GetComponent<Renderer>();
@@ -71,6 +69,12 @@ public class HighlightController : MonoBehaviour
             }
             _selection = null;
         }
+
+        // Hover highlighting needs a mouse: on touch screens the pointer stays where the last finger lifted,
+        // so whatever was tapped (or placed there) stayed highlighted.
+        if (Input.touchCount > 0) usesTouch = true;
+        if (usesTouch || PointerUtility.IsOverUI())
+            return;
 
         ray = _camera.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out hit))

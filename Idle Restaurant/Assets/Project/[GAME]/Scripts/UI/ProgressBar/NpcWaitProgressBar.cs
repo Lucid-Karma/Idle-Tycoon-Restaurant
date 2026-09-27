@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class NpcWaitProgressBar : MonoBehaviour
+public class NpcWaitProgressBar : MonoBehaviour, IProgress01
 {
     NpcFsm npcFsm;
     NpcFsm NpcFsm { get { return (npcFsm == null) ? npcFsm = GetComponentInParent<NpcFsm>() : npcFsm; } }
 
     public float maximum = 240f;
     private float current = 0;
+
+    public float Progress01 => Mathf.Clamp01(current / maximum);
     private Image mask;
     private float fillAmount;
 

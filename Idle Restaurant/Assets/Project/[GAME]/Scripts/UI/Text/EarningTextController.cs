@@ -22,6 +22,8 @@ public class EarningTextController : MonoBehaviour
     {
         EventManager.OnScoreUpdate.AddListener(UpdateEarningText);
         EventManager.OnLevelFinish.AddListener(UpdateLevelEarningText);
+        // Labels inside panels that open later (e.g. the shop wallet) must show the current value.
+        if (ScoreManager.Instance != null) UpdateEarningText();
     }
 
     private void OnDisable()
@@ -30,16 +32,10 @@ public class EarningTextController : MonoBehaviour
         EventManager.OnLevelFinish.RemoveListener(UpdateLevelEarningText); 
     }
 
-    private float point = 0;
     private void UpdateEarningText()
     {
-        point = ScoreManager.Instance.totalLevelEarning;
-        EarningText.text = point.ToString() + "$";
+        EarningText.text = "$" + ScoreManager.Instance.totalLevelEarning;
     }
 
-    private void UpdateLevelEarningText()
-    {
-        point = ScoreManager.Instance.totalLevelEarning;
-        EarningText.text = point.ToString() + " $";
-    }
+    private void UpdateLevelEarningText() => UpdateEarningText();
 }

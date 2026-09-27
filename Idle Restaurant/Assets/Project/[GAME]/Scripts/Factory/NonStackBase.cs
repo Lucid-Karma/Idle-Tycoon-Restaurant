@@ -5,7 +5,24 @@ using UnityEngine;
 public class NonStackBase : PlaceableBase
 {
     protected GameObject currentObject;
-    
+    private Transform foodSlot;
+
+    // Food goes into an unscaled slot at this utensil's position rather than under the utensil itself:
+    // some utensil objects are non-uniformly scaled (the oven is 1.41 × 0.01 × 1.15), and a rotated child
+    // of a non-uniform parent gets sheared — the food mesh and its billboard bubble came out skewed.
+    private Transform FoodSlot
+    {
+        get
+        {
+            if (foodSlot == null)
+            {
+                foodSlot = new GameObject(name + " FoodSlot").transform;
+                foodSlot.SetPositionAndRotation(transform.position, transform.rotation);
+            }
+            return foodSlot;
+        }
+    }
+
     public override void EnableCollider()
     {
         if(currentObject == null)
@@ -16,10 +33,11 @@ public class NonStackBase : PlaceableBase
     {
         ingredient.SetPlaceable(this);
         currentObject = ingredient.SetFood();
-        
 
-        ingredient.gameObject.transform.parent = transform;
-        ingredient.gameObject.transform.position = transform.position;
+        var food = ingredient.gameObject.transform;
+        food.SetParent(FoodSlot, true);
+        food.localPosition = Vector3.zero;
+        food.localRotation = Quaternion.identity;
     }
 
     public override void RemoveFood(EdibleBase ingredient)

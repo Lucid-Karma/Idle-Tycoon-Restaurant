@@ -15,17 +15,21 @@ public class NpcSpawnController : MonoBehaviour
     private Vector3 spawnPos;
     private float timeBreak;
     private int levelCustomerCount; // comes from difficultyManager.
+    private int spawnedCount;       // customers sent in this shift; capped at ScoreManager.CustomersPerLevel
 
     void OnEnable()
     {
-        EventManager.OnLevelStart.AddListener(() => StartCoroutine(CreateLevelCustomers()));
-        EventManager.OnCustomerWent.AddListener(() => StartCoroutine(DelayedCreation()));
+        EventManager.OnLevelStart.AddListener(StartLevelCustomers);
+        EventManager.OnCustomerWent.AddListener(StartDelayedCreation);
     }
     void OnDisable()
     {
-        EventManager.OnLevelStart.RemoveListener(() => StartCoroutine(CreateLevelCustomers()));
-        EventManager.OnCustomerWent.RemoveListener(() => StartCoroutine(DelayedCreation()));
+        EventManager.OnLevelStart.RemoveListener(StartLevelCustomers);
+        EventManager.OnCustomerWent.RemoveListener(StartDelayedCreation);
     }
+
+    private void StartLevelCustomers() => StartCoroutine(CreateLevelCustomers());
+    private void StartDelayedCreation() => StartCoroutine(DelayedCreation());
 
     void Start()
     {
@@ -66,19 +70,24 @@ public class NpcSpawnController : MonoBehaviour
 
     public void CreateNpc()
     {
+        // A shift has a fixed number of customers; extra ones used to keep arriving (and got frozen when
+        // the result screen paused the game).
+        if (spawnedCount >= ScoreManager.Instance.CustomersPerLevel) return;
+
         GameObject npc = GetPooledNpc();
         if(targetChairs.Any(x => x.GetComponent<ISedile>().IsEmpty))
         {
             if(npc != null)
             {
                 List<GameObject> specificChairs = targetChairs.Where(x => x.GetComponent<ISedile>().IsEmpty).ToList();
-                chairIndex = Random.Range(0, specificChairs.Count - 1);
+                chairIndex = Random.Range(0, specificChairs.Count); // max is exclusive: the last chair was never picked
                 //Debug.Log("SChairCount: " + specificChairs.Count + " chairIndex: " + chairIndex);
                 npc.GetComponent<NpcFsm>().chair = specificChairs[chairIndex].GetComponent<ISedile>();
 
                 spawnPos = new Vector3(21.35f, 1.2f, 8.79f);
                 npc.transform.position = spawnPos;
                 npc.SetActive(true);
+                spawnedCount++;
             }
             
         }

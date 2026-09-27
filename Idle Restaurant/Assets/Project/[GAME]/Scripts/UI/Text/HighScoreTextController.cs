@@ -44,6 +44,6 @@ public class HighScoreTextController : MonoBehaviour
             //print("NEW RECORD !!!");
             //HighScoreText.text = point.ToString("F3");
         }
-        HighScoreText.text = PlayerPrefs.GetFloat("HighScore", 0).ToString("F2");
+        HighScoreText.text = PlayerPrefs.GetFloat("HighScore", 0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
     }
 }

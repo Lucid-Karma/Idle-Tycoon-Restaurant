@@ -5,17 +5,24 @@ using UnityEngine;
 // - Hover (mouse only): the object under the cursor turns yellow.
 // - Target: the object the chef was just sent to stays yellow until he gets there (tap feedback on phones,
 //   where there is no hover).
-// - Hints: a soft yellow pulse on what makes sense next: where the held food can go (pan, oven, chopping
-//   board, a plate, a waiting customer's table), food that is ready to take, or the ingredient crates when
-//   the chef's hands are empty and nothing is ready.
-// Materials are swapped on the renderers and restored exactly (no material instances are created per object).
+// - Hints: what makes sense next pulses between its own look and teal (solid colour like the highlight,
+//   no glow): where the held food can go (pan, oven, chopping board, a plate, a waiting customer and their
+//   table), food that is ready to take, or the ingredient crates when hands are empty and nothing is ready.
+// Materials are swapped on the renderers and restored exactly. Hinted Lit materials are swapped for copies
+// using Chibi/HintLit (made once per original material), whose colour follows a global pulse. A swap keeps
+// the material count, so it also works on statically batched renderers.
 public class HighlightController : MonoBehaviour
 {
     [SerializeField] private Material highlightMaterial;   // solid yellow: hover and tap target
-    [SerializeField] private Material hintMaterial;        // Chibi/HintOverlay: drawn on top, pulsing
+    [SerializeField] private Material hintTemplate;        // Chibi/HintLit material (keeps the shader in builds)
+    [SerializeField] private Material hintMaterial;        // solid teal, for the rare non-Lit material
     [SerializeField] private float targetMinTime = 0.35f;  // a tap stays lit at least this long
-    [SerializeField] private Vector2 hintAlpha = new Vector2(0.12f, 0.55f);
-    [SerializeField] private float hintPulsesPerSecond = 1.1f;
+    [SerializeField] private float hintPulseSeconds = 1f;  // one breath: own look → teal → own look
+    [SerializeField, Range(0f, 1f)] private float hintPeak = 0.9f;
+
+    private static readonly int HintAmountId = Shader.PropertyToID("_HintAmount");
+    private static readonly int HintColorId = Shader.PropertyToID("_HintColor");
+    private readonly Dictionary<Material, Material> hintVariants = new();
 
     private enum Look { None, Hint, Full }
 
@@ -32,8 +39,6 @@ public class HighlightController : MonoBehaviour
     private ChoppingBoard[] boards;
     private Plate[] plates;
     private IngredientsSource[] sources;
-    private Material hintOverlay;
-    private Color hintColor;
     private bool usesTouch;
 
     private void Start()
@@ -45,10 +50,33 @@ public class HighlightController : MonoBehaviour
         boards = FindObjectsByType<ChoppingBoard>(FindObjectsSortMode.None);
         plates = FindObjectsByType<Plate>(FindObjectsSortMode.None);
         sources = FindObjectsByType<IngredientsSource>(FindObjectsSortMode.None);
+        Shader.SetGlobalColor(HintColorId, UITokens.Colors.Teal);
+        Shader.SetGlobalFloat(HintAmountId, 0f);
+    }
 
-        // Animate a copy, so the pulse never dirties the material asset.
-        hintOverlay = new Material(hintMaterial);
-        hintColor = hintMaterial.color;
+    private void OnDestroy()
+    {
+        foreach (var variant in hintVariants.Values) if (variant != null && variant != hintMaterial) Destroy(variant);
+        hintVariants.Clear();
+    }
+
+    // The original with its colour free to drift towards teal; one copy per original material.
+    private Material HintVariant(Material original)
+    {
+        if (original == null || original.shader == null || original.shader.name != "Universal Render Pipeline/Lit")
+        {
+#if UNITY_EDITOR
+            if (original != null && hintVariants.TryAdd(original, hintMaterial))
+                Debug.LogWarning($"[Highlight] '{original.name}' ({original.shader?.name}) isn't URP Lit: hinted with the plain teal material");
+#endif
+            return hintMaterial;
+        }
+        if (!hintVariants.TryGetValue(original, out var variant))
+        {
+            variant = new Material(original) { name = original.name + " (hint)", shader = hintTemplate.shader };
+            hintVariants[original] = variant;
+        }
+        return variant;
     }
 
     // Hints only make sense while a shift is running (not on the title, help or result screens).
@@ -72,11 +100,6 @@ public class HighlightController : MonoBehaviour
         originals.Clear();
     }
 
-    private void OnDestroy()
-    {
-        if (hintOverlay != null) Destroy(hintOverlay);
-    }
-
     private void LateUpdate()
     {
         if (player == null) return;
@@ -87,35 +110,53 @@ public class HighlightController : MonoBehaviour
             return;
         }
 
-        // What the chef is on his way to (or was tapped a moment ago) glows solid; nothing else is hinted
+        // What the chef is on his way to (or was tapped a moment ago) turns yellow; nothing else is hinted
         // meanwhile, so the destination is unambiguous.
         var tapped = player.LastTapped;
         bool showTap = tapped != null && (player.IsHeadingTo(tapped) || Time.unscaledTime - player.LastTappedAt < targetMinTime);
         if (showTap)
+            hints.Clear();
+        else
+            CollectHints(hints);
+        UpdatePulse();
+        if (showTap)
             Mark(tapped, Look.Full);
         else
-        {
-            CollectHints(hints);
             foreach (var c in hints) Mark(c, Look.Hint);
-        }
 
         // Hover needs a mouse: on touch screens the pointer stays where the last finger lifted.
         if (Input.touchCount > 0) usesTouch = true;
         if (!usesTouch && !PointerUtility.IsOverUI() && Physics.Raycast(_camera.ScreenPointToRay(Input.mousePosition), out var hit))
         {
-            var selectable = hit.collider.GetComponent<ISelectable>() as Component;
+            var proxy = hit.collider.GetComponent<TapProxy>();
+            var col = proxy != null ? player.ResolveTap(hit.collider) : hit.collider;
+            var selectable = col != null ? col.GetComponent<ISelectable>() as Component : null;
             if (selectable != null) Mark(selectable, Look.Full);
+            else if (proxy != null) Mark(proxy.Target, Look.Full); // full oven: still show it's the oven
         }
 
         Apply();
-
-        float pulse = 0.5f - 0.5f * Mathf.Cos(Time.unscaledTime * hintPulsesPerSecond * 2f * Mathf.PI);
-        var color = hintColor;
-        color.a = Mathf.Lerp(hintAlpha.x, hintAlpha.y, pulse);
-        hintOverlay.color = color;
     }
 
     #region Hints
+    private int hintSignature;
+    private float hintSince;
+
+    // The pulse restarts whenever the hinted set changes, so newly hinted things ease in from their own
+    // look instead of popping in at full teal.
+    private void UpdatePulse()
+    {
+        int signature = hints.Count;
+        foreach (var c in hints) signature = signature * 31 + (c != null ? c.GetInstanceID() : 0);
+        if (signature != hintSignature)
+        {
+            hintSignature = signature;
+            hintSince = Time.unscaledTime;
+        }
+        float phase = (Time.unscaledTime - hintSince) / Mathf.Max(0.1f, hintPulseSeconds);
+        Shader.SetGlobalFloat(HintAmountId, hintPeak * (0.5f - 0.5f * Mathf.Cos(phase * 2f * Mathf.PI)));
+    }
+
     private void CollectHints(List<Component> into)
     {
         into.Clear();
@@ -156,7 +197,7 @@ public class HighlightController : MonoBehaviour
 
         // Empty hands: whatever is ready to take (burnt counts too: it's blocking the pan).
         foreach (var pan in pans) if (pan.Food is Burger patty && patty.Preparation != Prep.Raw) into.Add(patty);
-        foreach (var oven in ovens) if (oven.Food is Bun bun && bun.Preparation != Prep.Raw) into.Add(bun);
+        foreach (var oven in ovens) if (oven.Food is Bun bun && bun.Preparation != Prep.Raw) { into.Add(bun); into.Add(oven); }
         foreach (var board in boards) if (board.Food is CuttableBase sliced && sliced.isSliced) into.Add(sliced);
         foreach (var plate in plates) if (plate.FinishedBurger != null) into.Add(plate.FinishedBurger);
 
@@ -171,6 +212,9 @@ public class HighlightController : MonoBehaviour
         if (target == null) return;
         // A finished burger is lit as a whole (its layers are selectables of their own).
         Collect(target.transform, target.transform, look, target is Hamburger);
+        // A utensil tappable through bigger furniture (the oven tray through the whole oven) lights it too.
+        foreach (var proxy in TapProxy.All)
+            if (proxy.Target == target) Collect(proxy.transform, proxy.transform, look, false);
     }
 
     private void Collect(Transform node, Transform root, Look look, bool includeNested)
@@ -213,9 +257,8 @@ public class HighlightController : MonoBehaviour
             }
             else
             {
-                materials = new Material[original.Length + 1];
-                original.CopyTo(materials, 0);
-                materials[original.Length] = hintOverlay;
+                materials = new Material[original.Length];
+                for (int i = 0; i < materials.Length; i++) materials[i] = HintVariant(original[i]);
             }
             renderer.sharedMaterials = materials;
             applied[renderer] = pair.Value;

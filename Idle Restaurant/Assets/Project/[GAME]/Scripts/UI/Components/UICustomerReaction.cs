@@ -19,9 +19,11 @@ public class UICustomerReaction : MonoBehaviour
     [SerializeField] private float lineHold = 3.1f, moneyTime = 1.7f, moneyRise = 70f;
     [SerializeField] private float padding = 26f, gap = 12f, iconSize = 52f, minWidth = 150f;
 
+    [SerializeField] private float raise = 110f;   // lift above the order bubble while it's showing
+
     private NpcFsm npc;
     private CanvasGroup bubbleGroup, moneyGroup;
-    private Vector2 moneyRest;
+    private Vector2 moneyRest, moneyBase, bubbleRest;
     private float lineAge = float.MaxValue, moneyAge = float.MaxValue, hold;
     private float pop = 1f, popVelocity;
 
@@ -30,7 +32,8 @@ public class UICustomerReaction : MonoBehaviour
         npc = GetComponentInParent<NpcFsm>();
         bubbleGroup = bubble.GetComponent<CanvasGroup>();
         moneyGroup = moneyPill.GetComponent<CanvasGroup>();
-        moneyRest = moneyPill.anchoredPosition;
+        moneyRest = moneyBase = moneyPill.anchoredPosition;
+        bubbleRest = bubble.anchoredPosition;
     }
 
     private void OnEnable()
@@ -38,6 +41,8 @@ public class UICustomerReaction : MonoBehaviour
         npc.OnNpcServed.AddListener(OnServed);
         npc.OnNpcPaid.AddListener(OnPaid);
         npc.OnNpcWaitEnd.AddListener(OnGaveUp);
+        npc.OnNpcSays.AddListener(OnSays);
+        npc.OnNpcTipped.AddListener(OnTipped);
         HideAll();
     }
 
@@ -46,31 +51,42 @@ public class UICustomerReaction : MonoBehaviour
         npc.OnNpcServed.RemoveListener(OnServed);
         npc.OnNpcPaid.RemoveListener(OnPaid);
         npc.OnNpcWaitEnd.RemoveListener(OnGaveUp);
+        npc.OnNpcSays.RemoveListener(OnSays);
+        npc.OnNpcTipped.RemoveListener(OnTipped);
     }
 
     private void OnServed()
     {
         var review = npc.LastReview;
         if (review == null) return;
-        Say(review.Reaction, review.Mood, lineHold);
+        Say(review.Reaction, review.Mood, lineHold, false);
     }
 
     private void OnPaid()
     {
         lineAge = float.MaxValue;
         bubble.gameObject.SetActive(false);
+        ShowMoney(ScoreManager.Instance.LastOrder.Earned, false);
+    }
 
-        var order = ScoreManager.Instance.LastOrder;
-        moneyLabel.text = "+$" + order.Earned;
+    private void OnGaveUp() => Say("Too slow!", Mood.Shocked, 2.2f, false);
+
+    // Snack / bonk while they're still waiting: said above their order bubble, which stays up.
+    private void OnSays(string text, Mood mood) => Say(text, mood, 2.2f, true);
+    private void OnTipped(int amount) => ShowMoney(amount, true);
+
+    private void ShowMoney(int amount, bool raised)
+    {
+        moneyLabel.text = "+$" + amount;
         moneyPill.sizeDelta = new Vector2(moneyLabel.GetPreferredValues(moneyLabel.text).x + 2f * padding, moneyPill.sizeDelta.y);
+        moneyBase = moneyRest + (raised ? Vector2.up * (raise + 90f) : Vector2.zero);
         moneyPill.gameObject.SetActive(true);
         moneyAge = 0f;
     }
 
-    private void OnGaveUp() => Say("Too slow!", Mood.Shocked, 2.2f);
-
-    private void Say(string text, Mood mood, float seconds)
+    private void Say(string text, Mood mood, float seconds, bool raised)
     {
+        bubble.anchoredPosition = bubbleRest + (raised ? Vector2.up * raise : Vector2.zero);
         line.text = text;
         face.sprite = mood == Mood.Delighted ? faceLove : mood == Mood.Amused ? faceLaugh : faceShock;
         face.color = UITokens.MoodColor(mood);
@@ -114,7 +130,7 @@ public class UICustomerReaction : MonoBehaviour
             moneyAge += dt;
             float t = Mathf.Clamp01(moneyAge / moneyTime);
             float rise = 1f - Mathf.Pow(1f - t, 3f);
-            moneyPill.anchoredPosition = moneyRest + Vector2.up * (moneyRise * rise);
+            moneyPill.anchoredPosition = moneyBase + Vector2.up * (moneyRise * rise);
             moneyPill.localScale = Vector3.one * (t < 0.12f ? Mathf.Lerp(0.6f, 1.08f, t / 0.12f) : Mathf.Lerp(1.08f, 1f, Mathf.Clamp01((t - 0.12f) / 0.1f)));
             moneyGroup.alpha = 1f - Mathf.Clamp01((t - 0.6f) / 0.4f);
             if (t >= 1f) moneyPill.gameObject.SetActive(false);

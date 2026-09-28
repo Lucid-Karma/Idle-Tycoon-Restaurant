@@ -50,6 +50,12 @@ public class NpcFsm : MonoBehaviour
     // They finished eating and paid: ScoreManager.LastOrder holds the rating and the money.
     [HideInInspector]
     public UnityEvent OnNpcPaid = new();
+    // Something to say that isn't about a served burger (a snack, a bonk on the head).
+    [HideInInspector]
+    public UnityEvent<string, Mood> OnNpcSays = new();
+    // A small tip outside of a rated order (a thrown snack).
+    [HideInInspector]
+    public UnityEvent<int> OnNpcTipped = new();
 
     #endregion
 
@@ -75,6 +81,13 @@ public class NpcFsm : MonoBehaviour
     private float waitingTimer;
     private float servedAfter;
 
+    // Food thrown at them while they wait: the first prepared item is a snack (buys time, small tip);
+    // anything unprepared, or a second item, earns the chef a tomato back.
+    [SerializeField] private float snackPatience = 25f;
+    [SerializeField] private float bonkPatience = 10f;
+    public const int SnackTip = 1;
+    private int caughtCount;
+
     Hamburger _hamburger;
     [HideInInspector] public ISedile chair;
     #endregion
@@ -84,6 +97,7 @@ public class NpcFsm : MonoBehaviour
         Active.Add(this);
         Patience = Random.Range(patienceRange.x, patienceRange.y);
         LastReview = null;
+        caughtCount = 0;
 
         executingNpcState = ExecutingNpcState.COME;
         currentState = comeState;
@@ -130,6 +144,9 @@ public class NpcFsm : MonoBehaviour
         waitingTimer += Time.deltaTime;
         if (waitingTimer > Patience)
         {
+            // Out of patience: "Too slow!", and a tomato for the chef on the way out.
+            OnNpcWaitEnd.Invoke();
+            if (FoodFight.Instance != null) FoodFight.Instance.CustomerThrows(this);
             executingNpcState = ExecutingNpcState.PROTEST;
             return;
         }
@@ -179,6 +196,33 @@ public class NpcFsm : MonoBehaviour
 
         chair.IsEmpty = true;
         executingNpcState = ExecutingNpcState.GO;
+    }
+
+    // Something the chef threw hit them (FoodFight). Only customers still waiting for their order react.
+    public void CatchThrown(BurgerLayer item)
+    {
+        if (executingNpcState != ExecutingNpcState.WAIT) return;
+        caughtCount++;
+
+        if (caughtCount > 1)
+        {
+            OnNpcSays.Invoke("I want a BURGER!", Mood.Shocked);
+            FoodFight.Instance.CustomerThrows(this);
+        }
+        else if (item.Prep == Prep.Good)
+        {
+            waitingTimer = Mathf.Max(0f, waitingTimer - snackPatience);
+            OnNpcSays.Invoke(BurgerReview.SnackLine(item), Mood.Delighted);
+            ScoreManager.Instance.AddTip(SnackTip);
+            OnNpcTipped.Invoke(SnackTip);
+            EventManager.OnScoreUpdate.Invoke();
+        }
+        else
+        {
+            waitingTimer = Mathf.Min(Patience - 1f, waitingTimer + bonkPatience);
+            OnNpcSays.Invoke(BurgerReview.BonkLine(item), Mood.Shocked);
+            FoodFight.Instance.CustomerThrows(this);
+        }
     }
 
     public void Protest()

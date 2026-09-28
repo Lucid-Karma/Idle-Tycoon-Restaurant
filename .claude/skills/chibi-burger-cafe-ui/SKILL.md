@@ -950,7 +950,7 @@ tinted via `Image.color`:
 `icon_bolt` (rush), mood faces `icon_face_love` / `icon_face_laugh` /
 `icon_face_shock` (filled face, features cut out, tinted by
 `UITokens.MoodColor`), and poster effects `fx_sunburst` (rays fading to the
-rim), `fx_speedline`, `fx_drop`.
+rim), `fx_speedline`, `fx_drop`, `fx_splat` (tomato splat).
 Key art (the chef sprinting with the Chaos Burger on his head) is a 3D render
 from the game's own models: `Graphics/Sprites/KeyArt/keyart_rush.png`
 (`Assets/Editor/KeyArtRenderer.cs`, Tools/Chibi UI/Render Key Art;
@@ -1059,16 +1059,40 @@ visible behind the card.
   collider) or near a free service point serves there (`PlayerFSM.HandleScreenTap`);
   service points accept only burgers.
 - "What can I tap" is `HighlightController`, and it must work without hover
-  (phones): solid yellow (`HighlightMat`) for the mouse hover and for the tap
-  target until the chef arrives; a pulsing overlay (`Chibi/HintOverlay` shader,
-  `HintOverlayMat`, added as an extra material) on context hints — where the
-  held food can go, ready food, waiting customers + their table when holding a
-  burger, the ingredient crates when hands are empty and nothing is ready. Only
-  during a shift, never while paused. Materials are swapped and restored
-  exactly; don't add other code that changes those renderers' materials.
-- Tappable objects must NOT be "Batching Static": a statically batched
-  renderer draws a slice of a combined mesh, so the extra hint material painted
-  unrelated props (books, a plate). New sources/stations: clear that flag.
+  (phones). Both states are material swaps, never a glow/translucent overlay
+  (the user rejected a glowing yellow overlay as "a light"):
+  **yellow** (`HighlightMat`, solid) = mouse hover and the tap target until the
+  chef arrives; **teal pulse** = "use it next" hints — where the held food can
+  go, ready food, waiting customers + their table when holding a burger, the
+  ingredient crates when hands are empty and nothing is ready. Hinted URP Lit
+  materials are swapped for runtime copies using `Chibi/HintLit`
+  (`Graphics/Shaders/HintLit.shader`: URP Lit + `lerp(albedo, _HintColor,
+  _HintAmount)`), and the globals breathe 0 → 0.9 → 0 once a second, restarting
+  when the hinted set changes — the object keeps its texture and shading and
+  eases into teal and back. A *steady* teal was rejected ("looks like a bug"),
+  so keep it pulsing. `HintPulseMat` (in the scene via the controller) keeps
+  the shader's base variant in builds; hintable materials have no keywords —
+  if one gains keywords (e.g. `_EMISSION`), add a template material with them.
+  Teal was chosen because yellow disappears on cheese, the cutting board and
+  white plates. In the editor the first frame after a new variant compiles
+  shows Unity's flat cyan placeholder (async shader compilation) — not a bug.
+  Only during a shift, never while paused. Materials are swapped (same count)
+  and restored exactly; don't add other code that changes those renderers'
+  materials.
+- Tappables stay "Batching Static" (user requirement). A material *swap* is
+  safe with static batching; *adding* a material is not (a batched renderer
+  draws a slice of a combined mesh, so an extra material painted unrelated
+  props) — never highlight by appending materials.
+- The oven is tappable as a whole: `Level/Selectables/oven` has a BoxCollider
+  + `TapProxy` (target = the tray `OvenStuff`'s `Oven`). `PlayerFSM.ResolveTap`
+  turns a proxy hit into the utensil (food in hand) or the food inside (empty
+  hands); the highlight lights the proxy object too. Use `TapProxy` for any
+  other thin/awkward target.
+- Food fight presentation: `UISplatPop` (HUD/SplatPop, `fx_splat` + "SPLAT!" in
+  Permanent Marker) listens to `FoodFight.OnChefSplatted`; snack/bonk lines and
+  "+$1" come through `UICustomerReaction` (raised above the order bubble while
+  it shows). The splash particles use the Hyper Casual FX `Circles_AB`
+  material (a URP Particles/Unlit material made in code didn't show up).
 - `Npc_WS_Canvas/EatProgressBackground/Bubble` is inactive on purpose (the
   eating ring was replaced by the reaction bubble); its timer driver
   `Mask_CircleProgressBar` must stay active.

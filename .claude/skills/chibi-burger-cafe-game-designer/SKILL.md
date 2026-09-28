@@ -94,8 +94,8 @@ should serve that joke and that tension:
    Both must be viable; a sloppy burger served fast can out-earn a perfect one served late.
 2. **Mess is content, not failure.** Sloppy layers lower the stars a little but give the burger a
    name and the customer a line to say. Never punish mess harder than the joke is worth.
-3. **Readable at a glance.** What can be tapped glows; where the held food can go pulses; no
-   reading needed mid-rush.
+3. **Readable at a glance.** What to use next gently pulses into teal and back, what you point at /
+   tapped turns solid yellow (colour shifts, never a glow); no reading needed mid-rush.
 4. **Short, spiky shifts.** 8 customers per shift, arrivals that overlap, a result screen that
    celebrates the shift's "signature burger".
 
@@ -156,12 +156,31 @@ serialized in the scene). 7 seats, 8 customers per shift.
 - Events: `NpcFsm.OnNpcServed` (reaction), `NpcFsm.OnNpcPaid` + `EventManager.OnOrderRated`
   (money/toast/chef card), `ScoreManager.LastOrder`.
 - Feel: `CarryWobble` (held food leans and sways, messier = wobblier), `HighlightController`
-  (hover, tap target, context hints), `UICustomerReaction`, `UIToast`, `UIShiftHighlights`.
+  (hover, tap target, context hints), `TapProxy` (whole oven tappable), `FoodFight` + `UISplatPop`
+  (throws), `UICustomerReaction`, `UIToast`, `UIShiftHighlights`.
+- Patience lives only in `NpcFsm` (`WaitedSeconds` / `Patience`); `NpcWaitProgressBar` only displays
+  it (it used to run its own clock, which broke as soon as the wait could change).
 - Key art: `Assets/Editor/KeyArtRenderer.cs` (Tools/Chibi UI/Render Key Art) renders the chef + Chaos
   Burger from the game's own models; `Assets/Editor/PosterLayout.cs` builds the title screen
   (Tools/Chibi UI/Build Title Poster) and the store covers `Graphics/Sprites/KeyArt/cover_square.png`
   (1024) and `cover_wide.png` (1920×1080) (Tools/Chibi UI/Render Covers). Tagline "Stack fast. Serve
   faster.", callout "Perfection optional!".
+
+### Single ingredients and the tomato fight (`FoodFight`, `NpcFsm.CatchThrown`)
+
+Asked: "can customers be given just one ingredient?" Evaluated: as a full order it would make burgers
+pointless, so a single ingredient is a **snack you throw**, not a meal:
+
+- With any single ingredient in hand, tap a **seated, waiting** customer: the chef throws it (no walk).
+- **Prepared** (sliced, cooked, baked) → snack: their wait drops by 25 s, $1 tip, a happy line
+  ("Tomato snack? OK!", "Cheese! Yes!"). One per customer.
+- **Unprepared** (whole tomato/onion, cheese brick, raw or burnt patty/bun) → bonk: +10 s to their
+  wait, a shocked line ("OW! A tomato?!") and **they throw a tomato back**.
+- A second item to the same customer → "I want a BURGER!" and a tomato back.
+- A customer who runs out of patience throws a tomato on the way out ("Too slow!").
+- A customer's tomato always hits: splash, "SPLAT!" over the chef, chef frozen 1 s (keeps what he
+  holds, then carries on). No money is lost — it's comedy with a small time cost.
+- Throws never count as serving; the customer still wants a burger. Throwing is not hinted (optional).
 
 ### Next ideas (not built yet)
 

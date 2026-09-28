@@ -52,8 +52,8 @@ public class UIToast : MonoBehaviour
     private void OnScoreUpdate()
     {
         int delta = ScoreManager.Instance.totalLevelEarning - lastEarning;
-        if (delta >= 0) return;
         lastEarning += delta;
+        if (delta >= 0) return; // snack tips: shown over the customer, not here
         Show($"Purchased  <color=#{Hex(UITokens.Colors.Tomato)}>-${-delta}</color>", cartIcon, UITokens.Colors.Teal);
     }
 

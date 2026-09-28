@@ -109,6 +109,27 @@ public static class UISpriteBaker
             float h = Mathf.Clamp01(V.Dot(pa, ba) / V.Dot(ba, ba));
             return (pa - ba * h).magnitude - Mathf.Lerp(2f, 16f, h);
         }, 0, true);
+        // Tomato splat for "SPLAT!": a lumpy blob with a few flying drops.
+        Bake("fx_splat", 256, p =>
+        {
+            V c = new V(128, 128);
+            float d = Circle(p, c, 62);
+            float[] lumpAngle = { 10, 55, 100, 150, 200, 245, 290, 330 };
+            float[] lumpSize = { 30, 22, 34, 20, 28, 24, 32, 18 };
+            for (int i = 0; i < lumpAngle.Length; i++)
+            {
+                float a = lumpAngle[i] * Mathf.Deg2Rad;
+                d = SMin(d, Circle(p, c + new V(Mathf.Cos(a), Mathf.Sin(a)) * 62f, lumpSize[i]), 14f);
+            }
+            float[] dropAngle = { 35, 125, 215, 310 };
+            float[] dropSize = { 11, 8, 12, 9 };
+            for (int i = 0; i < dropAngle.Length; i++)
+            {
+                float a = dropAngle[i] * Mathf.Deg2Rad;
+                d = Mathf.Min(d, Circle(p, c + new V(Mathf.Cos(a), Mathf.Sin(a)) * 112f, dropSize[i]));
+            }
+            return d;
+        }, 0, true);
         Bake("fx_drop", 128, p => SMin(Circle(p, new V(64, 46), 30), Poly(p, new[] { new V(42, 60), new V(86, 60), new V(64, 118) }) - 2, 10), 0, true);
 
         AssetDatabase.Refresh();

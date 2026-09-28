@@ -1,8 +1,9 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+// Shows how long the customer has been waiting. The customer owns the timer (NpcFsm.WaitedSeconds /
+// Patience) — this bar used to run its own clock and end the wait itself, which drifted as soon as the
+// wait could change (a thrown snack buys time).
 public class NpcWaitProgressBar : MonoBehaviour, IProgress01
 {
     NpcFsm npcFsm;
@@ -13,32 +14,17 @@ public class NpcWaitProgressBar : MonoBehaviour, IProgress01
 
     public float Progress01 => Mathf.Clamp01(current / maximum);
     private Image mask;
-    private float fillAmount;
 
     void OnEnable()
     {
         mask = GetComponent<Image>();
-        maximum = NpcFsm.Patience; // shown when they sit down; the customer owns the patience value
+        maximum = NpcFsm.Patience;
     }
 
     void Update()
     {
-        if(current < maximum)
-            GetCurrentFill();
-        else
-        {
-            NpcFsm.executingNpcState = ExecutingNpcState.PROTEST;
-            NpcFsm.OnNpcWaitEnd.Invoke();
-            current = 0;
-            mask.fillAmount = 0;
-        }
-    }
-
-    void GetCurrentFill()
-    {
-        current += Time.deltaTime;
-        fillAmount = (float)current / (float)maximum;
-        mask.fillAmount = fillAmount;
+        current = NpcFsm.WaitedSeconds;
+        mask.fillAmount = Progress01;
     }
 
     private void OnDisable()

@@ -98,6 +98,9 @@ public class ScoreManager : Singleton<ScoreManager>
         RushStreak = 0;
     }
 
+    // Money outside of a rated order (a snack thrown to a waiting customer).
+    public void AddTip(int amount) => totalLevelEarning += amount;
+
     private bool levelFinished;
 
     // Called whenever a customer walks out. The shift ends once, when every customer of the shift has left.

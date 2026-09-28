@@ -117,6 +117,29 @@ public sealed class BurgerReview
         }
     }
 
+    // A single ingredient thrown to a waiting customer (NpcFsm.CatchThrown): prepared = a snack...
+    public static string SnackLine(BurgerLayer item) => item.Name switch
+    {
+        "tomato" => "Tomato snack? OK!",
+        "onion" => "Onion rings? Sure!",
+        "cheese" => "Cheese! Yes!",
+        "lettuce" => "Salad? Fine.",
+        "burger" => "Patty snack!",
+        "bun" => "Just bread? Eh.",
+        _ => "Snack time!",
+    };
+
+    // ...unprepared = a bonk on the head (and a tomato comes back).
+    public static string BonkLine(BurgerLayer item) => item.Name switch
+    {
+        "tomato" => "OW! A tomato?!",
+        "onion" => "OW! My head!",
+        "cheese" => "BONK! Cheese?!",
+        "burger" => item.Prep == Prep.Raw ? "EWW, raw meat!" : "HOT! Charcoal!",
+        "bun" => item.Prep == Prep.Burnt ? "Charcoal?!" : "Hey! Cold bread!",
+        _ => "HEY!",
+    };
+
     // How hard a stack wobbles in the chef's hands: round whole veggies and a pile of mistakes wobble more.
     public float Wobbliness => 1f + 0.25f * Mathf.Min(Flaws, 4);
 }

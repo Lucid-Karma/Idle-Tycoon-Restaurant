@@ -3,8 +3,13 @@ using UnityEngine.UI;
 
 // Keeps the title poster alive: the chef bobs with his stride, speed streaks rush past behind him, the
 // sweat flies off and the sun-burst turns slowly. Unscaled time (the title shows while the game is idle).
+// Battery: it only animates while the title is on screen (the panel is hidden with its CanvasGroup, so this
+// used to keep rebuilding the HUD's canvas all game long), and the opaque poster switches off the world
+// camera under it: no point rendering the kitchen nobody can see.
 public class UITitleMotion : MonoBehaviour
 {
+    [SerializeField] private bool hideWorldBehind = true;
+
     [SerializeField] private RectTransform chef;
     [SerializeField] private RectTransform burst;
     [SerializeField] private RectTransform[] streaks;
@@ -17,6 +22,8 @@ public class UITitleMotion : MonoBehaviour
     private Vector2 chefRest, calloutRest;
     private Vector2[] streakRest, dropRest;
     private Graphic[] streakGraphics, dropGraphics;
+    private CanvasGroup panel;
+    private Camera world;
 
     private void Awake()
     {
@@ -38,8 +45,23 @@ public class UITitleMotion : MonoBehaviour
         }
     }
 
+    // After every Start of the first frame (they look up Camera.main, which is null while it's disabled).
+    private void Start()
+    {
+        panel = GetComponentInParent<CanvasGroup>();
+        world = Camera.main;
+    }
+
     private void Update()
     {
+        bool visible = panel == null || panel.alpha > 0.01f;
+        if (hideWorldBehind && world != null)
+        {
+            bool covered = panel != null && panel.alpha > 0.99f;
+            if (world.enabled == covered) world.enabled = !covered;
+        }
+        if (!visible) return;
+
         float t = Time.unscaledTime;
 
         // Two bounces per stride, sharp at the bottom like footfalls.

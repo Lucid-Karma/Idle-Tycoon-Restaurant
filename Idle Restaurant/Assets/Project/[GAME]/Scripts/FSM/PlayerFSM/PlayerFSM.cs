@@ -28,6 +28,9 @@ public class PlayerFSM : MonoBehaviour
     public UnityEvent OnPlayerRun = new UnityEvent();
     [HideInInspector]
     public UnityEvent OnPlayerInteract = new UnityEvent();
+    // Slipped on a tomato: the animator plays the fall and getting up again.
+    [HideInInspector]
+    public UnityEvent OnPlayerSlip = new UnityEvent();
     #endregion
 
     #region Components
@@ -82,6 +85,8 @@ public class PlayerFSM : MonoBehaviour
     {
         _playerCam = Camera.main;
         isHolded = false;
+        baseSpeed = Agent.speed;
+        ApplyPerks();
 
         executingState = ExecutingState.IDLE;
         currentState = playerIdleState;
@@ -90,6 +95,25 @@ public class PlayerFSM : MonoBehaviour
         //path = new NavMeshPath();
         //elapsed = 0.0f;
     }
+
+    #region Cafe upgrades
+    private float baseSpeed;
+
+    private void OnEnable() => CafeShop.Changed += OnCafeChanged;
+    private void OnDisable() => CafeShop.Changed -= OnCafeChanged;
+
+    // A new table brings service points of its own; the coffee makes the chef quicker.
+    private void OnCafeChanged(Upgrade upgrade)
+    {
+        services = null;
+        ApplyPerks();
+    }
+
+    private void ApplyPerks()
+    {
+        if (baseSpeed > 0f) Agent.speed = baseSpeed * CafeShop.ChefSpeedScale;
+    }
+    #endregion
 
     // The UI check only gates new taps (MovePlayer), so the chef keeps walking while the pointer is over UI.
     void Update()
@@ -178,6 +202,7 @@ public class PlayerFSM : MonoBehaviour
         bin = null;
         placeable = target;
         selectable = target;
+        approachTarget = target;
         destination = target.transform.position;
         GoToTarget();
         return true;
@@ -195,8 +220,12 @@ public class PlayerFSM : MonoBehaviour
             LastTappedAt = Time.unscaledTime;
         }
 
+        // Something to use: walk to the reachable spot beside it with the shortest walk, or use it from here
+        // if that's already as close. Just the floor: walk there unless it's a step away.
+        bool approach = FindApproach(approachTarget, out var spot);
+        if (approach) destination = spot;
         distance = Vector3.Distance(Agent.transform.position, destination);
-        if (distance > 3.0f)
+        if (approach ? !ReachedApproach() : distance > 3.0f)
         {
             executingState = ExecutingState.RUN;
             Agent.SetDestination(destination);
@@ -204,6 +233,95 @@ public class PlayerFSM : MonoBehaviour
         else
             Interact();
     }
+
+    #region Approach
+    // Where to stand to use the tapped thing. It used to be the walkable point nearest to where the finger
+    // landed, which for a plate in the middle of the island could be on its far side: the chef walked all
+    // the way round the table instead of using the plate right in front of him. Now: probe spots around it,
+    // keep the one with the shortest walk (never on a seated customer), and stop as soon as he is that close
+    // to it (DoneWithPath), even if the path would go on. Only on a tap: a few navmesh queries.
+    [SerializeField] private float approachSlack = 0.25f;
+    private const int ApproachProbes = 12;
+    private Component approachTarget;
+    private bool hasApproach;
+    private Bounds approachBounds;
+    private float approachReach;
+    private NavMeshPath probePath;   // made on first use (not in a field initializer: Unity can't make it there)
+    private static readonly Vector3[] corners = new Vector3[32];
+
+    private bool FindApproach(Component target, out Vector3 spot)
+    {
+        spot = default;
+        hasApproach = false;
+        if (target == null || !TryBounds(target, out var bounds)) return false;
+
+        probePath ??= new NavMeshPath();
+        var filter = new NavMeshQueryFilter { agentTypeID = Agent.agentTypeID, areaMask = Agent.areaMask };
+        Vector3 from = Agent.transform.position;
+        float ring = Mathf.Max(bounds.extents.x, bounds.extents.z) + Agent.radius + 0.1f;
+        float best = float.PositiveInfinity;
+        for (int i = 0; i < ApproachProbes; i++)
+        {
+            float angle = i * Mathf.PI * 2f / ApproachProbes;
+            var probe = new Vector3(bounds.center.x + Mathf.Cos(angle) * ring, from.y, bounds.center.z + Mathf.Sin(angle) * ring);
+            if (!NavMesh.SamplePosition(probe, out var hit, 2.5f, filter) || NearCustomer(hit.position)) continue;
+            if (!NavMesh.CalculatePath(from, hit.position, filter, probePath) || probePath.status != NavMeshPathStatus.PathComplete) continue;
+            // The shortest walk wins; among similar ones, the spot closer to the thing.
+            float cost = PathLength(probePath) + 0.5f * FlatDistance(hit.position, bounds);
+            if (cost < best)
+            {
+                best = cost;
+                spot = hit.position;
+            }
+        }
+        if (float.IsPositiveInfinity(best)) return false;
+
+        approachBounds = bounds;
+        approachReach = FlatDistance(spot, bounds) + approachSlack;
+        hasApproach = true;
+        return true;
+    }
+
+    public bool ReachedApproach() => hasApproach && FlatDistance(Agent.transform.position, approachBounds) <= approachReach;
+
+    // Colliders of utensils are switched off while not usable, and a disabled collider has empty bounds.
+    private static bool TryBounds(Component target, out Bounds bounds)
+    {
+        var col = target as Collider ?? target.GetComponent<Collider>();
+        if (col != null && col.enabled)
+        {
+            bounds = col.bounds;
+            return true;
+        }
+        var shape = target.GetComponentInChildren<Renderer>();
+        bounds = shape != null ? shape.bounds : default;
+        return shape != null;
+    }
+
+    private static float FlatDistance(Vector3 point, Bounds bounds)
+    {
+        var closest = bounds.ClosestPoint(new Vector3(point.x, bounds.center.y, point.z));
+        return Vector2.Distance(new Vector2(point.x, point.z), new Vector2(closest.x, closest.z));
+    }
+
+    private static float PathLength(NavMeshPath path)
+    {
+        int n = path.GetCornersNonAlloc(corners);
+        float length = 0f;
+        for (int i = 1; i < n; i++) length += Vector3.Distance(corners[i - 1], corners[i]);
+        return length;
+    }
+
+    private static bool NearCustomer(Vector3 point)
+    {
+        foreach (var npc in NpcFsm.Active)
+        {
+            var offset = npc.transform.position - point;
+            if (offset.x * offset.x + offset.z * offset.z < 0.8f) return true;
+        }
+        return false;
+    }
+    #endregion
 
     // `col` may be null (e.g. a full oven tapped with food in hand): then it's a plain walk to the point.
     private void GatherInteractableComponents(Collider col, Vector3 point)
@@ -213,6 +331,7 @@ public class PlayerFSM : MonoBehaviour
         edible = col != null ? col.GetComponent<EdibleBase>() : null;
         selectable = col != null ? col.GetComponent<ISelectable>() : null;
         bin = col != null ? col.GetComponent<Bin>() : null;
+        approachTarget = col != null && IsInteractive(col) ? col : null;   // the floor is just walked to
         tapPoint = point;
         destination = point;
     }
@@ -236,8 +355,8 @@ public class PlayerFSM : MonoBehaviour
         FoodFight.Instance.ChefThrows(food, npc);
     }
 
-    // Hit by a customer's tomato: frozen on the spot for a moment (he keeps what he's holding and then
-    // carries on to where he was going).
+    // Hit by a customer's tomato or arrow with empty hands: frozen on the spot for a moment, then he carries
+    // on to where he was going. (While he carries something a hit never stops him: FoodFight.)
     public void Splat(float seconds)
     {
         stunnedUntil = Time.time + seconds;
@@ -246,7 +365,33 @@ public class PlayerFSM : MonoBehaviour
         Invoke(nameof(Recover), seconds);
     }
 
-    private void Recover() => Agent.isStopped = false;
+    // Only a running chef can slip (never mid-interaction: that animation ends the interaction).
+    public bool IsRunning => executingState == ExecutingState.RUN && Agent.velocity.sqrMagnitude > 0.25f;
+
+    private bool slipped;
+
+    // Hit by a tomato while running: he slips on it, lands on his back and gets up again, still holding
+    // whatever he was carrying.
+    public void Slip(float seconds)
+    {
+        stunnedUntil = Time.time + seconds;
+        Agent.isStopped = true;
+        Agent.velocity = Vector3.zero;
+        slipped = true;
+        OnPlayerSlip.Invoke();
+        CancelInvoke(nameof(Recover));
+        Invoke(nameof(Recover), seconds);
+    }
+
+    private void Recover()
+    {
+        Agent.isStopped = false;
+        if (!slipped) return;
+        slipped = false;
+        // The animator was busy falling: back to running (if he still has somewhere to be) or standing.
+        if (executingState == ExecutingState.RUN) OnPlayerRun.Invoke();
+        else OnPlayerIdle.Invoke();
+    }
     #endregion
 
     // The service point is a small white spot; with a burger in hand, a tap on anything non-interactive
@@ -274,6 +419,7 @@ public class PlayerFSM : MonoBehaviour
 
         placeable = nearest;
         selectable = nearest;
+        approachTarget = nearest;
         destination = nearest.transform.position;
     }
 
@@ -378,15 +524,22 @@ public class PlayerFSM : MonoBehaviour
 
     public void DoneWithPath()
     {
-        if(!Agent.pathPending && Agent.remainingDistance <= Agent.stoppingDistance)
+        if (Agent.pathPending) return;
+        if (Agent.remainingDistance <= Agent.stoppingDistance)
+            executingState = ExecutingState.IDLE;
+        else if (ReachedApproach())
         {
+            // Close enough to use it: stop here rather than finishing a path that bends round it.
+            Agent.ResetPath();
             executingState = ExecutingState.IDLE;
         }
     }
 
     private void UpdateStoppingDistance()  
     {
-        if(placeable != null)
+        if (approachTarget != null)
+            Agent.stoppingDistance = 0f;   // he walks to a spot beside it (FindApproach)
+        else if(placeable != null)
         {
             if(placeable.gameObject.GetComponent<ServiceBase>() != null)
             {

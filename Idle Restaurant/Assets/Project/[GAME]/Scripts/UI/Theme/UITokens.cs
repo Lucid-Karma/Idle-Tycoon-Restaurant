@@ -19,12 +19,14 @@ public static class UITokens
         public static readonly Color Yellow    = Hex(0xF4C95D);
         public static readonly Color DeepYellow = Hex(0xD9A441);
         public static readonly Color Tomato    = Hex(0xE96A5F);
+        public static readonly Color Raspberry = Hex(0xE0457B);       // the pulse on what to tap next: pink, but loud enough to find
 
         // Derived surfaces
         public static readonly Color SecondaryEdge = Hex(0xE6CAD5);   // edge of warm-white buttons over the 3D world
         public static readonly Color SubtleFace = Hex(0xFBE4EB);      // secondary button face on a warm-white card
         public static readonly Color SubtleEdge = Hex(0xE8BCCB);
         public static readonly Color StarEmpty = Hex(0xF8C7D5);
+        public static readonly Color CreamSoft = Hex(0xFAF0E2);       // shop tile already owned: done, recedes
         public static readonly Color Scrim  = WithAlpha(Ink, 0.38f);
         public static readonly Color Shadow = new Color(0.35f, 0.16f, 0.26f, 0.22f);
     }

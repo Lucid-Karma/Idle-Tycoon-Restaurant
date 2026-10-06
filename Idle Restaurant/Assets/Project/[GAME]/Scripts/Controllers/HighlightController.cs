@@ -5,9 +5,10 @@ using UnityEngine;
 // - Hover (mouse only): the object under the cursor turns yellow.
 // - Target: the object the chef was just sent to stays yellow until he gets there (tap feedback on phones,
 //   where there is no hover).
-// - Hints: what makes sense next pulses between its own look and teal (solid colour like the highlight,
-//   no glow): where the held food can go (pan, oven, chopping board, a plate, a waiting customer and their
-//   table), food that is ready to take, or the ingredient crates when hands are empty and nothing is ready.
+// - Hints: what makes sense next pulses between its own look and raspberry (solid colour like the
+//   highlight, no glow): where the held food can go (pan, oven, chopping board, a plate, a waiting customer
+//   and their table), food that is ready to take, or the ingredient crates when hands are empty and nothing
+//   is ready.
 // Materials are swapped on the renderers and restored exactly. Hinted Lit materials are swapped for copies
 // using Chibi/HintLit (made once per original material), whose colour follows a global pulse. A swap keeps
 // the material count, so it also works on statically batched renderers.
@@ -15,9 +16,9 @@ public class HighlightController : MonoBehaviour
 {
     [SerializeField] private Material highlightMaterial;   // solid yellow: hover and tap target
     [SerializeField] private Material hintTemplate;        // Chibi/HintLit material (keeps the shader in builds)
-    [SerializeField] private Material hintMaterial;        // solid teal, for the rare non-Lit material
+    [SerializeField] private Material hintMaterial;        // solid raspberry, for the rare non-Lit material
     [SerializeField] private float targetMinTime = 0.35f;  // a tap stays lit at least this long
-    [SerializeField] private float hintPulseSeconds = 1f;  // one breath: own look → teal → own look
+    [SerializeField] private float hintPulseSeconds = 1f;  // one breath: own look → raspberry → own look
     [SerializeField, Range(0f, 1f)] private float hintPeak = 0.9f;
 
     private static readonly int HintAmountId = Shader.PropertyToID("_HintAmount");
@@ -45,14 +46,22 @@ public class HighlightController : MonoBehaviour
     {
         _camera = Camera.main;
         player = FindFirstObjectByType<PlayerFSM>();
+        FindUtensils();
+        Shader.SetGlobalColor(HintColorId, UITokens.Colors.Raspberry);
+        Shader.SetGlobalFloat(HintAmountId, 0f);
+    }
+
+    // Again after a purchase: a second stove brings a pan of its own.
+    private void FindUtensils()
+    {
         pans = FindObjectsByType<Pan>(FindObjectsSortMode.None);
         ovens = FindObjectsByType<Oven>(FindObjectsSortMode.None);
         boards = FindObjectsByType<ChoppingBoard>(FindObjectsSortMode.None);
         plates = FindObjectsByType<Plate>(FindObjectsSortMode.None);
         sources = FindObjectsByType<IngredientsSource>(FindObjectsSortMode.None);
-        Shader.SetGlobalColor(HintColorId, UITokens.Colors.Teal);
-        Shader.SetGlobalFloat(HintAmountId, 0f);
     }
+
+    private void OnCafeChanged(Upgrade upgrade) => FindUtensils();
 
     private void OnDestroy()
     {
@@ -60,14 +69,14 @@ public class HighlightController : MonoBehaviour
         hintVariants.Clear();
     }
 
-    // The original with its colour free to drift towards teal; one copy per original material.
+    // The original with its colour free to drift towards the hint colour; one copy per original material.
     private Material HintVariant(Material original)
     {
         if (original == null || original.shader == null || original.shader.name != "Universal Render Pipeline/Lit")
         {
 #if UNITY_EDITOR
             if (original != null && hintVariants.TryAdd(original, hintMaterial))
-                Debug.LogWarning($"[Highlight] '{original.name}' ({original.shader?.name}) isn't URP Lit: hinted with the plain teal material");
+                Debug.LogWarning($"[Highlight] '{original.name}' ({original.shader?.name}) isn't URP Lit: hinted with the plain raspberry material");
 #endif
             return hintMaterial;
         }
@@ -86,6 +95,7 @@ public class HighlightController : MonoBehaviour
     {
         EventManager.OnLevelStart.AddListener(OnShiftStart);
         EventManager.OnLevelFinish.AddListener(OnShiftEnd);
+        CafeShop.Changed += OnCafeChanged;
     }
 
     private void OnShiftStart() => inShift = true;
@@ -95,6 +105,7 @@ public class HighlightController : MonoBehaviour
     {
         EventManager.OnLevelStart.RemoveListener(OnShiftStart);
         EventManager.OnLevelFinish.RemoveListener(OnShiftEnd);
+        CafeShop.Changed -= OnCafeChanged;
         foreach (var pair in applied) Restore(pair.Key);
         applied.Clear();
         originals.Clear();
@@ -143,7 +154,7 @@ public class HighlightController : MonoBehaviour
     private float hintSince;
 
     // The pulse restarts whenever the hinted set changes, so newly hinted things ease in from their own
-    // look instead of popping in at full teal.
+    // look instead of popping in at full colour.
     private void UpdatePulse()
     {
         int signature = hints.Count;
@@ -160,6 +171,13 @@ public class HighlightController : MonoBehaviour
     private void CollectHints(List<Component> into)
     {
         into.Clear();
+        // While the first shift is being taught, only the one thing the lesson is about pulses: two
+        // pulsing things at once is exactly the confusion the tutorial exists to prevent.
+        if (Tutorial.Running)
+        {
+            if (Tutorial.Focus != null) into.Add(Tutorial.Focus);
+            return;
+        }
         var held = player.HeldFood;
 
         if (held is Hamburger burger)

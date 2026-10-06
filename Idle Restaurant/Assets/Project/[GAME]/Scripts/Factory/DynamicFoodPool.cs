@@ -29,7 +29,14 @@ public class DynamicFoodPool
                     // still in use under an inactive parent as free (e.g. an eaten burger's plate) and moved them.
                     if (!_pooledObjects[i].activeSelf)
                     {
-                        _pooledObjects[i].transform.parent = null;
+                        var free = _pooledObjects[i].transform;
+                        free.parent = null;
+                        // A free object is usually still a child of whatever used it last (a bun's raw look, under
+                        // the bun that went into a burger), and taking it out of there keeps its size in the world.
+                        // If that burger was small at that moment (the waiter carries it on a tray) the object came
+                        // out small for good: the next bun in the oven was tiny. Whatever it was inside, it comes
+                        // out the size it was made.
+                        free.localScale = poolObject.transform.localScale;
                         return _pooledObjects[i];
                     }
                 }

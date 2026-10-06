@@ -15,13 +15,17 @@ public class PlayerAnimationController : MonoBehaviour
         PlayerFSM.OnPlayerIdle.AddListener(() => InvokeTrigger("Idle"));
         PlayerFSM.OnPlayerRun.AddListener(() => InvokeTrigger("Run"));
         PlayerFSM.OnPlayerInteract.AddListener(() => InvokeTrigger("Interact"));
+        PlayerFSM.OnPlayerSlip.AddListener(OnSlip);
     }
+
+    private void OnSlip() => InvokeTrigger("Slip");
 
     private void OnDisable()
     {
         PlayerFSM.OnPlayerIdle.RemoveListener(() => InvokeTrigger("Idle"));
         PlayerFSM.OnPlayerRun.RemoveListener(() => InvokeTrigger("Run"));
         PlayerFSM.OnPlayerInteract.RemoveListener(() => InvokeTrigger("Interact"));
+        PlayerFSM.OnPlayerSlip.RemoveListener(OnSlip);
     }
 
     private void InvokeTrigger(string value)

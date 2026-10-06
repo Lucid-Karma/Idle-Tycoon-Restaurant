@@ -32,9 +32,13 @@ public class EarningTextController : MonoBehaviour
         EventManager.OnLevelFinish.RemoveListener(UpdateLevelEarningText); 
     }
 
+    // The wallet shows the till (kept between shifts); the result card shows what this shift earned.
+    [SerializeField] private bool shiftOnly;
+
     private void UpdateEarningText()
     {
-        EarningText.text = "$" + ScoreManager.Instance.totalLevelEarning;
+        var score = ScoreManager.Instance;
+        EarningText.text = "$" + (shiftOnly ? score.ShiftEarned : score.totalLevelEarning);
     }
 
     private void UpdateLevelEarningText() => UpdateEarningText();

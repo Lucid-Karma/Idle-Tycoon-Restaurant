@@ -93,6 +93,15 @@ public static class UISpriteBaker
             return Mathf.Max(head(p), -Mathf.Min(eyes, mouth));
         }, 0, true);
         Bake("icon_bolt", 128, p => Poly(p, new[] { new V(74, 120), new V(30, 58), new V(60, 58), new V(50, 8), new V(98, 74), new V(68, 74) }) - 5, 0, true);
+        // Shop: not open yet (cafe level too low). Round shackle over a chunky body, keyhole cut out.
+        Bake("icon_lock", 128, p =>
+        {
+            float body = RBox(p, new V(64, 44), new V(40, 32), 12);
+            float shackle = Mathf.Max(Mathf.Abs(Circle(p, new V(64, 78), 25)) - 8, 72 - p.y);
+            float legs = Mathf.Min(Seg(p, new V(39, 60), new V(39, 78), 8), Seg(p, new V(89, 60), new V(89, 78), 8));
+            float hole = Mathf.Min(Circle(p, new V(64, 50), 9), RBox(p, new V(64, 36), new V(4.5f, 11), 3));
+            return Mathf.Max(Mathf.Min(body, Mathf.Min(shackle, legs)), -hole);
+        }, 0, true);
 
         // Title / poster effects: radiating burst behind the hero, speed streaks, sweat drops.
         // Rays fade out towards the rim, so the burst never shows an edge however it is sized.

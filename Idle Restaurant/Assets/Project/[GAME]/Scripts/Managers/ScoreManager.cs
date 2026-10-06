@@ -8,7 +8,9 @@ public struct OrderResult
     public BurgerReview Review;
     public float Rating;      // 0..5 stars: up to 3 for how it was made + up to 2 for how fast it came
     public float Speed01;     // 1 = served almost at once, 0 = at the end of their patience
-    public int Earned;        // base + tip + perfect bonus + rush bonus
+    public int Earned;        // base + tip + perfect bonus + rush bonus + the customer's quirk + tip jar
+    public int Stars;         // rounded rating: what the order adds to the cafe's stars (CafeProgress)
+    public Mood Mood;         // how the customer took it (their quirk can change the burger's own mood)
     public int RushStreak;    // orders served in a row, each within RushWindow of the previous one
     public bool Speedy => Speed01 >= 0.8f;
 }
@@ -26,12 +28,26 @@ public class ScoreManager : Singleton<ScoreManager>
 
     [HideInInspector] public float currentBurgerScore;
     [HideInInspector] public int HostedCustomerCount;
-    [HideInInspector] public int totalLevelEarning;
     [HideInInspector] public float totalLevelScore;
     [HideInInspector] public int hostedCustomer;
-    private int _levelUpdateCount = 8;
 
-    public int CustomersPerLevel => _levelUpdateCount;
+    // The money in the till. It is kept between shifts (CafeProgress); what this shift added is ShiftEarned.
+    public int totalLevelEarning => CafeProgress.Coins;
+    public int ShiftEarned { get; private set; }
+    public int ShiftStars { get; private set; }
+
+    // 8 customers a shift, more with bigger dining upgrades. Fixed for the whole shift on first use, so a
+    // table bought mid-shift adds its customer from the next shift (the pips and the end stay consistent).
+    public const int BaseCustomers = 8;
+    private int customersThisShift;
+    public int CustomersPerLevel
+    {
+        get
+        {
+            if (customersThisShift == 0) customersThisShift = BaseCustomers + CafeShop.ExtraCustomers;
+            return customersThisShift;
+        }
+    }
 
     #region Rush rules
     // Speed vs. care is the core choice: a sloppy burger served fast can out-earn a perfect one served late.
@@ -59,10 +75,16 @@ public class ScoreManager : Singleton<ScoreManager>
     public float RushTimeLeft => RushStreak > 0 ? Mathf.Max(0f, RushWindow - (Time.time - lastServeTime)) : 0f;
     #endregion
 
-    public OrderResult RateOrder(BurgerReview review, float waitedSeconds, float patience)
+    // 1 = served within the grace share of their patience, falling to 0 at the end of it.
+    public static float Speed01(float waitedSeconds, float patience)
     {
         float grace = patience * SpeedGrace;
-        float speed01 = 1f - Mathf.Clamp01((waitedSeconds - grace) / Mathf.Max(1f, patience - grace));
+        return 1f - Mathf.Clamp01((waitedSeconds - grace) / Mathf.Max(1f, patience - grace));
+    }
+
+    public OrderResult RateOrder(BurgerReview review, float waitedSeconds, float patience, CustomerKind kind = CustomerKind.Regular)
+    {
+        float speed01 = Speed01(waitedSeconds, patience);
         float rating = QualityStars * review.Quality01 + SpeedStars * speed01;
 
         RushStreak = Time.time - lastServeTime <= RushWindow ? RushStreak + 1 : 1;
@@ -71,7 +93,11 @@ public class ScoreManager : Singleton<ScoreManager>
 
         int earned = BasePay + Mathf.RoundToInt(rating)
                    + (review.IsPerfect ? PerfectBonus : 0)
-                   + Mathf.Min(RushStreak - 1, MaxRushBonus);
+                   + Mathf.Min(RushStreak - 1, MaxRushBonus)
+                   + Customers.Bonus(kind, review, speed01)
+                   + (rating >= 4f ? CafeShop.TipJar : 0);
+        earned = Mathf.Max(1, earned);
+        int stars = Mathf.RoundToInt(rating);
 
         ServedCount++;
         if (review.IsPerfect) PerfectCount++;
@@ -80,12 +106,19 @@ public class ScoreManager : Singleton<ScoreManager>
         titleCounts[review.Title] = ++n;
         if (SignatureBurger == null || n >= titleCounts[SignatureBurger]) SignatureBurger = review.Title;
 
-        LastOrder = new OrderResult { Review = review, Rating = rating, Speed01 = speed01, Earned = earned, RushStreak = RushStreak };
+        LastOrder = new OrderResult
+        {
+            Review = review, Rating = rating, Speed01 = speed01, Earned = earned, Stars = stars,
+            Mood = Customers.React(kind, review, speed01).mood, RushStreak = RushStreak
+        };
 
         hostedCustomer++;
         totalLevelScore += rating;
         currentBurgerScore = rating;
-        totalLevelEarning += earned;
+        ShiftEarned += earned;
+        ShiftStars += stars;
+        CafeProgress.AddCoins(earned);
+        CafeProgress.AddStars(stars);   // may level the cafe up (UIToast announces it after this order)
         DoPointExpression();
         return LastOrder;
     }
@@ -99,7 +132,11 @@ public class ScoreManager : Singleton<ScoreManager>
     }
 
     // Money outside of a rated order (a snack thrown to a waiting customer).
-    public void AddTip(int amount) => totalLevelEarning += amount;
+    public void AddTip(int amount)
+    {
+        ShiftEarned += amount;
+        CafeProgress.AddCoins(amount);
+    }
 
     private bool levelFinished;
 
@@ -108,11 +145,12 @@ public class ScoreManager : Singleton<ScoreManager>
     // the 8 scores by 7 — averages above 5 — and could fire again for later departures.)
     public void FinishLevel()
     {
-        if (levelFinished || HostedCustomerCount < _levelUpdateCount) return;
+        if (levelFinished || HostedCustomerCount < CustomersPerLevel) return;
         levelFinished = true;
 
         // Average over every customer that was rated or left unserved (a protest adds 0 to the total).
         totalLevelScore /= Mathf.Max(1, hostedCustomer);
+        CafeProgress.CountShift();
         EventManager.OnLevelFinish.Invoke();
     }
 
@@ -136,10 +174,5 @@ public class ScoreManager : Singleton<ScoreManager>
     {
         //print("Total point: " + totalLevelScore);
         return totalLevelScore;
-    }
-
-    public void SpendEarnings(int amount)
-    {
-        totalLevelEarning -= amount;
     }
 }

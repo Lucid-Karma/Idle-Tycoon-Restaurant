@@ -3,7 +3,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // World-space speech bubble over a customer (Npc_WS_Canvas):
-// - burger served: what they say about it (BurgerReview.Reaction) with a mood face, while they eat;
+// - sitting down (adventurers): their quirk ("MAKE IT MESSY!"), raised above the order bubble;
+// - burger served: what they say about it (NpcFsm.ServedLine) with a mood face, while they eat;
 // - paid: a "+$7" pill that floats up and fades;
 // - out of patience: "Too slow!" as they get up.
 // Presentation only: it listens to the customer's events and never changes gameplay state.
@@ -57,9 +58,8 @@ public class UICustomerReaction : MonoBehaviour
 
     private void OnServed()
     {
-        var review = npc.LastReview;
-        if (review == null) return;
-        Say(review.Reaction, review.Mood, lineHold, false);
+        if (npc.LastReview == null) return;
+        Say(npc.ServedLine, npc.ServedMood, lineHold, false);
     }
 
     private void OnPaid()
@@ -69,7 +69,7 @@ public class UICustomerReaction : MonoBehaviour
         ShowMoney(ScoreManager.Instance.LastOrder.Earned, false);
     }
 
-    private void OnGaveUp() => Say("Too slow!", Mood.Shocked, 2.2f, false);
+    private void OnGaveUp() => Say(npc.GiveUpLine, Mood.Shocked, 2.2f, false);
 
     // Snack / bonk while they're still waiting: said above their order bubble, which stays up.
     private void OnSays(string text, Mood mood) => Say(text, mood, 2.2f, true);

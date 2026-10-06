@@ -36,6 +36,7 @@ public class UIPressable : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     {
         hovered = pressed = false;
         scale = 1f; scaleVel = 0f; sink = 0f; sinkVel = 0f;
+        atRest = false;
         Apply();
     }
 
@@ -50,6 +51,10 @@ public class UIPressable : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     public void OnPointerEnter(PointerEventData e) => hovered = true;
     public void OnPointerExit(PointerEventData e) { hovered = false; pressed = false; }
 
+    // Only touches the UI while something moves: writing the same scale/position/alpha every frame made
+    // the whole canvas rebuild every frame (a battery drain on phones).
+    private bool atRest;
+
     private void Update()
     {
         bool interactable = Interactable;
@@ -58,12 +63,25 @@ public class UIPressable : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
             lastInteractable = interactable;
             if (group == null) group = gameObject.AddComponent<CanvasGroup>();
         }
-        if (group != null) group.alpha = interactable ? 1f : disabledAlpha;
+        float alpha = interactable ? 1f : disabledAlpha;
+        if (group != null && group.alpha != alpha) group.alpha = alpha;
 
         float targetScale = !interactable ? 1f
             : pressed ? UITokens.Motion.PressScale
             : hovered ? UITokens.Motion.HoverScale : 1f;
         float targetSink = pressed && interactable ? 1f : 0f;
+
+        bool moving = Mathf.Abs(scale - targetScale) > 0.0005f || Mathf.Abs(scaleVel) > 0.001f
+                   || Mathf.Abs(sink - targetSink) > 0.0005f || Mathf.Abs(sinkVel) > 0.001f;
+        if (!moving)
+        {
+            if (atRest) return;
+            scale = targetScale; sink = targetSink; scaleVel = sinkVel = 0f;
+            Apply();
+            atRest = true;
+            return;
+        }
+        atRest = false;
 
         float dt = Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
         UITokens.Spring(ref scale, ref scaleVel, targetScale, dt);

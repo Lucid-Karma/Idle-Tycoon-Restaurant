@@ -3,10 +3,27 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // Top-center, short-lived feedback line: the served burger's name + money earned (+ rush streak),
-// purchases, customers leaving, and the shift objective. One message at a time; a new one replaces the old.
+// customers leaving, the shift objective and the cafe levelling up. One message at a time; a new one
+// replaces the old, except queued ones (level up), which wait for the current message to finish.
 [RequireComponent(typeof(CanvasGroup))]
 public class UIToast : MonoBehaviour
 {
+    private readonly struct Message
+    {
+        public readonly string Text;
+        public readonly Sprite Sprite;
+        public readonly Color Tint;
+
+        public Message(string text, Sprite sprite, Color tint)
+        {
+            Text = text;
+            Sprite = sprite;
+            Tint = tint;
+        }
+    }
+
+    private readonly System.Collections.Generic.Queue<Message> queued = new();
+
     [SerializeField] private TMP_Text label;
     [SerializeField] private Image icon;
     [SerializeField] private Sprite starIcon, checkIcon, crossIcon, cartIcon, personIcon;
@@ -33,6 +50,7 @@ public class UIToast : MonoBehaviour
         EventManager.OnScoreUpdate.AddListener(OnScoreUpdate);
         EventManager.OnOrderRated.AddListener(OnOrderRated);
         EventManager.OnCustomerProtest.AddListener(OnProtest);
+        CafeProgress.LeveledUp += OnCafeLevelUp;
     }
 
     private void OnDisable()
@@ -41,6 +59,7 @@ public class UIToast : MonoBehaviour
         EventManager.OnScoreUpdate.RemoveListener(OnScoreUpdate);
         EventManager.OnOrderRated.RemoveListener(OnOrderRated);
         EventManager.OnCustomerProtest.RemoveListener(OnProtest);
+        CafeProgress.LeveledUp -= OnCafeLevelUp;
     }
 
     private void Start() => lastEarning = ScoreManager.Instance.totalLevelEarning;
@@ -48,13 +67,16 @@ public class UIToast : MonoBehaviour
     private void ShowObjective() =>
         Show($"Rush hour! Serve {ScoreManager.Instance.CustomersPerLevel} customers", boltIcon ? boltIcon : personIcon, UITokens.Colors.Berry);
 
-    // Spending fires OnScoreUpdate without an order, so a negative delta means a purchase.
-    private void OnScoreUpdate()
+    // Spending fires OnScoreUpdate without an order; purchases show up in the kitchen itself (CafeShop),
+    // and snack tips over the customer, so this only keeps the reference value in sync.
+    private void OnScoreUpdate() => lastEarning = ScoreManager.Instance.totalLevelEarning;
+
+    // "Cafe level 3!  Barbarians drop by", queued behind the order that earned the stars.
+    private void OnCafeLevelUp(int level)
     {
-        int delta = ScoreManager.Instance.totalLevelEarning - lastEarning;
-        lastEarning += delta;
-        if (delta >= 0) return; // snack tips: shown over the customer, not here
-        Show($"Purchased  <color=#{Hex(UITokens.Colors.Tomato)}>-${-delta}</color>", cartIcon, UITokens.Colors.Teal);
+        string news = Customers.ArrivesAt(level, out var kind) ? Customers.Of(kind).Plural + " drop by" : "New in the shop";
+        queued.Enqueue(new Message($"Cafe level {level}!   <color=#{Hex(UITokens.Colors.DarkTeal)}>{news}</color>",
+            starIcon, UITokens.Colors.DeepYellow));
     }
 
     // "Charcoal Special  +$7  RUSH x2"
@@ -69,7 +91,7 @@ public class UIToast : MonoBehaviour
         else if (order.Speedy)
             text += $"   <color=#{Hex(UITokens.Colors.DeepYellow)}>SPEEDY</color>";
 
-        var (sprite, tint) = MoodIcon(order.Review.Mood);
+        var (sprite, tint) = MoodIcon(order.Mood);
         Show(text, sprite, tint);
     }
 
@@ -92,7 +114,12 @@ public class UIToast : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (age > holdTime + UITokens.Motion.Slow) return;
+        if (age > holdTime + UITokens.Motion.Slow)
+        {
+            if (queued.Count == 0) return;
+            var next = queued.Dequeue();
+            Show(next.Text, next.Sprite, next.Tint);
+        }
         age += Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
 
         float fadeIn = Mathf.Clamp01(age / UITokens.Motion.Normal);

@@ -1,13 +1,18 @@
+using TMPro;
 using UnityEngine;
 
-// "SPLAT!" pops over the chef's head when a customer's tomato hits him (FoodFight.OnChefSplatted):
-// a tomato splat shape with the word on it, punching in, holding, then fading. HUD canvas (overlay).
+// "SPLAT!" pops over the chef's head when a customer's tomato hits him (FoodFight.OnChefSplatted),
+// "WHOOPS!" when he slips on it, "BULLSEYE!" (on a yellow burst) when a Ranger's arrow gets him: a splat
+// shape with the word on it, punching in, holding, then fading. HUD canvas (overlay).
 [RequireComponent(typeof(CanvasGroup))]
 public class UISplatPop : MonoBehaviour
 {
     [SerializeField] private float hold = 0.7f;
 
     private CanvasGroup group;
+    private TMP_Text label;
+    private UnityEngine.UI.Image shape;
+    private Color tomatoColor, labelColor;
     private RectTransform rect, parent;
     private Vector3 worldAnchor;
     private float age = float.MaxValue;
@@ -16,6 +21,10 @@ public class UISplatPop : MonoBehaviour
     private void Awake()
     {
         group = GetComponent<CanvasGroup>();
+        label = GetComponentInChildren<TMP_Text>(true);
+        shape = GetComponentInChildren<UnityEngine.UI.Image>(true);
+        if (shape != null) tomatoColor = shape.color;
+        if (label != null) labelColor = label.color;
         rect = (RectTransform)transform;
         parent = (RectTransform)rect.parent;
         group.alpha = 0f;
@@ -24,9 +33,12 @@ public class UISplatPop : MonoBehaviour
     private void OnEnable() => FoodFight.OnChefSplatted.AddListener(Show);
     private void OnDisable() => FoodFight.OnChefSplatted.RemoveListener(Show);
 
-    private void Show(Vector3 world)
+    private void Show(Vector3 world, FoodFight.Hit hit)
     {
         worldAnchor = world;
+        if (label != null) label.text = hit == FoodFight.Hit.Arrow ? "BULLSEYE!" : hit == FoodFight.Hit.Slip ? "WHOOPS!" : "SPLAT!";
+        if (shape != null) shape.color = hit == FoodFight.Hit.Arrow ? UITokens.Colors.Yellow : tomatoColor;
+        if (label != null) label.color = hit == FoodFight.Hit.Arrow ? UITokens.Colors.Ink : labelColor;   // white on yellow didn't read
         age = 0f;
         pop = 0.3f;
         popVelocity = 0f;

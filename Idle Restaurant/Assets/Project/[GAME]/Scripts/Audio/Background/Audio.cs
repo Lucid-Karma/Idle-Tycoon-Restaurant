@@ -2,7 +2,7 @@ using UnityEngine;
 
 // Background music that keeps playing across scene reloads (Replay).
 // The first <<<Audio>>> persists and owns the music. The copy that comes with each reloaded scene is kept alive,
-// because that scene's objects reference its children (e.g. ProductManager.fxsSources -> <<<Audio>>>/Fx), but it
+// because that scene's objects reference its children (e.g. CafeShop.revealSound -> <<<Audio>>>/Fx), but it
 // stays silent: disabling this component in Awake also skips OnEnable, so it never subscribes to the music events.
 public class Audio : MonoBehaviour
 {

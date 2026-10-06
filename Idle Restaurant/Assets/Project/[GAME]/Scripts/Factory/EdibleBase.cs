@@ -84,7 +84,12 @@ public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
 
     public virtual void OnEnable()
     {
-        if (currentVersion != null && !currentVersion.activeInHierarchy)
+        // The pool hands out any look that is switched off, and a food waiting in the pool has its own look
+        // switched off: so another food can take it (a bun going onto a plate asks for a bottom bun, and gets
+        // one off a pooled bun). That food then came back with a look that now sits under another burger,
+        // shown nowhere: an invisible bun in the oven with only its timer. A look that is no longer under this
+        // food is lost, and it asks for a new one just as it does when its look is merely switched off.
+        if (currentVersion != null && (!currentVersion.activeInHierarchy || currentVersion.transform.parent != transform))
         {
             SetStarterVersion();
             gameObject.GetComponent<Collider>().enabled = true;

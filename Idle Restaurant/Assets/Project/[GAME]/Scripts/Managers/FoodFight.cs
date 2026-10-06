@@ -6,28 +6,44 @@ using UnityEngine.Events;
 // Food flying across the cafe. The chef can throw a single ingredient at a waiting customer
 // (PlayerFSM.TryCustomerAt → ChefThrows; the customer decides what it means in NpcFsm.CatchThrown), and
 // customers throw a tomato back at the chef when bonked, pestered or left waiting too long
-// (CustomerThrows): it always hits, splats, and freezes him for a moment.
+// (CustomerThrows); a Ranger shoots an arrow instead. It always hits. One rule for what it costs him:
+// a tomato caught while running always puts him on his back (he keeps whatever he was carrying), and
+// standing still it only splats — or freezes him a moment if his hands were empty.
 public class FoodFight : MonoBehaviour
 {
     public static FoodFight Instance { get; private set; }
-    // World position of the chef's head when a tomato hits him (UISplatPop).
-    public static readonly UnityEvent<Vector3> OnChefSplatted = new();
+
+    // A customer took a prepared ingredient as a snack (the first thing thrown at them, NpcFsm.CatchThrown).
+    // The first-shift lesson waits for this. Static: subscribe with named methods only.
+    public static readonly UnityEvent OnSnackAccepted = new();
+
+    public enum Hit { Splat, Slip, Arrow }
+    // World position of the chef's head when something hits him, and what it was (UISplatPop).
+    public static readonly UnityEvent<Vector3, Hit> OnChefSplatted = new();
 
     [SerializeField] private GameObject tomatoModel;          // the whole-tomato visual the customers throw
+    [SerializeField] private GameObject arrowModel;           // what a Ranger shoots (long axis +Z, tip forward)
+    [SerializeField] private float arrowSeconds = 0.4f;
+    [SerializeField] private float arrowArc = 0.5f;
+    [SerializeField] private float arrowStuckSeconds = 1.6f;  // it stays stuck in his head (or hat) a moment
+    [SerializeField] private float arrowScale = 1.6f;
     [SerializeField] private Material splatMaterial;          // round particle for the splash
     [SerializeField] private float chefThrowSeconds = 0.55f;
     [SerializeField] private float customerThrowSeconds = 0.7f;
     [SerializeField] private float arcHeight = 2.4f;
     [SerializeField] private float throwBackDelay = 0.45f;
     [SerializeField] private float stunSeconds = 1f;
+    [SerializeField] private float slipSeconds = 2.1f;   // the fall + getting-up animation
 
     private PlayerFSM chef;
+    private Transform chefHead;
     private ParticleSystem splash;
 
     private void Awake()
     {
         Instance = this;
         chef = FindFirstObjectByType<PlayerFSM>();
+        chefHead = chef.transform.Find("Model/Rig/root/hips/spine/chest/head");
         splash = BuildSplash();
     }
 
@@ -43,10 +59,12 @@ public class FoodFight : MonoBehaviour
         body.SetParent(null, true);
         var col = food.GetComponent<Collider>();
         if (col != null) col.enabled = false;
+        GameSfx.Play(GameSfx.Cue.ChefThrow);
 
         StartCoroutine(Fly(body, () => npc != null ? npc.transform.position + Vector3.up * 1.6f : body.position, chefThrowSeconds, () =>
         {
             Splash(body.position, ColorOf(item.Name), 14);
+            if (item.Prep != Prep.Good) GameSfx.Play(GameSfx.Cue.Bonk);
             if (col != null) col.enabled = true;
             food.gameObject.SetActive(false); // back to its pool
             if (npc != null) npc.CatchThrown(item);
@@ -59,32 +77,80 @@ public class FoodFight : MonoBehaviour
     {
         yield return new WaitForSeconds(throwBackDelay);
         var start = (npc != null ? npc.transform.position : chef.transform.position + Vector3.forward * 6f) + Vector3.up * 1.6f;
+        if (npc != null && npc.Kind == CustomerKind.Ranger && arrowModel != null)
+        {
+            yield return ShootArrow(start);
+            yield break;
+        }
         var tomato = Instantiate(tomatoModel, start, UnityEngine.Random.rotation);
         foreach (var c in tomato.GetComponentsInChildren<Collider>()) Destroy(c);
         foreach (var b in tomato.GetComponentsInChildren<MonoBehaviour>()) Destroy(b);
+        GameSfx.Play(GameSfx.Cue.CustomerThrow);
 
         yield return Fly(tomato.transform, ChefHead, customerThrowSeconds, () =>
         {
             Splash(tomato.transform.position, ColorOf("tomato"), 28);
             Destroy(tomato);
-            chef.Splat(stunSeconds);
-            OnChefSplatted.Invoke(ChefHead());
+            GameSfx.Play(GameSfx.Cue.Splat);
+            // Running into a tomato, he goes down every time: one rule the player can read off the screen.
+            bool slip = chef.IsRunning;
+            if (slip)
+            {
+                chef.Slip(slipSeconds);
+                GameSfx.Play(GameSfx.Cue.Slip);
+            }
+            else if (chef.HeldFood == null) chef.Splat(stunSeconds);
+            OnChefSplatted.Invoke(ChefHead(), slip ? Hit.Slip : Hit.Splat);
         });
     }
 
-    private Vector3 ChefHead() => chef.transform.position + Vector3.up * 1.9f;
+    // A Ranger's answer: a quick, flat shot that sticks in the chef's head (or hat) for a moment.
+    private IEnumerator ShootArrow(Vector3 start)
+    {
+        var arrow = Instantiate(arrowModel, start, Quaternion.LookRotation(ChefHead() - start));
+        arrow.transform.localScale *= arrowScale;   // the model is a thin prop: bigger reads from the game camera
+        foreach (var c in arrow.GetComponentsInChildren<Collider>()) Destroy(c);
+        GameSfx.Play(GameSfx.Cue.ArrowShot);
 
-    // Arc from where the object is to a (possibly moving) target, spinning; homing, so it always lands.
-    private IEnumerator Fly(Transform body, Func<Vector3> target, float seconds, Action onArrive)
+        yield return Fly(arrow.transform, ArrowTarget, arrowSeconds, () =>
+        {
+            GameSfx.Play(GameSfx.Cue.ArrowHit);
+            if (chef.HeldFood == null) chef.Splat(stunSeconds);
+            OnChefSplatted.Invoke(ChefHead(), Hit.Arrow);
+            // Only the tip goes in: pull it back along its flight so the shaft and feathers stick out.
+            arrow.transform.position -= arrow.transform.forward * (0.45f * arrowScale);
+            if (chefHead != null) arrow.transform.SetParent(chefHead, true);
+        }, arrowArc, false);
+
+        yield return new WaitForSeconds(arrowStuckSeconds);
+        if (arrow == null) yield break;
+        var scale = arrow.transform.localScale;
+        for (float t = 0f; t < 1f && arrow != null; t += Time.deltaTime / 0.2f)
+        {
+            arrow.transform.localScale = scale * (1f - t);
+            yield return null;
+        }
+        if (arrow != null) Destroy(arrow);
+    }
+
+    private Vector3 ChefHead() => chef.transform.position + Vector3.up * 1.9f;
+    private Vector3 ArrowTarget() => chef.transform.position + Vector3.up * 2.1f;   // the top of his head
+
+    // Arc from where the object is to a (possibly moving) target; homing, so it always lands. Tumbling
+    // food spins; an arrow points along its flight.
+    private IEnumerator Fly(Transform body, Func<Vector3> target, float seconds, Action onArrive, float arc = -1f, bool spin = true)
     {
         Vector3 from = body.position;
-        Vector3 spin = UnityEngine.Random.onUnitSphere;
+        Vector3 axis = UnityEngine.Random.onUnitSphere;
+        float height = arc >= 0f ? arc : arcHeight;
         float t = 0f;
         while (t < 1f)
         {
             t = Mathf.Min(1f, t + Time.deltaTime / seconds);
-            body.position = Vector3.Lerp(from, target(), t) + Vector3.up * (arcHeight * 4f * t * (1f - t));
-            body.Rotate(spin, 720f * Time.deltaTime, Space.World);
+            var next = Vector3.Lerp(from, target(), t) + Vector3.up * (height * 4f * t * (1f - t));
+            if (spin) body.Rotate(axis, 720f * Time.deltaTime, Space.World);
+            else if ((next - body.position).sqrMagnitude > 1e-6f) body.rotation = Quaternion.LookRotation(next - body.position);
+            body.position = next;
             yield return null;
         }
         onArrive();

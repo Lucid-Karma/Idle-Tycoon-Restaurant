@@ -153,8 +153,8 @@ public static class KeyArtRenderer
         model.transform.localRotation = Quaternion.Euler(0f, ChefYaw, 0f);
         model.transform.localScale = source.lossyScale;
         foreach (var behaviour in model.GetComponentsInChildren<MonoBehaviour>(true)) Object.DestroyImmediate(behaviour);
-        var apron = model.transform.Find("Kitchen Apron");
-        if (apron != null) apron.gameObject.SetActive(false);
+        // The apron rides on his hips, so it stays on. No hat: the tower balances on his head, which is the
+        // whole joke, and a toque under it only fights for the same space.
 
         // Legs from the run, arms (and their chain) from a two-handed hold.
         var legs = Clip(LegsClip);
@@ -177,7 +177,7 @@ public static class KeyArtRenderer
         }
         model.transform.localRotation = Quaternion.Euler(0f, ChefYaw, 0f) * Quaternion.Euler(ChefLean, 0f, 0f);
 
-        // Balanced on his head (chibi arms can't reach over that big skull), leaning back from the sprint.
+        // Balanced on his head (chibi arms can't reach over that big head), leaning back from the sprint.
         var head = PosedBounds(model.GetComponentsInChildren<SkinnedMeshRenderer>().First(r => r.name.Contains("Head")));
         var stack = new GameObject("ChaosBurger").transform;
         stack.SetParent(stage, false);

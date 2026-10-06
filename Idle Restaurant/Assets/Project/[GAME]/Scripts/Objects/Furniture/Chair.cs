@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Chair : MonoBehaviour, ISedile
 {
-    public bool IsEmpty{ get; set; }
+    public bool IsEmpty{ get; set; } = true;   // also before Start: chairs of a table bought mid-shift
     public NonStackBase service;
 
     void Start()

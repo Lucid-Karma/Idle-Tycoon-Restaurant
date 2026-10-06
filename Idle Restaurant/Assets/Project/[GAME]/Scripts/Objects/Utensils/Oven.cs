@@ -16,6 +16,8 @@ public class Oven : CookingBase
                 break;
 
                 case State.Cook:
+                // During the first-shift lesson a baked bun waits for as long as it takes: no burning.
+                if (Tutorial.Running && bun.Preparation == Prep.Good) break;
                 cookingTimer += Time.deltaTime;
                 if (cookingTimer > bun.maxCookingTime)
                 {

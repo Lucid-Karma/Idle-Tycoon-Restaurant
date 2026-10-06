@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using TMPro;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UI;
@@ -48,12 +49,21 @@ public static class PosterLayout
         // Wide: the hero's origin is the screen's left edge. Square: the canvas centre.
         parts.Hero = Rect("Hero", root, wide ? new Vector2(0f, 0.5f) : new Vector2(0.5f, 0.5f), wide ? new Vector2(0f, 0.5f) : new Vector2(0.5f, 0.5f),
             Vector2.zero, new Vector2(wide ? 1100f : 700f, 1080f));
-        Vector2 chefPos = wide ? new Vector2(620f, -30f) : new Vector2(-190f, -40f);
+        Vector2 chefPos = wide ? new Vector2(620f, -30f) : new Vector2(-215f, -35f);
         Vector2 Local(float fx, float fyFromTop) => chefPos + new Vector2((fx - 0.5f) * chefW, (0.5f - fyFromTop) * chefH);
 
         parts.Burst = Img("Burst", parts.Hero, S(Ui + "fx_sunburst.png"), new Color(1f, 0.98f, 0.94f, 0.4f)).rectTransform;
         parts.Burst.anchoredPosition = Local(0.55f, 0.62f);
-        parts.Burst.sizeDelta = Vector2.one * (wide ? 2600f : 1900f);
+        parts.Burst.sizeDelta = Vector2.one * (wide ? 2600f : 1700f);
+
+        // A pale disc behind him so the pink chef reads against the pink field, and a soft shadow under his
+        // feet so he runs on something.
+        var halo = Img("Halo", parts.Hero, S(Ui + "ui_circle.png"), new Color(1f, 0.98f, 0.95f, 0.45f)).rectTransform;
+        halo.anchoredPosition = Local(0.5f, 0.52f);
+        halo.sizeDelta = Vector2.one * chefH * (wide ? 1.05f : 1.0f);
+        var ground = Img("Ground", parts.Hero, S(Ui + "ui_shadow_round.png"), new Color(0.35f, 0.16f, 0.26f, 0.18f)).rectTransform;
+        ground.anchoredPosition = Local(0.52f, 0.97f);
+        ground.sizeDelta = new Vector2(chefH * 0.46f, chefH * 0.13f);
 
         float[] streakY = { 0.18f, 0.34f, 0.5f, 0.66f, 0.82f };
         float[] streakLen = { 300f, 380f, 340f, 400f, 280f };
@@ -87,7 +97,7 @@ public static class PosterLayout
         parts.Callout = Rect("Callout", parts.Hero, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(10f, 10f));
         // Said by the chef: beside his head, the tail pointing back at him.
         // (Below the Start button's row on the title screen, which shares this layout.)
-        parts.Callout.anchoredPosition = wide ? new Vector2(chefPos.x + chefW * 0.5f + 250f, -350f) : new Vector2(250f, -210f);
+        parts.Callout.anchoredPosition = wide ? new Vector2(chefPos.x + chefW * 0.5f + 250f, -350f) : new Vector2(250f, -270f);
         parts.Callout.localRotation = Quaternion.Euler(0f, 0f, 6f);
         var calloutText = Text("Label", parts.Callout, Font("Fredoka/Fredoka-SemiBold SDF.asset"), wide ? 40f : 36f, UITokens.Colors.Ink, Callout);
         float w = calloutText.GetPreferredValues(Callout).x + 64f;
@@ -108,16 +118,16 @@ public static class PosterLayout
 
         // Brand: logo and tagline (the title screen adds the Start button under them).
         parts.Brand = Rect("Brand", root, wide ? new Vector2(1f, 0.5f) : new Vector2(0.5f, 0.5f), wide ? new Vector2(1f, 0.5f) : new Vector2(0.5f, 0.5f),
-            wide ? new Vector2(-470f, 0f) : new Vector2(250f, 0f), new Vector2(760f, 1080f));
+            wide ? new Vector2(-470f, 0f) : new Vector2(210f, 0f), new Vector2(760f, 1080f));
         var logo = Img("Logo", parts.Brand, S(Game + "Graphics/Sprites/GameTitle.png"), Color.white);
         logo.preserveAspect = true;
         parts.Logo = logo.rectTransform;
-        parts.Logo.sizeDelta = Vector2.one * (wide ? 760f : 480f);
-        parts.Logo.anchoredPosition = wide ? new Vector2(0f, 190f) : new Vector2(0f, 310f);
+        parts.Logo.sizeDelta = Vector2.one * (wide ? 760f : 540f);
+        parts.Logo.anchoredPosition = wide ? new Vector2(0f, 190f) : new Vector2(0f, 300f);
         parts.Logo.localRotation = Quaternion.Euler(0f, 0f, 3f);
         var tagline = Text("Tagline", parts.Brand, Font("Fredoka/Fredoka-SemiBold SDF.asset"), wide ? 46f : 36f, UITokens.Colors.Ink, Tagline);
         tagline.rectTransform.sizeDelta = new Vector2(760f, 70f);
-        tagline.rectTransform.anchoredPosition = wide ? new Vector2(0f, -60f) : new Vector2(0f, 150f);
+        tagline.rectTransform.anchoredPosition = wide ? new Vector2(0f, -60f) : new Vector2(0f, 120f);
         return parts;
     }
 
@@ -178,12 +188,51 @@ public static class PosterLayout
     [MenuItem("Tools/Chibi UI/Render Covers")]
     public static void RenderCovers()
     {
-        RenderCover(KeyArtRenderer.OutDir + "cover_square.png", 1024, 1024, false);
-        RenderCover(KeyArtRenderer.OutDir + "cover_wide.png", 1920, 1080, true);
+        RenderCover(KeyArtRenderer.OutDir + "cover_square.png", 1024, 1024, root => Build(root, false));
+        RenderCover(KeyArtRenderer.OutDir + "cover_wide.png", 1920, 1080, root => Build(root, true));
+        RenderCover(IconPath, 1024, 1024, BuildIcon);
         AssetDatabase.Refresh();
+        SetAppIcon();
+        Debug.Log("[Poster] covers and app icon rendered");
     }
 
-    static void RenderCover(string path, int width, int height, bool wide)
+    #region App icon
+    public const string IconPath = KeyArtRenderer.OutDir + "icon_app.png";
+
+    // No words and no tower: at the size an icon is actually seen, only the chef's face reads. A pale disc
+    // behind him keeps him off the pink, and he is cropped like a portrait.
+    static void BuildIcon(RectTransform root)
+    {
+        var keyArt = S(KeyArtRenderer.OutDir + "keyart_rush.png");
+        float chefH = 2500f;
+        float chefW = chefH * keyArt.rect.width / keyArt.rect.height;
+        // Where his face sits in the key art, as a share of it (across, and down from the top).
+        var face = new Vector2(0.63f, 0.80f);
+        var at = new Vector2(-(face.x - 0.5f) * chefW, (face.y - 0.5f) * chefH);
+
+        var pattern = Img("Pattern", root, S(Game + "Graphics/Sprites/Chibi Pattern Img.png"), new Color(1f, 1f, 1f, 0.22f));
+        pattern.rectTransform.sizeDelta = new Vector2(1024f, 1024f);
+        var burst = Img("Burst", root, S(Ui + "fx_sunburst.png"), new Color(1f, 0.98f, 0.94f, 0.35f)).rectTransform;
+        burst.sizeDelta = Vector2.one * 1500f;
+        var halo = Img("Halo", root, S(Ui + "ui_circle.png"), new Color(1f, 0.98f, 0.95f, 0.5f)).rectTransform;
+        halo.sizeDelta = Vector2.one * 880f;
+        var chef = Img("Chef", root, keyArt, Color.white);
+        chef.preserveAspect = true;
+        chef.rectTransform.sizeDelta = new Vector2(chefW, chefH);
+        chef.rectTransform.anchoredPosition = at;
+    }
+
+    // The icon every platform falls back to (the old one was a flat drawing of the logo).
+    static void SetAppIcon()
+    {
+        AssetDatabase.ImportAsset(IconPath, ImportAssetOptions.ForceSynchronousImport);
+        var icon = AssetDatabase.LoadAssetAtPath<Texture2D>(IconPath) ?? throw new System.Exception("no " + IconPath);
+        PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
+        AssetDatabase.SaveAssets();
+    }
+    #endregion
+
+    static void RenderCover(string path, int width, int height, System.Action<RectTransform> build)
     {
         var stage = new GameObject("__CoverStage") { hideFlags = HideFlags.DontSave };
         stage.transform.position = new Vector3(-400f, -300f, -400f);
@@ -209,7 +258,7 @@ public static class PosterLayout
             canvas.planeDistance = 10f;
             var scaler = canvasGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = wide ? new Vector2(1920f, 1080f) : new Vector2(1024f, 1024f);
+            scaler.referenceResolution = new Vector2(width, height);
             scaler.matchWidthOrHeight = 1f;
 
             var rt = RenderTexture.GetTemporary(new RenderTextureDescriptor(width, height, RenderTextureFormat.ARGB32, 24) { msaaSamples = 4, sRGB = true });
@@ -217,7 +266,7 @@ public static class PosterLayout
             cam.aspect = width / (float)height;
 
             var root = Rect("Poster", canvasGo.transform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            Build(root, wide);
+            build(root);
             foreach (var t in root.GetComponentsInChildren<Transform>(true)) { t.gameObject.layer = 5; t.gameObject.hideFlags = HideFlags.DontSave; }
 
             // Screen-space-camera canvases size themselves from the camera's target on update.

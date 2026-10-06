@@ -77,6 +77,9 @@ public class Plate : PlaceableBase
     public bool HasHamburger => doesHaveHamburger;
     public Hamburger FinishedBurger => doesHaveHamburger ? placedHamburger : null;
     public int LayerCount => ingredients.Count;
+    // What is on the plate, by ingredient name ("bun", "burger", "tomato"...): the first-shift lesson walks
+    // the player through the ingredients that are still missing.
+    public IEnumerable<string> LayerNames => ingredients.Select(x => x.Name);
 
     // A finished burger in hand can be set down on an empty plate (to free the chef's hands). It used to be
     // stacked as a 7th "ingredient" of a new burger.
@@ -166,6 +169,7 @@ public class Plate : PlaceableBase
             _edibleHam.SetPlaceable(this);
             doesHaveHamburger = true;
             placedHamburger = _hamburger;
+            GameSfx.Play(GameSfx.Cue.BurgerDone);
 
             ingredients.Clear();
             refTransform.position = transform.position;

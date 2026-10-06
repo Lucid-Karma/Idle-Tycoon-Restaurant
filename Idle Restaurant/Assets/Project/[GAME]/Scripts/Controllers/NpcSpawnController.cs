@@ -11,10 +11,9 @@ public class NpcSpawnController : MonoBehaviour
     [SerializeField] private GameObject[] npcPrefabs;
     private List<GameObject> _npcList = new();
     private int amountToPool = 2;
-    private int npcIndex;
     private Vector3 spawnPos;
     private float timeBreak;
-    private int levelCustomerCount; // comes from difficultyManager.
+    private int levelCustomerCount; // customers in the restaurant at once (the opening wave; each leaver is replaced)
     private int spawnedCount;       // customers sent in this shift; capped at ScoreManager.CustomersPerLevel
 
     void OnEnable()
@@ -43,30 +42,19 @@ public class NpcSpawnController : MonoBehaviour
             }
         }
         
-        levelCustomerCount = 3;
+        // Every extra table bought fills one more seat at a time (and adds a customer to the shift).
+        levelCustomerCount = 3 + CafeShop.ExtraCustomers;
     }
 
+    // A free customer of a kind the cafe is known to (adventurers start coming at higher cafe levels).
     private GameObject GetPooledNpc()
     {
-        for (int i = 0; i < _npcList.Count; i++) 
-        {
-            npcIndex = Random.Range(0, _npcList.Count);
-            if (!_npcList[npcIndex].activeInHierarchy) 
-            {
-                try
-                {
-                    return _npcList[npcIndex];
-                }
-                catch (System.Exception ex)
-                {
-                    Debug.LogError("Can't find a track prefab " + ex.ToString());
-                    return null;
-                }
-            }
-        }
-        
-        return null;
+        var free = _npcList.Where(x => !x.activeInHierarchy && Customers.IsUnlocked(x.GetComponent<NpcFsm>().Kind)).ToList();
+        return free.Count > 0 ? free[Random.Range(0, free.Count)] : null;
     }
+
+    // Chairs of tables not bought yet are in the list but inactive.
+    private bool IsFree(GameObject chair) => chair.activeInHierarchy && chair.GetComponent<ISedile>().IsEmpty;
 
     public void CreateNpc()
     {
@@ -75,11 +63,11 @@ public class NpcSpawnController : MonoBehaviour
         if (spawnedCount >= ScoreManager.Instance.CustomersPerLevel) return;
 
         GameObject npc = GetPooledNpc();
-        if(targetChairs.Any(x => x.GetComponent<ISedile>().IsEmpty))
+        if(targetChairs.Any(IsFree))
         {
             if(npc != null)
             {
-                List<GameObject> specificChairs = targetChairs.Where(x => x.GetComponent<ISedile>().IsEmpty).ToList();
+                List<GameObject> specificChairs = targetChairs.Where(IsFree).ToList();
                 chairIndex = Random.Range(0, specificChairs.Count); // max is exclusive: the last chair was never picked
                 //Debug.Log("SChairCount: " + specificChairs.Count + " chairIndex: " + chairIndex);
                 npc.GetComponent<NpcFsm>().chair = specificChairs[chairIndex].GetComponent<ISedile>();

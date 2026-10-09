@@ -12,10 +12,10 @@ using UnityEngine.Rendering.Universal;
 // Menu: Tools/Chibi UI/Render Key Art. The stage is built far below the level and removed afterwards.
 public static class KeyArtRenderer
 {
-    const string Game = "Assets/Project/[GAME]/";
+    internal const string Game = "Assets/Project/[GAME]/";
     const string ChefFbx = "Assets/Models/KayKit_Skeletons_1.0_FREE/characters/fbx/Skeleton_Warrior.fbx";
     public const string OutDir = Game + "Graphics/Sprites/KeyArt/";
-    static readonly Vector3 StageOrigin = new Vector3(400f, -300f, 400f);
+    internal static readonly Vector3 StageOrigin = new Vector3(400f, -300f, 400f);
 
     // Pose: legs from a run cycle, arms from a two-handed "holding something out" clip.
     public static string LegsClip = "Running_B";
@@ -79,14 +79,14 @@ public static class KeyArtRenderer
     static AnimationClip Clip(string name) =>
         AssetDatabase.LoadAllAssetsAtPath(ChefFbx).OfType<AnimationClip>().FirstOrDefault(c => c.name == name);
 
-    static GameObject Visual(string foodPrefab, string field)
+    internal static GameObject Visual(string foodPrefab, string field)
     {
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Game + "Prefabs/FoodPrefabs/" + foodPrefab + ".prefab");
         var food = prefab.GetComponent<EdibleBase>();
         return (GameObject)new SerializedObject(food).FindProperty(field).objectReferenceValue;
     }
 
-    static Transform Place(GameObject visual, Transform parent, string name)
+    internal static Transform Place(GameObject visual, Transform parent, string name)
     {
         var go = Object.Instantiate(visual, parent);
         go.name = name;
@@ -97,7 +97,7 @@ public static class KeyArtRenderer
         return go.transform;
     }
 
-    static Bounds WorldBounds(Transform t)
+    internal static Bounds WorldBounds(Transform t)
     {
         var renderers = t.GetComponentsInChildren<Renderer>().Where(r => r.enabled && r.gameObject.activeInHierarchy && !(r is ParticleSystemRenderer)).ToArray();
         var b = renderers[0].bounds;
@@ -256,21 +256,37 @@ public static class KeyArtRenderer
     #region Render
     // Two renders over black and white give exact coverage (alpha) without relying on the pipeline's
     // alpha output: alpha = 1 - (white - black), colour = black / alpha, all in linear space.
-    static byte[] RenderMatted(Camera cam, int width, int height)
+    internal static byte[] RenderMatted(Camera cam, int width, int height, bool trim = true)
     {
         var black = RenderOver(cam, width, height, Color.black);
         var white = RenderOver(cam, width, height, Color.white);
         var result = new Texture2D(width, height, TextureFormat.RGBA32, false);
         var outPx = new Color32[black.Length];
+        // With post-processing on (tone mapping, grading) white and black backgrounds no longer differ by exactly
+        // 1, which left a faint grey haze over the whole frame: calibrate on the corners, which are background.
+        float range = 0f;
+        int[] corners = { 0, width - 1, (height - 1) * width, height * width - 1 };
+        foreach (int c in corners)
+        {
+            Color b = black[c].linear, w = white[c].linear;
+            range += ((w.r - b.r) + (w.g - b.g) + (w.b - b.b)) / 3f / corners.Length;
+        }
+        range = Mathf.Clamp(range, 0.5f, 1f);
         for (int i = 0; i < black.Length; i++)
         {
             Color b = black[i].linear, w = white[i].linear;
-            float a = Mathf.Clamp01(1f - ((w.r - b.r) + (w.g - b.g) + (w.b - b.b)) / 3f);
+            float a = Mathf.Clamp01(1f - ((w.r - b.r) + (w.g - b.g) + (w.b - b.b)) / 3f / range);
             Color c = a > 0.004f ? new Color(b.r / a, b.g / a, b.b / a) : Color.black;
             c = new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b)).gamma;
             outPx[i] = new Color(c.r, c.g, c.b, a);
         }
         result.SetPixels32(outPx);
+        if (!trim)
+        {
+            var whole = result.EncodeToPNG();
+            Object.DestroyImmediate(result);
+            return whole;
+        }
 
         // Trim to the subject (plus a small margin) so layouts can size it by its real extent.
         int minX = width, minY = height, maxX = -1, maxY = -1;

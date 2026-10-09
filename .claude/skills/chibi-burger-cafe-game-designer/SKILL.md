@@ -643,6 +643,23 @@ remove it; the chopping doesn't sound like a knife hitting a board; the burnt so
 - **Burnt** is a soft "fsss" now: it swells in over 0.18 s and dies away over ~0.7 s, low and breathy with a
   little hiss on top, no transient, at volume 0.35 (was a 15 ms-attack "poof" with crackles at 0.6).
 
+### Store covers (October 2026)
+
+`Desktop\ChibiCovers\`: landscape 1920x1080, portrait 800x1200, square 800x800. Asked: cover images with the game's
+title as the only text, the characters and the chef true to the game (a reference picture was an AI render with
+invented characters). Built from the game's own models, not painted:
+- `Assets/Editor/CoverRenderer.cs`: `RenderCafe` (the cafe as the game camera sees it, in play mode: shop fully
+  bought through the shop UI, customers sitting, the chef holding a real burger; world-space bubbles hidden)
+  and `RenderFood` (one ingredient, posed). Both are matted from a black and a white render like the key art
+  (`KeyArtRenderer.RenderMatted`, which now calibrates against the frame's corners: with post-processing on,
+  white minus black is not exactly 1 and left a grey haze over the frame).
+- `Tools/Covers/compose_covers.py <parts> <out>`: pink gradient + light sunburst + streaks, the cafe floating on a
+  soft shadow, ingredients with drop shadows, the title logo (`GameTitle.png`); the portrait puts the chef with his
+  Chaos Burger (`keyart_rush.png`) in front. Supersampled 2x. Re-run it after any change to the cafe or the chef.
+- Staging the cafe needs the real thing running: a person-speed bot (tap by tap) built two burgers while customers
+  seated; a bridge-driven script was far too slow (customers walked out). Patience was held at zero while staging.
+  The save was restored afterwards.
+
 ### Next ideas (not built yet)
 
 - Money earned while away (the waiter makes this honest now), so there is a reason to come back.

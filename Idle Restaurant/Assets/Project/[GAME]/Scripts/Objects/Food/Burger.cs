@@ -47,6 +47,7 @@ public class Burger : EdibleBase
             pool.GetObject(this.gameObject.transform, cookedBurger, PoolingManager.burgerCookedList);
             currentVersion = pool.currentObject;
             point = 10f;
+            GameSfx.Play(GameSfx.Cue.Ready);
 
             _currentBurgerState ++;
             break;
@@ -56,6 +57,8 @@ public class Burger : EdibleBase
             pool.GetObject(this.gameObject.transform, overcookedBurger, PoolingManager.burgerOvercookedList);
             currentVersion = pool.currentObject;
             point = 0.2f;
+            GameSfx.Play(GameSfx.Cue.Burnt);
+            BurnSmoke.On(this);
 
             _currentBurgerState ++;
             isOver = true;

@@ -24,7 +24,6 @@ public class Oven : CookingBase
                     if(!bun.isOver)
                     {
                         bun.SetCookedBun();
-                        Debug.Log(cookingTimer);
                         cookingTimer = 0f;
                     }
                 }
@@ -42,7 +41,6 @@ public class Oven : CookingBase
         cookingTimer = bun.bakeTimer;
 
         if(!bun.isOver)   state = State.Cook;
-        Debug.Log("pre: " + cookingTimer);
     }
 
     // Like Pan: remember how long the bun has baked, so taking it out and back in resumes instead of

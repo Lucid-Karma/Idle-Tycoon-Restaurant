@@ -40,15 +40,16 @@ public class Bun : EdibleBase
         switch (_currentBunState)
         {
             case 0:
-            Debug.Log("bun cooked.");
             point = 10f;
+            GameSfx.Play(GameSfx.Cue.Ready);
 
             _currentBunState ++;
             break;
 
             case 1:
-            Debug.Log("bun burned.");
             point = 4f;
+            GameSfx.Play(GameSfx.Cue.Burnt);
+            BurnSmoke.On(this);
 
             _currentBunState ++;
             isOver = true;

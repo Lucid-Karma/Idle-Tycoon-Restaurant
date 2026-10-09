@@ -58,6 +58,8 @@ public class Waiter : MonoBehaviour
     private float standing;     // 0 while hopping, 1 once he has settled: how much of the sway shows
     private float cheerAt = -10f;
     private Vector3 trayRest;
+    private Vector3 lastVelocity;
+    private Vector2 wobble, wobbleVelocity;     // the burger on the tray: x forward/back, y side to side
 
     // What the chef shouldn't bother with any more: a burger the waiter has already claimed.
     public static Hamburger Claimed { get; private set; }
@@ -130,6 +132,7 @@ public class Waiter : MonoBehaviour
                 Look();
             }
             if (job == Job.GoingHome && Arrived(home)) SetJob(Job.Waiting);
+            if (job == Job.Waiting) FaceTheViewer();
             return;
         }
 
@@ -138,6 +141,19 @@ public class Waiter : MonoBehaviour
 
         if (job == Job.Fetching) Fetch();
         else Deliver();
+    }
+
+    // Waiting in his corner he turns round to face the player (the camera), rather than showing his back to
+    // them for as long as there is nothing to carry.
+    private Transform viewer;
+    private void FaceTheViewer()
+    {
+        if (standing < 0.5f) return;
+        if (viewer == null) { var main = Camera.main; if (main == null) return; viewer = main.transform; }
+        var toward = -viewer.forward;
+        toward.y = 0f;
+        if (toward.sqrMagnitude < 0.01f) return;
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(toward), 240f * Time.deltaTime);
     }
 
     private void SetJob(Job next)
@@ -343,14 +359,14 @@ public class Waiter : MonoBehaviour
         if (cheer >= 0f && cheer < 1f) lift += 0.17f * 4f * cheer * (1f - cheer);
 
         float nod = Mathf.Sin(Time.time * SwayRate);
-        // Squashing at the landing is what makes a hop bouncy, but measured against how tall he stands it made
-        // him read as shrinking while he worked (up to 17% shorter for an instant): kept to a few percent now.
-        float stretch = (air * 0.08f + (cheer >= 0f && cheer < 1f ? 0.06f : 0f)) - landing * (carry ? 0.08f : 0.06f);
+        // A good squash as he lands is what makes the hop read as bouncy (it was tried at a few percent, and
+        // looked stiff, especially carrying a burger).
+        float stretch = (air * 0.08f + (cheer >= 0f && cheer < 1f ? 0.06f : 0f)) - landing * (carry ? 0.17f : 0.13f);
         stretch = Mathf.Lerp(stretch, Mathf.Abs(nod) * 0.02f, standing);    // the sway swells him a touch
         float tall = 1f + stretch;
         float wide = 1f / Mathf.Sqrt(tall);                                 // squash and stretch keep the same volume
 
-        float lean = Mathf.Clamp01(speed / Speed) * (carry ? 7f : 5f);
+        float lean = Mathf.Clamp01(speed / Speed) * (carry ? 9f : 6f);
         float rock = (hops % 2 == 0 ? 1f : -1f) * Mathf.Sin(u * Mathf.PI) * (carry ? 8f : 6f);
         float roll = Mathf.Lerp(rock, nod * SwayDegrees, standing);
 
@@ -374,6 +390,33 @@ public class Waiter : MonoBehaviour
         float ahead = Mathf.Sin(lean * Mathf.Deg2Rad) * trayRest.y;
         float bob = carry ? Mathf.Abs(nod) * 0.012f * standing : 0f;
         tray.localPosition = new Vector3(trayRest.x + side, trayRest.y * tall + lift + bob, trayRest.z + ahead);
+
+        if (hold != null) Wobble(dt, carry, speed, air, rock, nod);
+    }
+
+    // The burger on his tray wobbles the way it does in the chef's hands (CarryWobble): it leans back when he
+    // sets off and forward when he stops, sways with every hop, gets a jolt as he lands, and settles with a
+    // little spring. A messy burger wobbles more (BurgerReview.Wobbliness). Only the spot it rides on turns,
+    // about the tray's surface, so it tips on the tray rather than swinging through it.
+    private void Wobble(float dt, bool carry, float speed, float air, float rock, float nod)
+    {
+        dt = Mathf.Min(dt, 1f / 30f);
+        if (dt <= 0f) return;
+        var velocity = agent.isOnNavMesh ? agent.velocity : Vector3.zero;
+        var local = transform.InverseTransformDirection((velocity - lastVelocity) / dt);
+        lastVelocity = velocity;
+        if (!carry) { wobble = wobbleVelocity = Vector2.zero; hold.localRotation = Quaternion.identity; return; }
+
+        float wobbly = carrying.Review.Wobbliness;
+        float run01 = Mathf.Clamp01(speed / Speed);
+        var target = new Vector2(-local.z, local.x) * 1.4f                      // leans against his acceleration
+                   + new Vector2(-3f * run01 + air * 4f, rock * 0.9f)            // tips back running, bobs with the hop
+                   + new Vector2(0f, nod * 2.5f * standing);                       // and sways with him standing
+        target = Vector2.ClampMagnitude(target * wobbly, 16f * wobbly);
+        wobbleVelocity += (target - wobble) * (150f * dt);
+        wobbleVelocity *= Mathf.Exp(-8f * dt);
+        wobble += wobbleVelocity * dt;
+        hold.localRotation = Quaternion.Euler(wobble.x, 0f, wobble.y);
     }
     #endregion
 }

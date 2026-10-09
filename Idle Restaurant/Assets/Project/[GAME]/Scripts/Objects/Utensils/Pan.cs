@@ -8,6 +8,8 @@ public class Pan : CookingBase
 
     void Update()
     {
+        // The patty sizzles while it is on the heat (raw or done; a burnt one has gone quiet).
+        GameSfx.Sizzle(this, currentObject != null && state == State.Cook && burger != null && burger.Preparation != Prep.Burnt);
         if (currentObject != null)
         {
             switch (state)
@@ -24,13 +26,18 @@ public class Pan : CookingBase
                     if(!burger.isOver)
                     {
                         burger.SetCooked();
-                        Debug.Log(cookingTimer);
                         cookingTimer = 0f;
                     }
                 }
                 break;
             }
         }
+    }
+
+    protected override void OnDisable()
+    {
+        base.OnDisable();
+        GameSfx.Sizzle(this, false);
     }
 
     public override void UseFood(EdibleBase ingredient)

@@ -364,7 +364,8 @@ public static partial class CafeGrowthBuilder
     }
 
     // A ring on the floor under him. Whatever he is wearing, this is the thing that says "this one is
-    // you" at the distance the game is actually played from.
+    // you" at the distance the game is actually played from. In his uniform's scarlet (it was yellow; the
+    // user asked for it to match his clothes or go).
     const float RingInner = 0.46f, RingOuter = 0.60f;   // outside the apron, which hangs low and wide
 
     static void Marker(GameObject chef)
@@ -396,7 +397,7 @@ public static partial class CafeGrowthBuilder
         mesh.RecalculateBounds();
         Get<MeshFilter>(go).sharedMesh = SaveMesh(mesh);
         var renderer = Get<MeshRenderer>(go);
-        renderer.sharedMaterial = CafeGrowthBuilder.FlatMaterial("PlayerMarker", UITokens.Colors.Yellow);
+        renderer.sharedMaterial = CafeGrowthBuilder.FlatMaterial("PlayerMarker", ChefOutfit);
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
     }

@@ -3,7 +3,8 @@ using UnityEngine;
 
 // Short sounds for what happens in the cafe, so the player hears it without looking: money coming in, a
 // customer sitting down or leaving hungry, food flying, the chef getting splatted or slipping, a burger
-// done, the cafe levelling up. One AudioSource playing one-shots with a little pitch jitter so repeats
+// done, the cafe levelling up - and the kitchen itself: picking food up and putting it down, the knife on the
+// board, the patty sizzling, a bun or patty ready (a bright ding) or burnt (a poof), a bin. One AudioSource playing one-shots with a little pitch jitter so repeats
 // don't grate. Silent while the sound is off (the speaker button, Audio.IsMusicOn).
 // Lives on a scene object (<<<Controllers>>>/Sfx): gameplay calls GameSfx.Play(cue); cues that already
 // have an event (order rated, customer protest, level up) are picked up here.
@@ -11,7 +12,8 @@ using UnityEngine;
 public class GameSfx : MonoBehaviour
 {
     // Append new cues at the end: the scene stores them by index.
-    public enum Cue { Coin, Tip, Seated, LeftHungry, CustomerThrow, ChefThrow, Splat, Slip, Bonk, BurgerDone, LevelUp, ArrowShot, ArrowHit }
+    public enum Cue { Coin, Tip, Seated, LeftHungry, CustomerThrow, ChefThrow, Splat, Slip, Bonk, BurgerDone, LevelUp, ArrowShot, ArrowHit,
+        Pickup, PutDown, Chop, Ready, Burnt, Trash }
 
     [Serializable]
     private struct Sound
@@ -24,6 +26,12 @@ public class GameSfx : MonoBehaviour
     }
 
     [SerializeField] private Sound[] sounds = Array.Empty<Sound>();
+    // A patty on a pan sizzles for as long as it is on the heat (any pan; the loop fades in and out).
+    [SerializeField] private AudioClip sizzleLoop;
+    [SerializeField, Range(0f, 1f)] private float sizzleVolume = 0.22f;
+
+    private static readonly System.Collections.Generic.HashSet<UnityEngine.Object> sizzlers = new();
+    private AudioSource sizzle;
 
     private static GameSfx instance;
     // A few voices: pitch is per source, so overlapping sounds each get their own.
@@ -34,6 +42,12 @@ public class GameSfx : MonoBehaviour
     public static void Play(Cue cue)
     {
         if (instance != null) instance.PlayCue(cue);
+    }
+
+    // A pan says whether it is frying right now.
+    public static void Sizzle(UnityEngine.Object pan, bool on)
+    {
+        if (on) sizzlers.Add(pan); else sizzlers.Remove(pan);
     }
 
     private void Awake()
@@ -53,6 +67,29 @@ public class GameSfx : MonoBehaviour
             voices[i] = voice;
         }
         for (int i = 0; i < lastPlayed.Length; i++) lastPlayed[i] = float.NegativeInfinity;
+
+        sizzlers.Clear();
+        if (sizzleLoop != null)
+        {
+            sizzle = gameObject.AddComponent<AudioSource>();
+            sizzle.clip = sizzleLoop;
+            sizzle.loop = true;
+            sizzle.playOnAwake = false;
+            sizzle.volume = 0f;
+            sizzle.spatialBlend = 0f;
+            sizzle.outputAudioMixerGroup = first.outputAudioMixerGroup;
+        }
+    }
+
+    private void Update()
+    {
+        if (sizzle == null) return;
+        sizzlers.RemoveWhere(x => x == null);
+        // Paused (menus, the result card): the kitchen goes quiet too.
+        float target = sizzlers.Count > 0 && Audio.IsMusicOn && Time.timeScale > 0f ? sizzleVolume : 0f;
+        sizzle.volume = Mathf.MoveTowards(sizzle.volume, target, Time.unscaledDeltaTime * sizzleVolume * 4f);
+        if (sizzle.volume > 0f && !sizzle.isPlaying) { sizzle.time = UnityEngine.Random.Range(0f, sizzle.clip.length); sizzle.Play(); }
+        else if (sizzle.volume <= 0f && sizzle.isPlaying) sizzle.Stop();
     }
 
     private void OnDestroy()
@@ -65,6 +102,7 @@ public class GameSfx : MonoBehaviour
     {
         EventManager.OnOrderRated.AddListener(OnOrderRated);
         EventManager.OnCustomerProtest.AddListener(OnProtest);
+        EventManager.OnFoodHolded.AddListener(OnPickup);
         CafeProgress.LeveledUp += OnLevelUp;
     }
 
@@ -72,11 +110,13 @@ public class GameSfx : MonoBehaviour
     {
         EventManager.OnOrderRated.RemoveListener(OnOrderRated);
         EventManager.OnCustomerProtest.RemoveListener(OnProtest);
+        EventManager.OnFoodHolded.RemoveListener(OnPickup);
         CafeProgress.LeveledUp -= OnLevelUp;
     }
 
     private void OnOrderRated() => PlayCue(Cue.Coin);
     private void OnProtest() => PlayCue(Cue.LeftHungry);
+    private void OnPickup() => PlayCue(Cue.Pickup);
     private void OnLevelUp(int level) => PlayCue(Cue.LevelUp);
 
     private void PlayCue(Cue cue)

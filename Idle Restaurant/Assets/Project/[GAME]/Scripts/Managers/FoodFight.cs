@@ -23,6 +23,9 @@ public class FoodFight : MonoBehaviour
 
     [SerializeField] private GameObject tomatoModel;          // the whole-tomato visual the customers throw
     [SerializeField] private GameObject arrowModel;           // what a Ranger shoots (long axis +Z, tip forward)
+    [SerializeField] private GameObject bowModel;             // what they shoot it with (KayKit bow_withString)
+    private const float BowHeight = 1.35f;                    // the bow from tip to tip, in metres
+    private const float DrawSeconds = 0.45f;                  // the bow appearing and the string pulled back
     [SerializeField] private float arrowSeconds = 0.4f;
     [SerializeField] private float arrowArc = 0.5f;
     [SerializeField] private float arrowStuckSeconds = 1.6f;  // it stays stuck in his head (or hat) a moment
@@ -79,7 +82,7 @@ public class FoodFight : MonoBehaviour
         var start = (npc != null ? npc.transform.position : chef.transform.position + Vector3.forward * 6f) + Vector3.up * 1.6f;
         if (npc != null && npc.Kind == CustomerKind.Ranger && arrowModel != null)
         {
-            yield return ShootArrow(start);
+            yield return ShootArrow(npc, start);
             yield break;
         }
         var tomato = Instantiate(tomatoModel, start, UnityEngine.Random.rotation);
@@ -104,12 +107,40 @@ public class FoodFight : MonoBehaviour
         });
     }
 
-    // A Ranger's answer: a quick, flat shot that sticks in the chef's head (or hat) for a moment.
-    private IEnumerator ShootArrow(Vector3 start)
+    // A Ranger's answer: a bow appears in front of them and draws, the arrow leaves it in a quick, flat shot
+    // and sticks in the chef's head (or hat) for a moment; the bow lingers, then goes. No animation clip: the
+    // customers share the skeleton rig, which has no archery, so the bow and arrow move on their own.
+    private IEnumerator ShootArrow(NpcFsm npc, Vector3 start)
     {
-        var arrow = Instantiate(arrowModel, start, Quaternion.LookRotation(ChefHead() - start));
+        var aim = ChefHead() - start;
+        var flat = new Vector3(aim.x, 0f, aim.z).normalized;
+        // The chef is usually *behind* a seated customer as the game camera sees it (the kitchen is further
+        // back than the tables), so a bow held towards him hid inside the customer: it is held on their
+        // camera side instead, a little forward of them.
+        var toViewer = Camera.main != null ? -Camera.main.transform.forward : Vector3.zero;
+        toViewer.y = 0f;
+        var bow = SpawnBow(npc.transform.position + Vector3.up * 1.45f + flat * 0.3f + toViewer.normalized * 0.6f, flat);
+        var nock = bow != null ? bow.position : start;
+        var arrow = Instantiate(arrowModel, nock, Quaternion.LookRotation(ChefHead() - nock));
         arrow.transform.localScale *= arrowScale;   // the model is a thin prop: bigger reads from the game camera
         foreach (var c in arrow.GetComponentsInChildren<Collider>()) Destroy(c);
+
+        if (bow != null)
+        {
+            // Draw: the bow pops in while the arrow is pulled back along the string.
+            var full = Vector3.one;          // (SpawnBow leaves it at zero, to pop in)
+            var pulled = nock - arrow.transform.forward * 0.35f;
+            for (float t = 0f; t < 1f; t += Time.deltaTime / DrawSeconds)
+            {
+                float pop = t < 0.4f ? Mathf.Sin(t / 0.4f * Mathf.PI * 0.5f) * 1.12f : Mathf.Lerp(1.12f, 1f, (t - 0.4f) / 0.6f);
+                bow.localScale = full * pop;
+                arrow.transform.position = Vector3.Lerp(nock, pulled, Mathf.SmoothStep(0f, 1f, t));
+                arrow.transform.rotation = Quaternion.LookRotation(ChefHead() - arrow.transform.position);
+                yield return null;
+            }
+            bow.localScale = full;
+            StartCoroutine(PutAway(bow, full));
+        }
         GameSfx.Play(GameSfx.Cue.ArrowShot);
 
         yield return Fly(arrow.transform, ArrowTarget, arrowSeconds, () =>
@@ -131,6 +162,52 @@ public class FoodFight : MonoBehaviour
             yield return null;
         }
         if (arrow != null) Destroy(arrow);
+    }
+
+    // The bow, tip to tip `BowHeight` tall, standing upright and facing along `aim` (string towards the archer).
+    private Transform SpawnBow(Vector3 at, Vector3 aim)
+    {
+        if (bowModel == null) return null;
+        var pivot = new GameObject("Bow").transform;
+        pivot.SetPositionAndRotation(at, Quaternion.LookRotation(aim, Vector3.up));
+        var model = Instantiate(bowModel, pivot);
+        model.transform.localPosition = Vector3.zero;
+        // KayKit's Unity-axis bow: limbs along Z, the arc bulging towards +X with the string behind it, flat
+        // across Y. Limbs up, arc towards the target, string towards the archer.
+        model.transform.localRotation = Quaternion.LookRotation(Vector3.up, Vector3.right);
+        foreach (var c in model.GetComponentsInChildren<Collider>()) Destroy(c);
+        var renderers = model.GetComponentsInChildren<Renderer>();
+        if (renderers.Length > 0)
+        {
+            var b = renderers[0].bounds;
+            foreach (var r in renderers) b.Encapsulate(r.bounds);
+            if (b.size.y > 0.01f) model.transform.localScale *= BowHeight / b.size.y;
+            // centre the grip on the pivot
+            b = renderers[0].bounds;
+            foreach (var r in renderers) b.Encapsulate(r.bounds);
+            model.transform.position += at - b.center;
+        }
+        pivot.localScale = Vector3.zero;
+        return pivot;
+    }
+
+    // After the shot the bow kicks back a little, stays a moment, then shrinks away.
+    private IEnumerator PutAway(Transform bow, Vector3 full)
+    {
+        for (float t = 0f; t < 1f; t += Time.deltaTime / 0.18f)
+        {
+            if (bow == null) yield break;
+            bow.localScale = full * (1f + Mathf.Sin(t * Mathf.PI) * 0.12f);
+            yield return null;
+        }
+        yield return new WaitForSeconds(0.55f);
+        for (float t = 0f; t < 1f; t += Time.deltaTime / 0.2f)
+        {
+            if (bow == null) yield break;
+            bow.localScale = full * (1f - t);
+            yield return null;
+        }
+        if (bow != null) Destroy(bow.gameObject);
     }
 
     private Vector3 ChefHead() => chef.transform.position + Vector3.up * 1.9f;

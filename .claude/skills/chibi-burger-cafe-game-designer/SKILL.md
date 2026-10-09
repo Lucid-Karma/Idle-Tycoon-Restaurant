@@ -115,10 +115,17 @@ down on an empty plate.
 - Each layer: good 1.0 · whole (tomato/onion/cheese) 0.5 · raw bun 0.6 · burnt bun 0.45 · burnt
   patty 0.35 · raw patty 0.15 · a repeated ingredient 0.3. Quality = mean, ×0.6 without a patty,
   ×0.8 without a bun.
-- **Rating (0–5) = 3 × quality + 2 × speed**, speed = 1 within the first 20 % of the customer's
-  patience, falling linearly to 0 at the end of it.
+- **Rating (0–5) = 3 × taste + 2 × speed**, speed = 1 within the first 20 % of the customer's
+  patience, falling linearly to 0 at the end of it. **Taste** (`Customers.Taste01`) is how much *this*
+  customer liked it: a Barbarian scores a Chaos Burger 1.0, any messy one at least 0.85 and a perfect
+  one only 0.6 ("Too neat..."); a Mage scores a perfect one 1.0 and a sloppy one (2+ flaws) at 0.8 x
+  quality; everyone else scores the burger's quality. And **a customer who reacts with delight never
+  gives fewer than 4 stars** (a speedy serve to a Rogue, "GLORIOUS CHAOS!"...). Before this the stars
+  came from the burger's quality alone while the quirks only added money, so a Barbarian could pay a
+  fortune for a chaos burger and leave two stars (user report). Stars = round(rating), so they are
+  also the cafe's progress (`CafeProgress.AddStars`).
 - **Pay = $3 + round(rating) + $2 if perfect + rush bonus** (+$1 per order in the current rush
-  streak beyond the first, max +$3). Rush streak: each serve within 30 s of the previous one.
+  streak beyond the first, max +$3). Rush streak: each serve within 45 s of the previous one (was 30: out of reach for careful play).
 - A walkout counts as a 0-star order and breaks the streak. Shift score = average over the 8.
 - Worked examples: fast Chaos Burger ≈ 3.7★ → $7(+rush); slow Chef's Classic ≈ 3.3★ → $8; fast
   Chef's Classic 5★ → $10.
@@ -189,7 +196,8 @@ at the start (7 seats); each bought table adds one to both (`ScoreManager.Custom
 - Sounds (`Scripts/Audio/FX/GameSfx.cs` on `<<<Controllers>>>/Sfx`): coin when an order pays, a smaller coin
   for a snack tip, a soft boing when a customer sits, a sad sting when one leaves hungry, "pft" when food is
   thrown (both ways), a wet splat when a tomato hits, a slide for the slip, a bonk for an unprepared item,
-  a pop when a burger is done, the reward jingle on a cafe level up. Silent while the speaker button is off.
+  a pop when a burger is done, the reward jingle on a cafe level up, and the kitchen (pick up, put down, bin,
+  knife, ready ding, a soft burnt hiss, the sizzle loop: see the October play test). Silent while the speaker is off.
   Call `GameSfx.Play(cue)` from gameplay for new moments; keep them short (the click pack).
 - Key art: `Assets/Editor/KeyArtRenderer.cs` (Tools/Chibi UI/Render Key Art) renders the chef + Chaos
   Burger from the game's own models (apron on, no hat: the tower needs his head); `PosterLayout.cs` builds
@@ -280,7 +288,7 @@ while, and the user asked for them back as skeletons: a cafe full of skeletons i
 built on, and they are the darkest things in the room, which the chef has to beat.
 
 - The **chef** is the Rogue body (`CafeGrowthBuilder.ChefModel`), and he is **pale**: light skin, white
-  hair, a scarlet uniform under the white apron and toque, with a **yellow ring** on the floor under him
+  hair, a scarlet uniform under the white apron and toque, with a **ring** on the floor under him (yellow at first; now his uniform's scarlet, user's choice: "same red as his clothes, or remove it")
   (`Marker`, drawn wider than the apron so it is not swallowed by it). The old bone-white skeleton read
   instantly in the pink kitchen; a salmon cook with brown hair disappeared into it, and the first fix
   (ink navy) worked for contrast and was rejected as "too deep". Skin and hair are repainted like the
@@ -491,6 +499,150 @@ and a proper onboarding. Built in that order:
   (it read as bolted on). The tip was shortened to "Pink pulse = use it next." to make room, and the
   snack hint it used to carry moved into the "Stack the burger" step.
 
+### Moving the chef by hand, and a game that fits any frame
+
+- **WASD / arrow keys on a computer, an invisible joystick on a phone** (`ChefStick` on the Player,
+  `PlayerFSM.Steer`). Tapping still works exactly as before; steering forgets what the last tap was
+  sending him to (nothing is used when he stops) and is camera-relative (up = up the screen). On a touch
+  screen a finger down anywhere on the kitchen + drag is the stick (dead zone 2.5 % of the screen height,
+  full speed at 10 %, the centre follows the finger past that); a touch that never dragged and lasted
+  under 0.45 s is a tap, sent **on release** (`PlayerFSM.MovePlayer` ignores the browser's made-up mouse
+  clicks while `ChefStick.TouchDriven`). Touches that start on a screen-space HUD button belong to the
+  button. No steering before the title screen's Start (`EventManager.OnLevelStart`), while stunned,
+  mid-interaction or with the game paused.
+- **Input System package** (1.20.1) with *Active Input Handling = Both*: the old `Input.` calls in the
+  game still work, `ChefStick` reads the new system (`#if ENABLE_INPUT_SYSTEM`, with an old-input
+  fallback). Switching the handler needs an **editor restart** before the editor gets any device input
+  (`EditorApplication.OpenProject` on the same project did nothing; the internal
+  `EditorApplication.RequestCloseAndRelaunchWithCurrentArguments` restarted it). Set the handler *before*
+  installing the package and the package's blocking "enable backends?" dialog never appears. The import
+  errors about `...UITKAssetEditor/PackageResources/*.uxml` are the 260-character Windows path limit
+  (this project's path is long); they only affect the input actions editor window.
+- **The game keeps its 16:10 shape on every screen** (user: "it should open at every size, but its aspect
+  ratio must not change"). The WebGL template sizes the canvas to the largest 16:10 box that fits the
+  window/iframe, centred, with the page's dark background around it, and follows resizes; no footer, no
+  fullscreen button. A first version filled any shape (a `ScreenFit` component widening/narrowing the camera
+  and HUD) and was rejected and removed: the framing is designed for 960 x 600.
+- **Hit while running, he stops running too**: `PlayerFSM.Splat` (tomato or arrow with empty hands) used to stop
+  the agent but leave the run animation playing on the spot; it now sends the animator to idle and back to
+  the run when he recovers (if he is still on his way).
+- **Customers must be able to reach a chair** (a customer sat on the floor at the terrace): the terrace's two
+  tables were on the kitchen's pink floor, where the customers' navmesh doesn't go (customers walk only on the
+  teal dining floor: the bottom strip z 8-15 and the right column x 13-22). It is now laid out there
+  (`CafeGrowthBuilder.TerraceRound/TerracePair`, decoration constants next to them; "3b Move the Terrace" moves
+  the one in the scene without rebuilding the catalogue), and its lamp no longer stands in front of the plates.
+  Check any new seating with every chair's sit spot against the customers' navmesh (NavMesh.SamplePosition with
+  an NpcFsm agent's type), not the chef's.
+- Mochi turns to face the camera while he waits in his corner (`Waiter.FaceTheViewer`): from behind he
+  was a white blob. His landing squash stays at the original 13 % / 17 % (carrying): the gentler one
+  tried for a round looked stiff (user).
+
+### The trailer (October 2026)
+
+`C:\Users\Beyzanur\Desktop\ChibiTrailer\`: `chibi-burger-cafe-trailer.mp4` (69.5 s, 1920x1080, 30 fps), the plan
+(`trailer-plan.md`: what exists in the game, shot list, storyboard, camera/edit/sound plan), the edit decision
+list (`cut.txt`) and every recorded shot with its own sound in `clips\`. Second version, to the user's brief:
+cosy -> satisfying burgers -> Mochi -> personalities -> food fight -> arrow -> montage -> calm final joke ->
+title; no captions, only the title card ("CHIBI BURGER CAFE" logo + "Play free on beyzosh.com").
+How it was made (tools were temporary and deleted; rebuild them if needed):
+- Shots staged through the game's own systems from the bridge: which customer comes in and where they sit
+  (the spawner's pooled customer, `Bring`), a waiting customer's patience run out (`Impatient`: "Too slow!" and
+  the throw, an arrow from a Ranger), endless patience for the others, the shift's own arrivals stopped and its
+  end disabled while recording, the chef sent somewhere or turned to face the camera, Mochi hidden for plate
+  close-ups, hints off, HUD hidden, the game's music muted (music is laid in the edit).
+- Recorder: Game view 1920x1080 as JPEGs + the game's sound as WAV, 30 fps of game time; slow motion by
+  `Time.timeScale` during a take. **The editor's mute also silences the recording**, so takes were recorded with
+  the listener at 2% (barely audible) and boosted x50 in the edit; the WAV is 32-bit float, nothing lost.
+- Cut with `MediaEncoder`: crossfades, freeze frames, the shots' own sound, the music pack laid per section
+  (Loop-1 114 bpm cosy, Transition-1, Loop-2 128 bpm fight, Loop-3 142 bpm montage, Loop-1 soft for the final,
+  Stinger-2 on the title), music ducked before the arrow and silent after the last tomato.
+- Things that bit: a customer's sit-down line is raised above the order bubble (frame with room above);
+  the chef faces where he last walked (turn him to the camera for face shots); bash needs quotes around
+  `chair_A%20(5)`; `get` on a path through a `(Clone)` child failed, so the food in a station is read with a
+  dedicated query; a play session full of endlessly patient customers has no free chairs.
+- The chef's faces that exist: smile (default), grin (good rating), frown (customer protest), shock (hit).
+### Play-testing it like a player, and what that fixed (October 2026)
+
+Asked: "Mochi's burger should wobble like the chef's; a Ranger can use a bow; play the game a lot as a player
+and as a designer, find what keeps it from being fully professional and fix it."
+
+- **Mochi's burger wobbles** like the one in the chef's hands (`Waiter.Wobble`, called at the end of `Hop`):
+  a spring (stiffness 150, damping 8) on the tray's tilt driven by his acceleration, the hop's air time and
+  rock, and a nod while he stands, scaled by the burger's `Review.Wobbliness` (messier = wobblier) and capped at
+  16 deg x wobbliness. Measured on a real delivery: the tray swings between about -15 and +20 deg.
+- **A Ranger draws a bow** (`FoodFight.ShootArrow` / `SpawnBow`, KayKit `bow_withString.fbx`, assigned by step 7):
+  the bow pops in beside the Ranger **on the camera's side** (the chef is usually behind the customers, so
+  a bow on the far side was hidden by the Ranger's own body), the arrow is nocked and pulled back for
+  `DrawSeconds` (0.45), then flies; the bow is kicked and put away. The model's limbs lie along its Z with the
+  arc toward +X, so it is turned with `LookRotation(Vector3.up, Vector3.right)` and sized by its renderer bounds
+  to `BowHeight` (1.35, a const).
+- **The kitchen makes sounds now** (none of the packs had any): picking up (`OnFoodHolded`), putting down
+  (`PlayerFSM.DropObject`), the bin, the knife four times per chop (timed to the knife in `ChoppingBoardAnim`:
+  0.5 / 0.83 / 1.17 / 1.5 s), a bright two-note *ding* when a bun or patty is ready, a soft hiss when it burns (see the next section),
+  and a **sizzle loop** while any patty is on a pan (`GameSfx.Sizzle(pan, on)`, fades in/out, silent while
+  paused or with the sound off). All synthesised by `Idle Restaurant/Tools/Audio/kitchen_sfx.py` (numpy +
+  scipy, fixed seed, writes into `Graphics/Audio/Kitchen`); quiet on purpose (0.3-0.6), they happen all the time.
+  Wired in step 7's cue table (`CafePolishBuilder.Sounds`, `SizzleLoop`).
+- **The result card's title says how it went**: Perfect / Great / Nice / Busy / Rough shift! by the average
+  rating (`UIShiftHighlights.TitleFor`); it said "Shift complete!" for 0.6 and 4.8 alike.
+- **The rush streak is reachable**: `RushWindow` 30 -> 45 s. A careful player makes a Chef's Classic every
+  ~35-40 s (measured), so at 30 s nobody who wasn't pipelining two burgers ever saw "RUSH x2" or its bonus.
+  With 45 the same bot reaches x4 in a shift.
+- **No "Exit" on the web**: there is nowhere to quit to in a browser, and the button sent players to another
+  site's list of games 4.5 s after the farewell card. `QuitButton` hides its own button in WebGL builds (the
+  editor and a desktop build keep it).
+- **The web page is the game's, not Unity's**: title "Chibi Burger Cafe" (was "Unity Web Player | ..."),
+  a favicon of the chef's face (cropped from `icon_app.png`; the whole icon is unreadable at 16-32 px), an
+  apple-touch icon, and a loading screen with the app icon bobbing, the name, a teal pill progress bar and
+  "Warming up the kitchen..." / "Lighting the stove..." (the Unity logo and its bars are gone from
+  `TemplateData`). A failed load says so on the page instead of an `alert()`. The "Made with Unity" splash is
+  off (`PlayerSettings.SplashScreen.show`, allowed on Unity 6 Personal): the title screen comes up at once.
+- The first-shift lesson's serve beat no longer flicks back to "Pick it up from the plate" while the
+  customer is eating (`WorkOutServe`: "Served! Let's see what they think...").
+- `NpcSpawnController` sends the opening wave **once per shift** (`waveSent`). Replay auto-starts the next shift
+  (`GameManager.StartLevel` when `IsGameRestarted`); a second `OnLevelStart` doubled the wave (six customers at
+  once) - a player cannot cause it (Start only shows at launch), my test script did, by invoking the hidden
+  Start button: **after Replay, never click Start**.
+- Stray `Debug.Log`s in `Bun`, `Oven`, `Pan` (every bake and fry, in the shipped build) removed.
+
+**How it was play-tested**: a temporary in-editor bot (`_BotPlayer`, deleted) that plays through
+`PlayerFSM.HandleScreenTap` one tap at a time with a human reaction delay (0.35 s +-40 %), finishing the most
+advanced plate first, putting the next bun/patty on while it waits, tossing a lettuce snack to anyone past half
+their patience, and logging every order, walkout and burn. A bridge-driven script was too slow to be fair (3-5 s
+per tap: its buns burnt). Numbers from a fresh save:
+- Lesson: clean end to end; patience is frozen during it as designed.
+- A careful Chef's-Classic player: ~16 taps and **35-40 s per burger**, 8/8 served, 0 walkouts, average
+  3.9-4.1, **$73-97 and ~32 stars per shift** (perfect burgers floor at 4 stars, so only fast ones get 5).
+- Progress: level 3 after shift 3, level 5 after shift 6; the whole shop (~$1,135) takes ~13-15 shifts.
+- No exceptions in any shift (only the editor's own reload noise).
+
+### Burn smoke, the chef's ring, and a second pass on two sounds (October 2026)
+
+Asked: "add the smoke when something burns; make the player's yellow floor ring the same red as his clothes or
+remove it; the chopping doesn't sound like a knife hitting a board; the burnt sound makes me jump".
+
+- **Smoke** (`Scripts/Others/BurnSmoke.cs` on `<<<Controllers>>>/BurnSmoke`, built by step 7): the moment a bun or
+  patty burns (`Bun.SetCookedBun` / `Burger.SetCooked`, next to the Burnt sound) a charcoal puff of 20 soft
+  particles, then a thin wisp that follows the burnt thing for as long as it is on the stove or in the chef's
+  hands, and stops once it is binned, stacked, served or the pooled food is reused. Particles go charcoal ->
+  pale grey as they thin. Three things made the first versions invisible, all worth knowing for any VFX here:
+  - **A URP `Particles/Unlit` material made from code draws nothing in this project** (seen twice now). The
+    Hyper Casual FX materials' old `Mobile/Particles/Alpha Blended` shader does draw, so the smoke material is
+    **a copy of `Circles_AB.mat`** with our own texture.
+  - The pack's "circle" texture (`Circle02`) is a **thin ring**, not a blob: the smoke drew as faint rings.
+    `Graphics/Sprites/FX/smoke_puff.png` is a soft cloud of a few blobs (`Tools/FX/smoke_puff.py`).
+  - Started on the food, the smoke was **inside the range hood** over the pan and **inside the oven's box**.
+    It starts in front of the food toward the camera (0.55 m; 1.1 m from the oven, out of its door) and drifts
+    toward the camera as it rises. All dark, it read as a stain on the floor, hence the lightening.
+  Test VFX with real play (burn a patty), at timeScale 1: paused particles are not drawn.
+- **The ring under the chef is scarlet** (`CafeLookBuilder.Marker`, `ChefOutfit`; `PlayerMarker.mat`).
+- **Chopping**: four takes (`kitchen_chop_1..4`, picked at random per knife hit): a short crisp crunch of the
+  vegetable, then the board's dull knock - a 3 ms noise burst through five damped resonators (210-2600 Hz,
+  +-8 % per take) plus a low thump of the counter, no ringing tail. The first version was decaying pure sines
+  (310/690/1180 Hz) and sounded like a xylophone.
+- **Burnt** is a soft "fsss" now: it swells in over 0.18 s and dies away over ~0.7 s, low and breathy with a
+  little hiss on top, no transient, at volume 0.35 (was a 15 ms-attack "poof" with crackles at 0.6).
+
 ### Next ideas (not built yet)
 
 - Money earned while away (the waiter makes this honest now), so there is a reason to come back.
@@ -498,4 +650,4 @@ and a proper onboarding. Built in that order:
   e.g. "double patty, no onion"); a Mage asking for a specific burger.
 - More kitchen: an auto-chopper, a warming shelf that keeps a finished burger from going cold.
 - Group customers (a party of adventurers taking the Big Table together).
-- Juice: smoke puff when something burns, camera nudge on a 5★ serve, coin burst on rush x3.
+- Juice: camera nudge on a 5★ serve, coin burst on rush x3.

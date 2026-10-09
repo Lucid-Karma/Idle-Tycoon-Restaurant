@@ -1,16 +1,12 @@
-body { padding: 0; margin: 0 }
-#unity-container { position: absolute }
-#unity-container.unity-desktop { left: 50%; top: 50%; transform: translate(-50%, -50%) }
-#unity-container.unity-mobile { position: fixed; width: 100%; height: 100% }
-#unity-canvas { background: {{{ BACKGROUND_COLOR }}} }
-.unity-mobile #unity-canvas { width: 100%; height: 100% }
-#unity-loading-bar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none }
-#unity-logo { width: 154px; height: 130px; background: url('unity-logo-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
-#unity-progress-bar-empty { width: 141px; height: 18px; margin-top: 10px; margin-left: 6.5px; background: url('progress-bar-empty-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
-#unity-progress-bar-full { width: 0%; height: 18px; margin-top: 10px; background: url('progress-bar-full-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
-#unity-footer { position: relative }
-.unity-mobile #unity-footer { display: none }
-#unity-logo-title-footer { float:left; width: 102px; height: 38px; background: url('unity-logo-title-footer.png') no-repeat center }
-#unity-build-title { float: right; margin-right: 10px; line-height: 38px; font-family: arial; font-size: 18px }
-#unity-fullscreen-button { cursor:pointer; float: right; width: 38px; height: 38px; background: url('fullscreen-button.png') no-repeat center }
+html, body { width: 100%; height: 100%; padding: 0; margin: 0; overflow: hidden; background: {{{ BACKGROUND_COLOR }}} }
+/* The game opens at any window (or the portal's iframe) size, always 16:10 and centred (index.html sizes it). */
+#unity-container { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center }
+#unity-canvas { display: block; background: {{{ BACKGROUND_COLOR }}}; touch-action: none; outline: none }
+#unity-loading-bar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; text-align: center; font-family: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif; color: #FFF9F4 }
+#chibi-icon { display: block; width: min(30vmin, 132px); height: min(30vmin, 132px); margin: 0 auto; border-radius: 22%; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); animation: chibi-bob 1.6s ease-in-out infinite }
+@keyframes chibi-bob { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+#chibi-name { margin-top: 16px; font-size: min(5.5vmin, 22px); font-weight: 800; letter-spacing: .02em }
+#unity-progress-bar-empty { width: min(56vmin, 220px); height: 10px; margin: 14px auto 0; border-radius: 5px; background: rgba(255, 249, 244, .16); overflow: hidden }
+#unity-progress-bar-full { width: 0%; height: 100%; border-radius: 5px; background: #239FA4; transition: width .2s ease-out }
+#chibi-status { margin-top: 10px; font-size: min(3.6vmin, 13px); opacity: .7 }
 #unity-warning { position: absolute; left: 50%; top: 5%; transform: translate(-50%); background: white; padding: 10px; display: none }

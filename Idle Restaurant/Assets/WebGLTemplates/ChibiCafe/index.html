@@ -3,8 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | {{{ PRODUCT_NAME }}}</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <meta name="description" content="Stack fast. Serve faster. A cozy, chaotic burger cafe.">
+    <meta name="theme-color" content="{{{ BACKGROUND_COLOR }}}">
+    <link rel="icon" href="TemplateData/favicon.ico">
+    <link rel="apple-touch-icon" href="TemplateData/apple-touch-icon.png">
     <link rel="stylesheet" href="TemplateData/style.css">
 #if SHOW_DIAGNOSTICS
     <link rel="stylesheet" href="<<<TemplateData/diagnostics.css>>>">
@@ -12,23 +16,24 @@
 #endif
   </head>
   <body>
-    <div id="unity-container" class="unity-desktop">
+    <!-- Chibi Burger Cafe: the game opens at any window (or iframe) size, always at its own shape (16:10, the
+         shape it was made for): as large as fits, centred, the rest of the page in the game's background
+         colour. It follows the window when that changes size. No footer and no fullscreen button. -->
+    <div id="unity-container">
       <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
+      <!-- The loading screen is the game's own: its icon, its name, a pill progress bar in its teal. -->
       <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
+        <img id="chibi-icon" src="TemplateData/chibi-icon.png" alt="">
+        <div id="chibi-name">Chibi Burger Cafe</div>
         <div id="unity-progress-bar-empty">
           <div id="unity-progress-bar-full"></div>
         </div>
+        <div id="chibi-status">Warming up the kitchen...</div>
       </div>
       <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
 #if SHOW_DIAGNOSTICS
-        <img id="diagnostics-icon" src="TemplateData/webmemd-icon.png">
+      <img id="diagnostics-icon" src="TemplateData/webmemd-icon.png">
 #endif
-        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
-      </div>
     </div>
     <script>
       // Chibi Burger Cafe: frame limiter (battery). The game runs at most window.chibiMaxFps frames a
@@ -53,6 +58,17 @@
       })();
 
       var canvas = document.querySelector("#unity-canvas");
+
+      // Keep 16:10 whatever the window: the biggest 16:10 box that fits, centred.
+      var ASPECT = {{{ WIDTH }}} / {{{ HEIGHT }}};
+      function fitCanvas() {
+        var w = window.innerWidth, h = window.innerHeight;
+        if (w / h > ASPECT) w = Math.round(h * ASPECT); else h = Math.round(w / ASPECT);
+        canvas.style.width = w + "px";
+        canvas.style.height = h + "px";
+      }
+      fitCanvas();
+      window.addEventListener("resize", fitCanvas);
 
       // Shows a temporary message banner/ribbon for a few seconds, or
       // a permanent error message on top of the canvas if type=='error'.
@@ -124,15 +140,6 @@
       // expected to change.
 
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
-
         // Chibi Burger Cafe: phones report 2-3 device pixels per CSS pixel; rendering all of them
         // made phones hot. 1.5 keeps text and edges crisp at a fraction of the pixels.
         config.devicePixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -146,10 +153,6 @@
         canvas.after(diagnostics_icon);
 #endif
 
-      } else {
-        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
-        canvas.style.width = "{{{ WIDTH }}}px";
-        canvas.style.height = "{{{ HEIGHT }}}px";
       }
 
 #if BACKGROUND_FILENAME
@@ -162,6 +165,8 @@
       script.onload = () => {
         createUnityInstance(canvas, config, (progress) => {
           document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          // Downloading is most of the wait; the last stretch is the engine starting up.
+          if (progress >= 0.9) document.querySelector("#chibi-status").textContent = "Lighting the stove...";
               }).then((unityInstance) => {
                 document.querySelector("#unity-loading-bar").style.display = "none";
 #if SHOW_DIAGNOSTICS
@@ -169,9 +174,6 @@
                   unityDiagnostics.openDiagnosticsDiv(unityInstance.GetMetricsInfo);
                 };
 #endif
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
 
 #if DEVELOPMENT_PLAYER
                 // Unloading web content from DOM so that browser GC can run can be tricky to get right.
@@ -191,7 +193,7 @@
                 var quit = document.createElement("button");
                 quit.style = "margin-left: 5px; background-color: lightgray; border: none; padding: 5px; cursor: pointer";
                 quit.innerHTML = "Unload";
-                document.querySelector("#unity-build-title").appendChild(quit);
+                document.querySelector("#unity-container").appendChild(quit);
                 quit.onclick = () => {
                   // Quit Unity application execution
                   unityInstance.Quit().then(() => {
@@ -205,7 +207,10 @@
                 };
 #endif
               }).catch((message) => {
-                alert(message);
+                // A friendly card instead of the browser's alert box.
+                document.querySelector("#chibi-status").textContent = "The kitchen couldn't open. Please reload the page.";
+                document.querySelector("#unity-progress-bar-empty").style.display = "none";
+                console.error(message);
               });
             };
 

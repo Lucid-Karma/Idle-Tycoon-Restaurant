@@ -55,8 +55,10 @@ public class ScoreManager : Singleton<ScoreManager>
     // Waiting up to this share of their patience still counts as instant service.
     private const float SpeedGrace = 0.2f;
     public const int BasePay = 3, PerfectBonus = 2, MaxRushBonus = 3;
-    // Serve the next order within this many seconds to keep the rush streak going.
-    public const float RushWindow = 30f;
+    // Serve the next order within this many seconds to keep the rush streak going. 45, not 30: a careful
+    // player makes a Chef's Classic every ~35-40 s (measured with a play-test bot), so at 30 the streak - and
+    // its bonus and its "RUSH x2" - only ever happened to someone pipelining two burgers at once.
+    public const float RushWindow = 45f;
     #endregion
 
     #region Shift stats
@@ -85,7 +87,12 @@ public class ScoreManager : Singleton<ScoreManager>
     public OrderResult RateOrder(BurgerReview review, float waitedSeconds, float patience, CustomerKind kind = CustomerKind.Regular)
     {
         float speed01 = Speed01(waitedSeconds, patience);
-        float rating = QualityStars * review.Quality01 + SpeedStars * speed01;
+        // Stars are how happy this customer was: their own taste (a Barbarian loves a mess, a Mage only a
+        // perfect burger) and how fast it came. A customer who reacts with delight never leaves fewer than
+        // four, so what they say, what they pay and what they rate agree.
+        var mood = Customers.React(kind, review, speed01).mood;
+        float rating = QualityStars * Customers.Taste01(kind, review) + SpeedStars * speed01;
+        if (mood == Mood.Delighted) rating = Mathf.Max(rating, 4f);
 
         RushStreak = Time.time - lastServeTime <= RushWindow ? RushStreak + 1 : 1;
         lastServeTime = Time.time;
@@ -109,7 +116,7 @@ public class ScoreManager : Singleton<ScoreManager>
         LastOrder = new OrderResult
         {
             Review = review, Rating = rating, Speed01 = speed01, Earned = earned, Stars = stars,
-            Mood = Customers.React(kind, review, speed01).mood, RushStreak = RushStreak
+            Mood = mood, RushStreak = RushStreak
         };
 
         hostedCustomer++;

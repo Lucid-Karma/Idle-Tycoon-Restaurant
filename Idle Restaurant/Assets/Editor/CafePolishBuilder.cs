@@ -6,7 +6,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // Step 7 (re-runnable): sounds, the chef's slip, and the phone-battery settings that live in the scene.
-// - <<<Controllers>>>/Sfx: GameSfx with the cue → clip table below (Free UI Click Sound Effects Pack).
+// - <<<Controllers>>>/Sfx: GameSfx with the cue → clip table below (Free UI Click Sound Effects Pack, and the
+//   kitchen's own synthesised sounds in Graphics/Audio/Kitchen).
 // - PlayerAnim.controller: "Slip" trigger → Slip (fall on his back) → StandUp → Idle.
 // - The apron rides on the hips bone (it floated upright while the chef lay on the floor).
 // - UI: no pixel-perfect on the HUD canvas, and the parts that animate all the time get a canvas of their own,
@@ -33,14 +34,25 @@ public static partial class CafeGrowthBuilder
         (GameSfx.Cue.LevelUp, new[] { "../../../Project/[GAME]/Graphics/Audio/RewardedAdSound.mp3" }, 0.8f, 1f, 0f),
         (GameSfx.Cue.ArrowShot, new[] { "Metallic/SFX_UI_Click_Organic_Metallic_Thin_Select_1.wav" }, 0.55f, 0.8f, 0.05f),
         (GameSfx.Cue.ArrowHit, new[] { "Liquid/SFX_UI_Click_Organic_Liquid_Wooden_1.wav" }, 0.9f, 0.85f, 0.05f),
+        // The kitchen (no pack has these: synthesised, Graphics/Audio/Kitchen). Quiet: they happen all the time.
+        (GameSfx.Cue.Pickup, new[] { Kitchen + "kitchen_pickup.wav" }, 0.3f, 1f, 0.08f),
+        (GameSfx.Cue.PutDown, new[] { Kitchen + "kitchen_putdown.wav" }, 0.35f, 1f, 0.08f),
+        (GameSfx.Cue.Chop, new[] { Kitchen + "kitchen_chop_1.wav", Kitchen + "kitchen_chop_2.wav", Kitchen + "kitchen_chop_3.wav", Kitchen + "kitchen_chop_4.wav" }, 0.55f, 1f, 0.05f),
+        (GameSfx.Cue.Ready, new[] { Kitchen + "kitchen_ready.wav" }, 0.45f, 1f, 0f),
+        (GameSfx.Cue.Burnt, new[] { Kitchen + "kitchen_burnt.wav" }, 0.35f, 1f, 0.03f),   // soft: a louder puff made the user jump
+        (GameSfx.Cue.Trash, new[] { "Plastic/SFX_UI_Click_Organic_Plastic_Boxy_Negative_1.wav" }, 0.45f, 0.9f, 0.05f),
     };
+    const string Kitchen = "../../../Project/[GAME]/Graphics/Audio/Kitchen/";
+    const string SizzleLoop = Game + "Graphics/Audio/Kitchen/kitchen_sizzle_loop.wav";
 
     const string ArrowFbx = Game + "ThirdPartyPackages/KayKit_Adventurers_2.0_FREE/Assets/fbx(unity)/arrow_bow.fbx";
+    const string BowFbx = Game + "ThirdPartyPackages/KayKit_Adventurers_2.0_FREE/Assets/fbx(unity)/bow_withString.fbx";
 
     [MenuItem("Tools/Chibi Cafe/7 Sounds, Slip and Performance")]
     public static void Polish()
     {
         BuildSfx();
+        BuildBurnSmoke();
         BuildSlipAnimation();
         ApronOnHips();
         LighterCanvases();
@@ -51,6 +63,7 @@ public static partial class CafeGrowthBuilder
         // A Ranger shoots an arrow instead of throwing a tomato.
         var fight = new SerializedObject(Object.FindFirstObjectByType<FoodFight>());
         fight.FindProperty("arrowModel").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>(ArrowFbx);
+        fight.FindProperty("bowModel").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>(BowFbx);
         fight.ApplyModifiedPropertiesWithoutUndo();
         EditorSceneManager.MarkSceneDirty(GameObject.Find("<<<Controllers>>>").scene);
         Debug.Log("[CafeGrowth] sounds, slip and performance settings applied");
@@ -101,6 +114,33 @@ public static partial class CafeGrowthBuilder
             e.FindPropertyRelative("pitch").floatValue = pitch;
             e.FindPropertyRelative("pitchJitter").floatValue = jitter;
         }
+        so.FindProperty("sizzleLoop").objectReferenceValue = AssetDatabase.LoadAssetAtPath<AudioClip>(SizzleLoop) ?? throw new System.Exception("no clip " + SizzleLoop);
+        so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    // Smoke over a burnt bun or patty (BurnSmoke builds its particle systems at runtime from this material).
+    // A copy of the Hyper Casual FX particle material (its shader is the one that draws in this project: a
+    // URP Particles/Unlit material made from code drew nothing) with our own soft puff texture
+    // (Graphics/Sprites/FX/smoke_puff.png, Tools/FX/smoke_puff.py) instead of the pack's thin ring.
+    const string SmokeMaterialFrom = "Assets/Lana Studio/Hyper Casual FX/Materials/Circles_AB.mat";
+    const string SmokeTexture = Game + "Graphics/Sprites/FX/smoke_puff.png";
+    const string SmokeMaterial = Game + "Graphics/Materials/BurnSmoke.mat";
+
+    static void BuildBurnSmoke()
+    {
+        AssetDatabase.DeleteAsset(SmokeMaterial);
+        var mat = new Material(AssetDatabase.LoadAssetAtPath<Material>(SmokeMaterialFrom));
+        mat.SetTexture("_MainTex", AssetDatabase.LoadAssetAtPath<Texture2D>(SmokeTexture) ?? throw new System.Exception("no texture " + SmokeTexture));
+        AssetDatabase.CreateAsset(mat, SmokeMaterial);
+
+        var controllers = GameObject.Find("<<<Controllers>>>").transform;
+        var old = controllers.Find("BurnSmoke");
+        var go = old != null ? old.gameObject : new GameObject("BurnSmoke");
+        go.transform.SetParent(controllers, false);
+        var smoke = go.GetComponent<BurnSmoke>();
+        if (smoke == null) smoke = go.AddComponent<BurnSmoke>();
+        var so = new SerializedObject(smoke);
+        so.FindProperty("particleMaterial").objectReferenceValue = mat;
         so.ApplyModifiedPropertiesWithoutUndo();
     }
 

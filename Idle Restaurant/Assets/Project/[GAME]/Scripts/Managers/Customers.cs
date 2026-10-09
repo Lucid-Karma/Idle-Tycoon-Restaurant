@@ -71,6 +71,17 @@ public static class Customers
         _ => 0,
     };
 
+    // How much *this* customer liked the burger, 0..1: their quirk decides where they have one, the burger's
+    // own quality otherwise. This is what the quality stars are counted from (ScoreManager.RateOrder): it used
+    // to be the burger's quality alone, so a Barbarian who paid a fortune for a "GLORIOUS CHAOS" burger left
+    // two stars, and the money and the stars told the player opposite things.
+    public static float Taste01(CustomerKind kind, BurgerReview review) => kind switch
+    {
+        CustomerKind.Barbarian => review.IsChaos ? 1f : review.IsPerfect ? 0.6f : Mathf.Max(review.Quality01, 0.85f),
+        CustomerKind.Mage => review.IsPerfect ? 1f : review.Flaws >= 2 ? review.Quality01 * 0.8f : review.Quality01,
+        _ => review.Quality01,
+    };
+
     // What they say about the burger: their quirk speaks where it has an opinion, otherwise the burger's own line.
     public static (string line, Mood mood) React(CustomerKind kind, BurgerReview review, float speed01)
     {

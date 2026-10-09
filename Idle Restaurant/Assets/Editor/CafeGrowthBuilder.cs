@@ -326,13 +326,13 @@ public static partial class CafeGrowthBuilder
         // The terrace: the dining room spreads into the empty half of the floor it already has, with two
         // more tables, plants and a lamp. (Nothing is laid outside the baked walkable mesh - see below.)
         var terrace = Group(root, "Upgrade Terrace");
-        CloneTableInto(terrace, "table_round_A_small", new Vector3(0f, 0f, 8f));
-        CloneTableInto(terrace, "table_round_A_small (1)", new Vector3(-6f, 0f, -1f));
-        Place(Model(FurnFbx + "cactus_medium_A.fbx", furniture), terrace, new Vector3(8.4f, 1.2f, 21.2f), 20f, 1.7f);
-        Place(Model(FurnFbx + "cactus_small_A.fbx", furniture), terrace, new Vector3(14.6f, 1.2f, 20.4f), 0f, 1.7f);
-        Place(Model(FurnFbx + "lamp_standing.fbx", furniture), terrace, new Vector3(8.0f, 1.2f, 25.6f), 0f, 1.4f);
-        Place(Model(FurnFbx + "rug_oval_A.fbx", furniture), terrace, new Vector3(4.57f, 1.21f, 19.41f), 0f, 2.2f);
-        Place(Model(FurnFbx + "rug_oval_B.fbx", furniture), terrace, new Vector3(11.68f, 1.21f, 23.32f), 90f, 2.2f);
+        CloneTableInto(terrace, "table_round_A_small", TerraceRound);
+        CloneTableInto(terrace, "table_round_A_small (1)", TerracePair);
+        Place(Model(FurnFbx + "cactus_medium_A.fbx", furniture), terrace, TerraceCactus, 20f, 1.7f);
+        Place(Model(FurnFbx + "cactus_small_A.fbx", furniture), terrace, TerraceSmallCactus, 0f, 1.7f);
+        Place(Model(FurnFbx + "lamp_standing.fbx", furniture), terrace, TerraceLamp, 0f, 1.4f);
+        Place(Model(FurnFbx + "rug_oval_A.fbx", furniture), terrace, new Vector3(4.57f, 1.21f, 11.41f) + TerraceRound, 0f, 2.2f);
+        Place(Model(FurnFbx + "rug_oval_B.fbx", furniture), terrace, new Vector3(17.68f, 1.21f, 24.32f) + TerracePair, 90f, 2.2f);
 
         // The walkable meshes are the original bake (without any upgrade); bought furniture cuts its own hole.
         // (Baking with every upgrade in place left invisible obstacles and made the rugs raised walkable
@@ -419,6 +419,41 @@ public static partial class CafeGrowthBuilder
     // is pointed at the new service spot that matches the original's.
     static void CloneTable(Transform root, string name, string tableName, Vector3 offset) =>
         CloneTableInto(Group(root, name), tableName, offset);
+
+    // Where the terrace's two tables go, as offsets from the tables they are copies of, and its decoration.
+    // Everything has to stand on the *customers'* floor (the teal dining room: the bottom strip, z 8-15, and
+    // the column on the right, x 13-22): the first version put the terrace on the kitchen's pink floor, where
+    // the customers' navmesh doesn't reach - a customer walked as near to the chair as they could and sat
+    // down on the floor there - and the lamp stood right in front of the plates on the pass.
+    static readonly Vector3 TerraceRound = new Vector3(6.6f, 0f, 0f);      // round table: middle of the bottom strip
+    static readonly Vector3 TerracePair = new Vector3(-3.2f, 0f, 6.7f);    // table for two: top of the right column
+    static readonly Vector3 TerraceCactus = new Vector3(14.2f, 1.2f, 8.6f);
+    static readonly Vector3 TerraceSmallCactus = new Vector3(13.6f, 1.2f, 35.0f);
+    static readonly Vector3 TerraceLamp = new Vector3(19.0f, 1.2f, 35.2f);
+
+    // Moves the terrace already in the scene to where the builder now puts it, without rebuilding the
+    // upgrades (that rewrites the whole shop catalogue and its icons).
+    [MenuItem("Tools/Chibi Cafe/3b Move the Terrace")]
+    public static void MoveTerrace()
+    {
+        var terrace = GameObject.Find("Level").transform.Find("Upgrades/Upgrade Terrace");
+        var oldRound = new Vector3(4.57f, 0f, 19.41f);       // where the first version put the two tables
+        var oldPair = new Vector3(11.68f, 0f, 23.32f);
+        var newRound = new Vector3(4.57f, 0f, 11.41f) + TerraceRound;
+        var newPair = new Vector3(17.68f, 0f, 24.32f) + TerracePair;
+        float Flat(Transform t, Vector3 c) => Vector2.Distance(new Vector2(t.position.x, t.position.z), new Vector2(c.x, c.z));
+        foreach (Transform t in terrace)
+        {
+            if (t.name.StartsWith("cactus_medium")) t.position = TerraceCactus;
+            else if (t.name.StartsWith("cactus_small")) t.position = TerraceSmallCactus;
+            else if (t.name.StartsWith("lamp")) t.position = TerraceLamp;
+            else if (Flat(t, oldRound) < 3.2f) t.position += newRound - oldRound;
+            else if (Flat(t, oldPair) < 3.2f) t.position += newPair - oldPair;
+            else Debug.LogWarning("[CafeGrowth] terrace part left where it was: " + t.name);
+        }
+        EditorSceneManager.MarkSceneDirty(terrace.gameObject.scene);
+        Debug.Log("[CafeGrowth] moved the terrace into the dining room");
+    }
 
     // One upgrade can lay out more than one table (the terrace), so the group is passed in.
     static void CloneTableInto(Transform group, string tableName, Vector3 offset)

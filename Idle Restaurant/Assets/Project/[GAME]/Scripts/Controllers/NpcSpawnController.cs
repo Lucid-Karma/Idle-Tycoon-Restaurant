@@ -27,7 +27,15 @@ public class NpcSpawnController : MonoBehaviour
         EventManager.OnCustomerWent.RemoveListener(StartDelayedCreation);
     }
 
-    private void StartLevelCustomers() => StartCoroutine(CreateLevelCustomers());
+    // Once per shift: a second OnLevelStart in the same scene (it is a static event, also raised by Replay's
+    // auto-start) would send a second opening wave - six customers at once - and the walkouts that follow.
+    private bool waveSent;
+    private void StartLevelCustomers()
+    {
+        if (waveSent) return;
+        waveSent = true;
+        StartCoroutine(CreateLevelCustomers());
+    }
     private void StartDelayedCreation() => StartCoroutine(DelayedCreation());
 
     void Start()

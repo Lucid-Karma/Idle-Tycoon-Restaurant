@@ -118,14 +118,72 @@ public class PlayerFSM : MonoBehaviour
     // The UI check only gates new taps (MovePlayer), so the chef keeps walking while the pointer is over UI.
     void Update()
     {
+        Steer();
         currentState.UpdateState(this);
     }
 
     public void MovePlayer()
     {
+        // On a touch screen the stick sends taps itself, when the finger lifts without having dragged.
+        if (ChefStick.TouchDriven) return;
         if(Input.GetMouseButtonDown(0) && !PointerUtility.IsOverUI())
             HandleScreenTap(Input.mousePosition);
     }
+
+    #region Steering by hand
+    // WASD / arrow keys, or the invisible joystick on a phone (ChefStick). Steering forgets whatever a tap was
+    // sending him to: he goes where he is pointed, and nothing is used when he stops. Up on the stick is up the
+    // screen. Taps still work as before, in between.
+    private ChefStick stick;
+    public bool Steering { get; private set; }
+    [SerializeField] private float steerTurnSpeed = 14f;
+
+    private void Steer()
+    {
+        if (stick == null && (stick = GetComponent<ChefStick>()) == null) return;
+        Vector2 move = stick.Move;
+        bool wanted = move.sqrMagnitude > 0.0025f && stick.Playing && !IsStunned
+                      && executingState != ExecutingState.INTERACT && Time.timeScale > 0f;
+        if (wanted)
+        {
+            if (!Steering)
+            {
+                Steering = true;
+                ForgetTarget();
+            }
+            var camera = _playerCam.transform;
+            var ahead = Vector3.ProjectOnPlane(camera.forward, Vector3.up);
+            if (ahead.sqrMagnitude < 0.01f) ahead = Vector3.ProjectOnPlane(camera.up, Vector3.up);
+            ahead.Normalize();
+            var right = Vector3.Cross(Vector3.up, ahead);
+            var heading = right * move.x + ahead * move.y;
+
+            Agent.velocity = heading * Agent.speed;
+            if (heading.sqrMagnitude > 0.0001f)
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(heading), Time.deltaTime * steerTurnSpeed);
+            executingState = ExecutingState.RUN;
+        }
+        else if (Steering)
+        {
+            Steering = false;
+            Agent.velocity = Vector3.zero;
+            if (executingState == ExecutingState.RUN) executingState = ExecutingState.IDLE;
+        }
+    }
+
+    private void ForgetTarget()
+    {
+        spawnable = null;
+        placeable = null;
+        edible = null;
+        selectable = null;
+        bin = null;
+        approachTarget = null;
+        walkTarget = null;
+        hasApproach = false;
+        if (Agent.isOnNavMesh) Agent.ResetPath();
+    }
+    #endregion
 
     public void HandleScreenTap(Vector3 screenPosition)
     {
@@ -361,9 +419,18 @@ public class PlayerFSM : MonoBehaviour
     {
         stunnedUntil = Time.time + seconds;
         Agent.isStopped = true;
+        Agent.velocity = Vector3.zero;
+        // He stops dead: so do his legs (it used to keep playing the run on the spot until he moved on).
+        if (executingState == ExecutingState.RUN && !slipped)
+        {
+            splatted = true;
+            OnPlayerIdle.Invoke();
+        }
         CancelInvoke(nameof(Recover));
         Invoke(nameof(Recover), seconds);
     }
+
+    private bool splatted;
 
     // Only a running chef can slip (never mid-interaction: that animation ends the interaction).
     public bool IsRunning => executingState == ExecutingState.RUN && Agent.velocity.sqrMagnitude > 0.25f;
@@ -386,6 +453,11 @@ public class PlayerFSM : MonoBehaviour
     private void Recover()
     {
         Agent.isStopped = false;
+        if (splatted)
+        {
+            splatted = false;
+            if (executingState == ExecutingState.RUN) OnPlayerRun.Invoke();
+        }
         if (!slipped) return;
         slipped = false;
         // The animator was busy falling: back to running (if he still has somewhere to be) or standing.
@@ -492,6 +564,7 @@ public class PlayerFSM : MonoBehaviour
             place?.UseFood(currentFood);
             if(!place.IsSuitable(currentFood)) return;
             EventManager.OnFoodDropped.Invoke();
+            GameSfx.Play(GameSfx.Cue.PutDown);
 
             currentFood = null;
 
@@ -515,6 +588,7 @@ public class PlayerFSM : MonoBehaviour
             {
                 if (currentFood == null) return;
                 bin.Junk(currentFood);
+                GameSfx.Play(GameSfx.Cue.Trash);
                 currentFood = null;
                 isHolded = false;
             }
@@ -524,7 +598,7 @@ public class PlayerFSM : MonoBehaviour
 
     public void DoneWithPath()
     {
-        if (Agent.pathPending) return;
+        if (Steering || Agent.pathPending) return;
         if (Agent.remainingDistance <= Agent.stoppingDistance)
             executingState = ExecutingState.IDLE;
         else if (ReachedApproach())

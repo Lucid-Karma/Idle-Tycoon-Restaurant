@@ -423,6 +423,8 @@ public class Tutorial : MonoBehaviour
         if (held is Hamburger) return new Step { Target = Waiting(), Line = "Now carry it to a\n<b>hungry customer</b>." };
         if (held != null) return new Step { Target = Nearest<Bin>(), Line = "Hands full!\nBin that first." };
         var finished = FindObjectsByType<Plate>(FindObjectsSortMode.None).Select(p => p.FinishedBurger).FirstOrDefault(b => b != null);
+        // Handed over and being eaten: the card used to flick back to "pick it up" until they paid.
+        if (finished == null) return new Step { Target = null, Line = "Served! Let's see\nwhat they think..." };
         return new Step { Target = finished, Line = "A burger! <b>Pick it up</b>\nfrom the plate." };
     }
 

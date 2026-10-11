@@ -1,4 +1,6 @@
 html, body { width: 100%; height: 100%; padding: 0; margin: 0; overflow: hidden; background: {{{ BACKGROUND_COLOR }}} }
+/* No text selection, magnifier or long-press menu on touch screens (CrazyGames requirement; good anywhere). */
+body { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; -webkit-touch-callout: none }
 /* The game opens at any window (or the portal's iframe) size, always 16:10 and centred (index.html sizes it). */
 #unity-container { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center }
 #unity-canvas { display: block; background: {{{ BACKGROUND_COLOR }}}; touch-action: none; outline: none }

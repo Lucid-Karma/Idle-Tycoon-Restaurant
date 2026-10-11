@@ -103,6 +103,7 @@ public class CafeShop : MonoBehaviour
 
         Changed?.Invoke(upgrade);
         EventManager.OnScoreUpdate.Invoke();
+        GoogleAnalytics.Event("spend_virtual_currency", "item_name", upgrade.id, "value", upgrade.price, "virtual_currency_name", "coins");
         return true;
     }
 

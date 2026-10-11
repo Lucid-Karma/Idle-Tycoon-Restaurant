@@ -1,5 +1,4 @@
 using UnityEngine;
-//using CrazyGames;
 
 public class StartButton : MonoBehaviour
 {
@@ -7,6 +6,5 @@ public class StartButton : MonoBehaviour
     {
         EventManager.OnClick.Invoke();
         EventManager.OnLevelStart.Invoke();
-        //CrazySDK.Game.GameplayStart();
     }
 }

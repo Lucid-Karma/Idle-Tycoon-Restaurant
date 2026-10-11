@@ -103,6 +103,8 @@ public static class UISpriteBaker
             return Mathf.Max(Mathf.Min(body, Mathf.Min(shackle, legs)), -hole);
         }, 0, true);
 
+        BakeVideoIcon();
+
         // Title / poster effects: radiating burst behind the hero, speed streaks, sweat drops.
         // Rays fade out towards the rim, so the burst never shows an edge however it is sized.
         Bake("fx_sunburst", 512, p =>
@@ -144,6 +146,12 @@ public static class UISpriteBaker
         AssetDatabase.Refresh();
         Debug.Log("[UISpriteBaker] UI sprites baked to " + Dir);
     }
+
+    // "Watch a video" (rewarded ads, CrazyGames): a rounded screen with a play triangle cut out of it.
+    [MenuItem("Tools/Chibi UI/Bake Video Icon")]
+    public static void BakeVideoIcon() =>
+        Bake("icon_video", 128, p => Mathf.Max(RBox(p, new V(64, 64), new V(54, 42), 16),
+            -(Poly(p, new[] { new V(50, 40), new V(50, 88), new V(90, 64) }) - 3)), 0, true);
 
     static void Bake(string name, int size, Func<V, float> sdf, int border, bool mips, float soft = 0, Func<V, float> fade = null)
     {

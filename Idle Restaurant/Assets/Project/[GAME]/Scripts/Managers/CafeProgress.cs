@@ -4,11 +4,12 @@ using UnityEngine;
 
 // What the cafe keeps between shifts and sessions: the money in the till, the stars customers gave (they
 // raise the cafe level, which opens more of the shop and brings new kinds of customers) and what was
-// bought. Stored in PlayerPrefs; everything else starts fresh with each shift.
+// bought. Stored through GamePlatform (the player's CrazyGames account there, PlayerPrefs elsewhere);
+// everything else starts fresh with each shift.
 public static class CafeProgress
 {
     private const string CoinsKey = "Cafe.Coins", StarsKey = "Cafe.Stars", OwnedKey = "Cafe.Owned",
-                         HatKey = "Cafe.Hat", ShiftsKey = "Cafe.Shifts", TaughtKey = "Cafe.Taught";
+                         HatKey = "Cafe.Hat", ShiftsKey = "Cafe.Shifts", TaughtKey = "Cafe.Taught", SnackTipKey = "Cafe.SnackTip";
 
     // Total stars needed for level 1, 2, 3... Every served order gives its rounded rating (0-5 stars), so a
     // shift of 8 customers is worth about 20-35: level 2 after the first shift, the last level after ~10.
@@ -38,12 +39,12 @@ public static class CafeProgress
     {
         if (loaded) return;
         loaded = true;
-        coins = PlayerPrefs.GetInt(CoinsKey, 0);
-        stars = PlayerPrefs.GetInt(StarsKey, 0);
-        shifts = PlayerPrefs.GetInt(ShiftsKey, 0);
-        hat = PlayerPrefs.GetString(HatKey, "");
+        coins = GamePlatform.GetInt(CoinsKey, 0);
+        stars = GamePlatform.GetInt(StarsKey, 0);
+        shifts = GamePlatform.GetInt(ShiftsKey, 0);
+        hat = GamePlatform.GetString(HatKey, "");
         owned.Clear();
-        foreach (var id in PlayerPrefs.GetString(OwnedKey, "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var id in GamePlatform.GetString(OwnedKey, "").Split(',', StringSplitOptions.RemoveEmptyEntries))
             owned.Add(id);
     }
 
@@ -57,8 +58,15 @@ public static class CafeProgress
     // other things that have to survive closing the tab.
     public static bool Taught
     {
-        get => PlayerPrefs.GetInt(TaughtKey, 0) == 1;
-        set { PlayerPrefs.SetInt(TaughtKey, value ? 1 : 0); PlayerPrefs.Save(); }
+        get => GamePlatform.GetInt(TaughtKey, 0) == 1;
+        set { GamePlatform.SetInt(TaughtKey, value ? 1 : 0); GamePlatform.Flush(); }
+    }
+
+    // The snack toss is taught once, the first time a customer gets impatient (Tutorial.BeginSnackTip).
+    public static bool SnackTipShown
+    {
+        get => GamePlatform.GetInt(SnackTipKey, 0) == 1;
+        set { GamePlatform.SetInt(SnackTipKey, value ? 1 : 0); GamePlatform.Flush(); }
     }
 
     public static int LevelFor(int starCount)
@@ -85,7 +93,7 @@ public static class CafeProgress
         if (amount == 0) return;
         Load();
         coins = Mathf.Max(0, coins + amount);
-        PlayerPrefs.SetInt(CoinsKey, coins);
+        GamePlatform.SetInt(CoinsKey, coins);
         Save();
     }
 
@@ -103,7 +111,7 @@ public static class CafeProgress
         Load();
         int before = Level;
         stars += amount;
-        PlayerPrefs.SetInt(StarsKey, stars);
+        GamePlatform.SetInt(StarsKey, stars);
         Save();
         int after = Level;
         for (int level = before + 1; level <= after; level++) LeveledUp?.Invoke(level);
@@ -112,7 +120,7 @@ public static class CafeProgress
     public static void CountShift()
     {
         Load();
-        PlayerPrefs.SetInt(ShiftsKey, ++shifts);
+        GamePlatform.SetInt(ShiftsKey, ++shifts);
         Save();
     }
 
@@ -126,7 +134,7 @@ public static class CafeProgress
     {
         Load();
         if (!owned.Add(id)) return;
-        PlayerPrefs.SetString(OwnedKey, string.Join(",", owned));
+        GamePlatform.SetString(OwnedKey, string.Join(",", owned));
         Save();
     }
 
@@ -138,14 +146,14 @@ public static class CafeProgress
         {
             Load();
             hat = value ?? "";
-            PlayerPrefs.SetString(HatKey, hat);
+            GamePlatform.SetString(HatKey, hat);
             Save();
         }
     }
 
     private static void Save()
     {
-        PlayerPrefs.Save();
+        GamePlatform.Flush();
         Changed?.Invoke();
     }
 
@@ -153,8 +161,8 @@ public static class CafeProgress
     [UnityEditor.MenuItem("Tools/Chibi Cafe/Reset Cafe Progress")]
     public static void ResetAll()
     {
-        foreach (var key in new[] { CoinsKey, StarsKey, OwnedKey, HatKey, ShiftsKey, TaughtKey }) PlayerPrefs.DeleteKey(key);
-        PlayerPrefs.Save();
+        foreach (var key in new[] { CoinsKey, StarsKey, OwnedKey, HatKey, ShiftsKey, TaughtKey, SnackTipKey }) GamePlatform.DeleteKey(key);
+        GamePlatform.Flush();
         loaded = false;
         Changed?.Invoke();
     }

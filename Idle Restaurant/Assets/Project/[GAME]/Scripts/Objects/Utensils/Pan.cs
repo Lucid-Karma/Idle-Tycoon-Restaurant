@@ -20,7 +20,7 @@ public class Pan : CookingBase
                 case State.Cook:
                 // During the first-shift lesson a fried patty waits for as long as it takes: no burning.
                 if (Tutorial.Running && burger.Preparation == Prep.Good) break;
-                cookingTimer += Time.deltaTime;
+                cookingTimer += Time.deltaTime * Tutorial.CookSpeed;
                 if (cookingTimer > maxCookingTime)
                 {
                     if(!burger.isOver)

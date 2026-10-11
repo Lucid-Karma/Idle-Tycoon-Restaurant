@@ -499,6 +499,19 @@ and a proper onboarding. Built in that order:
   (it read as bolted on). The tip was shortened to "Pink pulse = use it next." to make room, and the
   snack hint it used to carry moved into the "Stack the burger" step.
 
+- **Second version of the lesson (2026-10-11).** CrazyGames showed 4.5 min average play time and the user
+  suspected players quit inside the lesson because they do not read. Changed: no hello card (the first line is
+  the first action) and the goodbye leaves by itself after 3 s, so nothing waits for a tap; every line is 2-4
+  words with the key word bold ("Tap the **buns**!", "Into the **oven**!", "**Chop** it!"); the stack lines
+  carry a progress count "(3/6)" in berry; baking and frying run at 2x while the lesson runs
+  (`Tutorial.CookSpeed`, used by `Oven`, `Pan` and `CookingProgressBar`); the snack toss is **out of the
+  lesson** and is now a one-time tip (`BeginSnackTip`, `CafeProgress.SnackTipShown` / `Cafe.SnackTip`) the first
+  time, after the lesson, a customer who can take a snack has used half their patience: same card and arrow,
+  no freezing (`Tutorial.Running` is false during it), ends on a toss or after 20 s. Each beat sends
+  `tutorial_step` (step, step_name) and the tip `snack_tip` (tossed / timeout) to Google Analytics, so the
+  funnel shows the exact beat where players leave. Played through by `follow.sh` (arrow-follower) to the
+  finale; tip shown and ended by a real toss.
+
 ### Moving the chef by hand, and a game that fits any frame
 
 - **WASD / arrow keys on a computer, an invisible joystick on a phone** (`ChefStick` on the Player,
@@ -656,9 +669,76 @@ invented characters). Built from the game's own models, not painted:
 - `Tools/Covers/compose_covers.py <parts> <out>`: pink gradient + light sunburst + streaks, the cafe floating on a
   soft shadow, ingredients with drop shadows, the title logo (`GameTitle.png`); the portrait puts the chef with his
   Chaos Burger (`keyart_rush.png`) in front. Supersampled 2x. Re-run it after any change to the cafe or the chef.
+- **Second version (2026-10-11), the current covers.** The first (cafe diorama on soft pink) got 1.1% click-through
+  on CrazyGames (bottom 20%; top 20% is ~4%): beside the Cooking/Simulation thumbnails (Papa's etc.: saturated warm
+  colours, a big face, a huge title) it was pale and nothing read at tile size. Now: a big hero in front of a yellow
+  comic starburst on a saturated teal background (no neighbour uses teal), the game's pink/white checker floor, the
+  logo as large as fits with a navy outline (GameTitle.png is only 512 px: upscaled 4x, alpha re-sharpened), a few
+  big ingredients; the landscape keeps the cafe diorama under the title ("restaurant game" at a glance).
+  The hero is `Assets/Editor/HeroArtRenderer.cs` (`Render(path, clip, time, yaw, size)` / `Sheet(dir, size)` via
+  scall): the chef facing the player, grin mouth, fist up (`Spellcast_Raise` 0.5, yaw 200), a tall proper burger
+  (two patties, cheese, lettuce, tomato) 1.55x life size on his head and a whole tomato bouncing off. Output
+  `ChibiCovers/parts/hero.png` (and `hero_balance.png`, arms out). The first covers and videos are in
+  `ChibiCovers/v1/`; the preview videos were re-cut to open on the new covers.
 - Staging the cafe needs the real thing running: a person-speed bot (tap by tap) built two burgers while customers
   seated; a bridge-driven script was far too slow (customers walked out). Patience was held at zero while staging.
   The save was restored afterwards.
+
+### CrazyGames (October 2026)
+
+Asked: publish on CrazyGames, do what docs.crazygames.com requires, earn from ads. Requirements read and met:
+- **CrazyGames Unity SDK 5.33** in `Assets/CrazySDK` + `Assets/Plugins/crazySDK.jslib` (downloaded from
+  sdk.crazygames.com, demo scenes left out). Its sitelock freezes the game on unknown domains: `beyzosh.com`,
+  `www.beyzosh.com`, `games.beyzosh.com` are whitelisted in `CrazySDK/Resources/CrazyGamesSettings` (re-importing
+  the SDK resets that list - add them back). On a whitelisted domain `CrazySDK.IsAvailable` is false.
+- **`GamePlatform`** (Scripts/Managers) is the only code that talks to the SDK: saves (Data module there, PlayerPrefs
+  elsewhere - same keys, and in the editor the Data module *is* PlayerPrefs), gameplay start/stop, happy time, ads.
+  **`Scenes/Boot.unity` is first in the build**: `Boot` starts the SDK and only then loads GameScene, because the
+  cafe's save must not be read before the Data module is ready (gives up after 6 s and plays on local saves).
+  `PlatformSession` (DontDestroyOnLoad) reports gameplay start/stop from one honest signal: a shift running with
+  time not paused (shop, help, result card and ads all pause it); a new cafe level is `HappyTime`.
+- **Ads**, per the ad rules: a **midgame** video on "Play again" (`RestartButton`; the card is blocked while it is up),
+  at most one per 8 minutes of play (`GamePlatform.MidgameGap`; never in the first shift) - CrazyGames' advice for
+  idle/tycoon games is to use forced ads "very sparingly". A **rewarded** "Double it" button on the result card
+  (`UIRewardedBonus`, built by step 11, video icon `icon_video`): pays the shift's earnings again only on a finished
+  ad; then rests 6 minutes; "No video right now" / "Ad blocker on" on failure; hidden for the session if ads are off
+  (Basic Launch); a player who watched it gets no midgame on the same transition. No banners.
+- **Build**: Tools/Chibi Cafe/Build for CrazyGames (`CrazyGamesBuild`): 16:9 canvas (CrazyGames' frame) instead of
+  the beyzosh 16:10, Brotli, no fallback, clean, release; everything restored afterwards. Upload every file in the
+  output folder. The WebGL template disables text selection / long-press (CrazyGames mobile rule).
+- **Covers and preview videos**: `Desktop\ChibiCovers`. Videos (16.7 s, silent, opening on the cover) are cut from
+  the trailer shots by `Assets/Editor/PreviewVideoMaker.cs` (play mode; VideoPlayer decode + MediaEncoder, no ffmpeg
+  on this machine) from `ChibiCoversideo\cut_*.txt`.
+- **Size** (CrazyGames: first download <= 50 MB, <= 20 MB to be on the mobile home page): 24.2 -> **16.3 MB**
+  (data 10.5 + wasm 6.3 + loader/framework 0.1; 11 files, 17.05 MB with the template's icons) by
+  `Tools/Chibi Cafe/12 Shrink Textures for Web` (`WebSizeTrimmer`, re-runnable) and the build menu's release
+  recipe. In order of what it saved: lightmap `light.exr` 1024->512 (HDR, nearly incompressible: the heaviest
+  thing in the build), directional lightmaps 256, shadowmasks 512, 13 KayKit colour palettes 1024->256 (swatch
+  grids), neon-sign metallic map 2048->64, particle soft circle 1000->128, FBX mesh compression Medium, the
+  farewell panel's two pictures 32 px in WebGL (never shown on the web: Exit is hidden), Unity's splash logo
+  dropped; and CrazyGames' own release settings (IL2CPP OptimizeSize + wasm "Disk Size with LTO": wasm 8.1 -> 6.3 MB).
+  Checked by screenshot diff against the original (mean difference 2.4/255, all of it animation). **Not done:** URP
+  carries ten film-grain textures (2.5 MB) that no volume uses; emptying the list in `UniversalRenderPipelineGlobalSettings`
+  through a SerializedObject did not persist, and saving that asset rewrites `m_RuntimeSettings` - left alone.
+  Gotcha found on the way: an NPOT texture (e.g. 455x1024 key art, 1000x1000) is stored uncompressed RGBA32 whatever
+  the importer says - `keyart_rush.png` (1.8 MB) and the sprites like it are the next candidates (pad to POT).
+  The LTO build takes ~35 min; a clean build is required (never an incremental one).
+- At submission: tick **Progress Save** (the Data module is off otherwise), orientation landscape, Unity build.
+- Wallet amount now shrinks to fit (it ran under the cart button past $999).
+
+#### Google Analytics (2026-10-11, CrazyGames build only)
+
+GA4 property "Chibi Burger Cafe - CrazyGames", measurement id `G-F01FFEBQRP` (`Scripts/Managers/GoogleAnalytics.cs`),
+browser side `Plugins/WebGL/ChibiAnalytics.jslib` (loads gtag.js from the game, so no template change). Started by
+`Boot` only when `GamePlatform.IsCrazyGames`; off on beyzosh, in the editor and on localhost (`?ga_test=1` turns it on
+locally in debug mode -> GA DebugView). Ad features off (ad_* consent denied, no Google signals); EEA/UK/CH get
+analytics_storage denied (no cookies, cookieless pings) since the game has no consent banner; cookie
+`SameSite=None;Secure` for the iframe. Events (GA4 recommended names): `game_ready`, `tutorial_begin` /
+`tutorial_complete`, `level_start` / `level_end` (one shift; stars, earned, perfect, chaos, walkouts, best_streak),
+`level_up` (cafe level), `spend_virtual_currency` (shop), `ad_midgame` / `ad_rewarded` (outcome),
+`tutorial_step` (step, step_name), `snack_tip` (outcome). Sent from
+`PlatformSession`, `Tutorial`, `CafeShop`, `GamePlatform`. Editor check: `GoogleAnalytics.EditorLog = true` logs
+"[GA] ..." lines. Custom parameters only show in GA reports after being registered as custom dimensions/metrics.
 
 ### Next ideas (not built yet)
 

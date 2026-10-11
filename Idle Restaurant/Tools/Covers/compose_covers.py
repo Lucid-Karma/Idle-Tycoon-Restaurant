@@ -1,9 +1,16 @@
-"""Lays out the Chibi Burger Cafe store covers from renders of the game's own models (see CoverRenderer.cs):
-  parts/cafe.png            the cafe as the game camera sees it (transparent background)
+"""Lays out the Chibi Burger Cafe store covers from renders of the game's own models:
+  parts/hero.png            the chef, grinning, a giant burger on his head (HeroArtRenderer.cs)
+  parts/cafe.png            the cafe as the game camera sees it (CoverRenderer.RenderCafe)
   parts/<food>.png          single ingredients (CoverRenderer.RenderFood)
-  GameTitle.png / keyart_rush.png   the logo and the chef with his Chaos Burger (already in the project)
+  GameTitle.png             the logo (already in the project)
 The only text on a cover is the logo. usage: python compose_covers.py <parts dir> <out dir>
-Needs Pillow + numpy."""
+Needs Pillow + numpy.
+
+Second version. The first covers (the cafe as a small diorama on soft pink) sat at 1.1% click-through on
+CrazyGames: next to the Cooking/Simulation thumbnails - saturated, warm reds and yellows, a big face, a huge
+title - they were pale and nothing in them read at tile size. Now: one big hero (a face and a burger read at any
+size), the title as large as the frame allows with a dark outline, and a teal background with a yellow burst,
+which none of the warm-coloured neighbours use. The pink and white checker floor is the game's own kitchen."""
 import math, os, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -11,18 +18,16 @@ from PIL import Image, ImageDraw, ImageFilter
 PARTS, OUT = sys.argv[1], sys.argv[2]
 SPRITES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Assets", "Project", "[GAME]", "Graphics", "Sprites")
 SS = 2  # supersampling
-PINK_TOP, PINK_BOT = (253, 204, 220), (246, 172, 199)
-INK_SHADOW = (170, 70, 110)
+TEAL_IN, TEAL_OUT = (64, 214, 204), (8, 104, 112)
+YELLOW, YELLOW_IN = (255, 200, 60), (255, 236, 150)
+FLOOR_PINK, FLOOR_WHITE = (246, 160, 188), (255, 247, 242)
+INK = (16, 38, 58)
 
 
-def load_image(im):
+def crop_alpha(im):
     a = np.array(im)[:, :, 3]
     ys, xs = np.where(a > 8)
     return im.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
-
-
-def load(path):
-    return load_image(Image.open(path).convert("RGBA"))
 
 
 def unhaze(im):
@@ -44,8 +49,7 @@ def unhaze(im):
 
 
 def part(name):
-    im = Image.open(os.path.join(PARTS, name + ".png")).convert("RGBA")
-    return load_image(unhaze(im))
+    return crop_alpha(unhaze(Image.open(os.path.join(PARTS, name + ".png")).convert("RGBA")))
 
 
 def fit(im, width=None, height=None):
@@ -53,53 +57,120 @@ def fit(im, width=None, height=None):
         height = round(im.height * width / im.width)
     else:
         width = round(im.width * height / im.height)
-    return im.resize((width, height), Image.LANCZOS)
+    return im.resize((max(1, width), max(1, height)), Image.LANCZOS)
 
 
-def background(w, h, cx, cy, rays=18):
-    """Soft pink gradient, a light sunburst from (cx, cy), a glow behind the subject."""
-    t = np.linspace(0, 1, h)[:, None, None]
-    base = np.array(PINK_TOP) * (1 - t) + np.array(PINK_BOT) * t
-    img = Image.fromarray(np.repeat(base, w, axis=1).astype(np.uint8), "RGB").convert("RGBA")
+def radial(w, h, cx, cy, inner, outer, reach):
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    t = np.clip(np.hypot(xx - cx, yy - cy) / reach, 0, 1)[:, :, None] ** 1.3
+    rgb = np.array(inner) * (1 - t) + np.array(outer) * t
+    return Image.fromarray(rgb.astype(np.uint8), "RGB").convert("RGBA")
+
+
+def rays(canvas, cx, cy, count, color, alpha, turn=0.0):
+    w, h = canvas.size
     layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     R = math.hypot(w, h)
-    for i in range(rays):
-        a0 = (i * 2) * math.pi / rays + 0.12
-        a1 = a0 + math.pi / rays
-        d.polygon([(cx, cy), (cx + R * math.cos(a0), cy + R * math.sin(a0)), (cx + R * math.cos(a1), cy + R * math.sin(a1))], fill=(255, 246, 249, 34))
-    img.alpha_composite(layer.filter(ImageFilter.GaussianBlur(1.2 * SS)))
-    glow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).ellipse((cx - w * 0.5, cy - h * 0.42, cx + w * 0.5, cy + h * 0.42), fill=(255, 240, 245, 130))
-    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(w * 0.09)))
-    return img
+    for i in range(count):
+        a0 = (i * 2) * math.pi / count + turn
+        a1 = a0 + math.pi / count
+        d.polygon([(cx, cy), (cx + R * math.cos(a0), cy + R * math.sin(a0)), (cx + R * math.cos(a1), cy + R * math.sin(a1))], fill=color + (alpha,))
+    canvas.alpha_composite(layer.filter(ImageFilter.GaussianBlur(1.0 * SS)))
 
 
-def streak(canvas, x, y, length, angle, width=14 * SS, alpha=235):
+def burst(canvas, cx, cy, r, points=14, inner=0.80):
+    """A comic-book starburst in yellow, lighter towards the middle, with a dark outline."""
+    w, h = canvas.size
+    pts = []
+    for i in range(points * 2):
+        a = i * math.pi / points - math.pi / 2
+        rr = r if i % 2 == 0 else r * inner
+        pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+    shadow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).polygon([(x + r * 0.03, y + r * 0.05) for x, y in pts], fill=INK + (70,))
+    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(r * 0.04)))
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).polygon(pts, fill=255)
+    fill = radial(w, h, cx, cy, YELLOW_IN, YELLOW, r)
+    outline = Image.new("RGBA", (w, h), INK + (255,))
+    grown = mask.filter(ImageFilter.MaxFilter(int(r * 0.022) * 2 + 1))
+    canvas.paste(outline, (0, 0), grown)
+    canvas.paste(fill, (0, 0), mask)
+
+
+def floor(canvas, horizon, top, cx, tile, tilt=0.0):
+    """The kitchen's pink and white checker floor, in perspective from `top` down, fading out towards the top."""
+    w, h = canvas.size
+    ys, xs = np.mgrid[top:h, 0:w].astype(np.float32)
+    depth = tile * 6.0 / np.maximum(ys - horizon, 1.0)          # distance into the picture
+    wx = (xs - cx) * depth / tile * 0.9
+    wz = depth * 9.0
+    c, s = math.cos(tilt), math.sin(tilt)
+    u, v = wx * c - wz * s, wx * s + wz * c
+    check = ((np.floor(u) + np.floor(v)) % 2)[:, :, None]
+    rgb = np.array(FLOOR_PINK) * check + np.array(FLOOR_WHITE) * (1 - check)
+    fade = np.clip((ys - top) / (h - top) * 2.2, 0, 1)
+    img = Image.fromarray(np.dstack([rgb, (fade * 255)]).astype(np.uint8), "RGBA")
+    # A soft teal line where the floor meets the wall would be hard; a gentle shade near the top of the floor instead.
+    shade = np.clip(1 - (ys - top) / (h - top) * 3, 0, 1) * 0.18
+    arr = np.asarray(img).astype(np.float32)
+    arr[:, :, :3] *= (1 - shade)[:, :, None]
+    canvas.alpha_composite(Image.fromarray(arr.astype(np.uint8), "RGBA"), (0, top))
+
+
+def drop_shadow(canvas, im, x, y, offset, blur, alpha=0.45, color=INK):
+    a = im.split()[3].point(lambda v: int(v * alpha))
+    sh = Image.new("RGBA", im.size, color + (0,))
+    sh.putalpha(a)
+    pad = int(blur * 3)
+    big = Image.new("RGBA", (im.width + pad * 2, im.height + pad * 2), (0, 0, 0, 0))
+    big.paste(sh, (pad, pad))
+    canvas.alpha_composite(big.filter(ImageFilter.GaussianBlur(blur)), (int(x - pad + offset[0]), int(y - pad + offset[1])))
+
+
+def outlined(im, px, color=INK):
+    """`im` with a solid outline `px` wide around its alpha (sticker style)."""
+    pad = px + 2
+    big = Image.new("RGBA", (im.width + pad * 2, im.height + pad * 2), (0, 0, 0, 0))
+    big.paste(im, (pad, pad))
+    a = big.split()[3]
+    grown = a
+    step = 0
+    while step < px:                       # MaxFilter sizes are limited; grow in steps
+        k = min(px - step, 6)
+        grown = grown.filter(ImageFilter.MaxFilter(k * 2 + 1))
+        step += k
+    grown = grown.filter(ImageFilter.GaussianBlur(0.8)).point(lambda v: 255 if v > 110 else int(v * 2.3))
+    out = Image.new("RGBA", big.size, color + (0,))
+    out.putalpha(grown)
+    out.alpha_composite(big)
+    return out
+
+
+def hero(canvas, cx, bottom, height, name="hero"):
+    """cx is where his body stands; the picture also holds the tomato flying off to his left (screen right)."""
+    im = fit(part(name), height=int(height * SS))
+    x, y = cx * SS - im.width * 0.40, bottom * SS - im.height
+    fw = im.width * 0.62
+    # Contact shadow on the floor under his feet.
+    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    ImageDraw.Draw(sh).ellipse((cx * SS - fw / 2, bottom * SS - fw * 0.10, cx * SS + fw / 2, bottom * SS + fw * 0.08), fill=INK + (110,))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(10 * SS)))
+    drop_shadow(canvas, im, x, y, (14 * SS, 10 * SS), 14 * SS, alpha=0.30)
+    canvas.alpha_composite(im, (int(x), int(y)))
+    return im, x, y
+
+
+def streak(canvas, x, y, length, angle, width=12, alpha=230):
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     dx, dy = math.cos(math.radians(angle)) * length / 2, math.sin(math.radians(angle)) * length / 2
-    d.line((x - dx, y - dy, x + dx, y + dy), fill=(255, 255, 255, alpha), width=width)
+    d.line((x - dx, y - dy, x + dx, y + dy), fill=(255, 255, 255, alpha), width=int(width))
     r = width / 2
     for px, py in ((x - dx, y - dy), (x + dx, y + dy)):
         d.ellipse((px - r, py - r, px + r, py + r), fill=(255, 255, 255, alpha))
     canvas.alpha_composite(layer)
-
-
-def paste(canvas, im, x, y, rot=0, shadow=0.38, lift=18, blur=16):
-    """Paste `im` with its top-left near (x, y), rotated, with a soft drop shadow on the pink."""
-    if rot:
-        im = im.rotate(rot, resample=Image.BICUBIC, expand=True)
-    if shadow:
-        a = im.split()[3].point(lambda v: int(v * shadow))
-        sh = Image.new("RGBA", im.size, INK_SHADOW + (0,))
-        sh.putalpha(a)
-        pad = blur * 3
-        big = Image.new("RGBA", (im.width + pad * 2, im.height + pad * 2), (0, 0, 0, 0))
-        big.paste(sh, (pad, pad))
-        big = big.filter(ImageFilter.GaussianBlur(blur))
-        canvas.alpha_composite(big, (int(x - pad), int(y - pad + lift)))
-    canvas.alpha_composite(im, (int(x), int(y)))
 
 
 def foods(canvas, spec):
@@ -107,26 +178,35 @@ def foods(canvas, spec):
         im = fit(part(name), width=int(width * SS))
         if rot:
             im = im.rotate(rot, resample=Image.BICUBIC, expand=True)
-        paste(canvas, im, cx * SS - im.width / 2, cy * SS - im.height / 2, 0, lift=14 * SS, blur=10 * SS)
+        x, y = cx * SS - im.width / 2, cy * SS - im.height / 2
+        drop_shadow(canvas, im, x, y, (8 * SS, 12 * SS), 8 * SS, alpha=0.35)
+        canvas.alpha_composite(im, (int(x), int(y)))
 
 
-def logo(canvas, cx, top, width, rot=-2.5):
-    im = fit(load(os.path.join(SPRITES, "GameTitle.png")), width=int(width * SS))
-    paste(canvas, im, cx * SS - im.width / 2, top * SS, rot, shadow=0.35, lift=8 * SS, blur=8 * SS)
+_logo = None
 
 
-def cafe_with_shadow(canvas, width, cx, top):
-    """The diorama floats: a soft shadow under it, offset down, like the title screen's chef."""
-    cafe = fit(part("cafe"), width=int(width * SS))
-    x = cx * SS - cafe.width / 2
-    y = top * SS
-    sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ImageDraw.Draw(sh).polygon([
-        (x + cafe.width * 0.02, y + cafe.height * 0.74), (x + cafe.width * 0.55, y + cafe.height * 1.04),
-        (x + cafe.width * 0.98, y + cafe.height * 0.78), (x + cafe.width * 0.48, y + cafe.height * 0.50)], fill=INK_SHADOW + (95,))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(26 * SS)))
-    canvas.alpha_composite(cafe, (int(x), int(y)))
-    return cafe
+def logo_art():
+    """GameTitle.png is 512 px: scaled up 4x and its alpha re-sharpened (the letters are flat shapes), then given
+    a thick ink outline so the pink and white title holds on any background."""
+    global _logo
+    if _logo is None:
+        im = crop_alpha(Image.open(os.path.join(SPRITES, "GameTitle.png")).convert("RGBA"))
+        im = im.resize((im.width * 4, im.height * 4), Image.LANCZOS)
+        r, g, b, a = im.split()
+        a = a.point(lambda v: 0 if v < 70 else 255 if v > 185 else int((v - 70) / 115 * 255))
+        im = Image.merge("RGBA", (r, g, b, a))
+        _logo = outlined(im, 22)
+    return _logo
+
+
+def logo(canvas, cx, top, width, rot=-3.0):
+    im = fit(logo_art(), width=int(width * SS))
+    if rot:
+        im = im.rotate(rot, resample=Image.BICUBIC, expand=True)
+    x, y = cx * SS - im.width / 2, top * SS
+    drop_shadow(canvas, im, x, y, (0, 12 * SS), 10 * SS, alpha=0.55)
+    canvas.alpha_composite(im, (int(x), int(y)))
 
 
 def save(canvas, name, size):
@@ -138,45 +218,61 @@ def save(canvas, name, size):
 
 def landscape():
     W, H = 1920, 1080
-    c = background(W * SS, H * SS, int(W * 0.40 * SS), int(H * 0.55 * SS))
-    for x, y, l, a in [(52, 600, 100, -28), (1010, 1030, 90, -30), (1885, 420, 80, -28), (960, 40, 70, -30), (1330, 1035, 70, -28)]:
-        streak(c, x * SS, y * SS, l * SS, a)
-    foods(c, [("lettuce", 95, 255, 190, -15), ("cheese", 770, 85, 250, -18), ("bun", 330, 100, 260, 10),
-              ("tomatoSlice", 120, 940, 230, 8), ("tomatoSlice", 1580, 975, 230, -10), ("patty", 1790, 720, 240, 8),
-              ("onionSlice", 1620, 575, 140, -12), ("bottomBun", 1850, 965, 190, 14)])
-    cafe_with_shadow(c, 1430, 735, 268)
-    logo(c, 1500, 40, 700)
+    hx = 560
+    c = radial(W * SS, H * SS, hx * SS, 430 * SS, TEAL_IN, TEAL_OUT, 1500 * SS)
+    rays(c, hx * SS, 430 * SS, 20, (255, 255, 255), 26, 0.1)
+    floor(c, 560 * SS, 800 * SS, hx * SS, 80 * SS, tilt=0.35)
+    burst(c, hx * SS, 470 * SS, 470 * SS, points=16)
+    for x, y, l, a in [(130, 210, 110, -30), (1010, 150, 90, -28), (1050, 860, 100, -30), (95, 760, 80, -28)]:
+        streak(c, x * SS, y * SS, l * SS, a, width=13 * SS)
+    foods(c, [("cheese", 150, 300, 200, -20), ("lettuce", 930, 760, 150, 25), ("tomatoSlice", 140, 610, 180, 12),
+              ("onionSlice", 975, 560, 120, -15)])
+    hero(c, hx, 1050, 1010)
+    logo(c, 1430, 120, 900)
+    # The cafe the chef runs, under the title: says "restaurant game" in a glance.
+    cafe = fit(part("cafe"), width=int(820 * SS))
+    cx, cy = 1440 * SS - cafe.width / 2, 545 * SS
+    drop_shadow(c, cafe, cx, cy, (0, 22 * SS), 18 * SS, alpha=0.45)
+    c.alpha_composite(cafe, (int(cx), int(cy)))
     save(c, "chibi-burger-cafe_cover_landscape_1920x1080.png", (W, H))
 
 
 def square():
     W = H = 800
-    c = background(W * SS, H * SS, int(W * 0.5 * SS), int(H * 0.62 * SS), rays=16)
-    for x, y, l, a in [(40, 470, 70, -28), (760, 560, 80, -30), (330, 770, 60, -30), (610, 28, 60, -28)]:
-        streak(c, x * SS, y * SS, l * SS, a, width=10 * SS)
-    foods(c, [("bun", 85, 175, 125, 12), ("cheese", 735, 170, 125, -16), ("lettuce", 725, 345, 85, 18),
-              ("tomatoSlice", 82, 715, 125, 8), ("patty", 722, 748, 125, -8)])
-    cafe_with_shadow(c, 790, 400, 335)
-    logo(c, 400, 18, 540)
+    hx = 400
+    c = radial(W * SS, H * SS, hx * SS, 470 * SS, TEAL_IN, TEAL_OUT, 700 * SS)
+    rays(c, hx * SS, 470 * SS, 18, (255, 255, 255), 26, 0.1)
+    floor(c, 520 * SS, 640 * SS, hx * SS, 46 * SS, tilt=0.35)
+    burst(c, hx * SS, 530 * SS, 275 * SS, points=14)
+    for x, y, l, a in [(60, 330, 70, -30), (745, 400, 70, -28), (700, 700, 60, -30)]:
+        streak(c, x * SS, y * SS, l * SS, a, width=9 * SS)
+    foods(c, [("cheese", 110, 420, 125, -20), ("lettuce", 715, 380, 105, 25), ("tomatoSlice", 690, 600, 120, 12),
+              ("onionSlice", 110, 640, 95, -15)])
+    hero(c, hx, 792, 480)
+    logo(c, 400, 12, 600)
     save(c, "chibi-burger-cafe_cover_square_800x800.png", (W, H))
 
 
 def portrait():
     W, H = 800, 1200
-    c = background(W * SS, H * SS, int(W * 0.5 * SS), int(H * 0.64 * SS), rays=16)
-    for x, y, l, a in [(45, 500, 90, -28), (748, 470, 90, -30), (60, 900, 80, -30), (300, 1175, 80, -28)]:
-        streak(c, x * SS, y * SS, l * SS, a, width=11 * SS)
-    cafe_with_shadow(c, 810, 400, 745)
-    chef = fit(load(os.path.join(SPRITES, "KeyArt", "keyart_rush.png")), height=int(840 * SS))
-    paste(c, chef, 405 * SS, 345 * SS, 0, shadow=0.35, lift=14 * SS, blur=12 * SS)
-    foods(c, [("bun", 120, 410, 140, 10), ("cheese", 700, 395, 120, -16), ("lettuce", 100, 585, 100, 18),
-              ("onionSlice", 215, 520, 100, -10), ("tomatoSlice", 105, 720, 120, 8), ("patty", 95, 1125, 130, -10)])
-    logo(c, 400, 28, 620)
+    hx = 400
+    c = radial(W * SS, H * SS, hx * SS, 700 * SS, TEAL_IN, TEAL_OUT, 900 * SS)
+    rays(c, hx * SS, 700 * SS, 18, (255, 255, 255), 26, 0.1)
+    floor(c, 820 * SS, 960 * SS, hx * SS, 56 * SS, tilt=0.35)
+    burst(c, hx * SS, 720 * SS, 360 * SS, points=14)
+    for x, y, l, a in [(70, 470, 80, -30), (740, 560, 80, -28), (90, 1000, 70, -30), (720, 1090, 70, -28)]:
+        streak(c, x * SS, y * SS, l * SS, a, width=10 * SS)
+    foods(c, [("cheese", 115, 610, 140, -20), ("lettuce", 690, 450, 125, 25), ("tomatoSlice", 690, 760, 135, 12),
+              ("onionSlice", 110, 850, 110, -15)])
+    hero(c, hx, 1160, 830)
+    logo(c, 400, 26, 720)
     save(c, "chibi-burger-cafe_cover_portrait_800x1200.png", (W, H))
+    # The portrait preview video (1080x1620) opens on this cover: same layout, video size.
+    save(c, "video/cover_portrait_1080x1620.png", (1080, 1620))
 
 
 if __name__ == "__main__":
-    os.makedirs(OUT, exist_ok=True)
+    os.makedirs(os.path.join(OUT, "video"), exist_ok=True)
     landscape()
     square()
     portrait()

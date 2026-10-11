@@ -30,7 +30,7 @@ public class CookingProgressBar : MonoBehaviour, IProgress01
 
     private void UpdateProgressBarAmount()
     {
-        current += Time.deltaTime;
+        current += Time.deltaTime * Tutorial.CookSpeed;   // the same clock as the Pan/Oven
         fillAmount = current / maximum;
         mask.fillAmount = fillAmount;
 

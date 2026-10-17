@@ -17,12 +17,21 @@ using UnityEngine;
 // run twice as fast while it lasts (CookSpeed), so nobody stands waiting for a bun; and the snack toss is no
 // longer part of the lesson - it is a tip shown once, the first time a customer gets impatient
 // (BeginSnackTip), when it is actually useful. Every beat is reported to Google Analytics (tutorial_step).
+// Third version (user: "it feels even worse than before - make it as short as possible"; tested as a player): the
+// first six steps were a fixed sequence (buns, oven, patty, pan, tomato, board), and a player who did anything out of
+// order hit a dead end - a raw bun put straight on the plate left "Into the oven!" pointing at an empty oven forever.
+// Now the whole lesson is the one step that always works out the next tap from where things stand (WorkOutStack),
+// the order is the shortest real burger (a Cheeseburger: bun, patty, cheese - Orders.LessonRecipe), cooking runs
+// three times as fast, and it ends the moment the burger is on the table: a short "Your first burger!" with
+// confetti, no watching. Gone again: Mochi walking about as a guide, the card sliding from side to side (it covered
+// customers), the tomato joke at the end (a punishment right after the first success) and throwing food at
+// customers during the lesson (a new player "giving the tomato to the customer" got a tomato in the face).
 public class Tutorial : MonoBehaviour
 {
     public static Tutorial Instance { get; private set; }
     // The lesson itself (patience frozen, nothing burns, faster cooking); the snack tip is not "Running".
     public static bool Running => Instance != null && Instance.step >= 0 && !Instance.tip;
-    public static float CookSpeed => Running ? 2f : 1f;
+    public static float CookSpeed => Running ? 3f : 1f;
 
     // What the arrow is pointing at right now, so the hints can agree with it (HighlightController).
     public static Component Focus { get; private set; }
@@ -52,59 +61,40 @@ public class Tutorial : MonoBehaviour
         public Func<Tutorial, Component> Point;          // what to point at (null: nothing)
         public Func<Tutorial, bool> Done;                // null: wait for a tap
         public float SkipAfter;                          // seconds before "tap to skip" is offered; 0 = never
+        public Action<Tutorial> Enter;                   // something that happens as the beat starts
+        public Func<Tutorial, bool> Lost;                // the step can no longer be done: back to the one before
     }
 
     // Mochi's face on the card says hello; the first line is already the first thing to do.
     private static readonly Beat[] Beats =
     {
+        // The burger, one tap at a time: the arrow always points at the single next tap (WorkOutStack), whatever
+        // order the player does things in, and the line says what it is and how far the burger has got.
         new()
         {
-            Name = "bun", Line = "Tap the <b>buns</b>!",
-            Point = t => t.Source("bun"), Done = t => t.chef.HeldFood is Bun,
-        },
-        new()
-        {
-            Name = "oven", Line = "Into the <b>oven</b>!",
-            Point = t => t.Nearest<Oven>(), Done = t => Any<Oven>(o => o.IsHaveFood()),
-        },
-        new()
-        {
-            Name = "patty", Line = "Grab a <b>patty</b>!",
-            Point = t => t.Source("burger"), Done = t => t.chef.HeldFood is Burger,
-        },
-        new()
-        {
-            Name = "pan", Line = "Onto the <b>pan</b>!",
-            Point = t => t.Nearest<Pan>(), Done = t => Any<Pan>(p => p.IsHaveFood()),
-        },
-        // Veggies are the third station: a whole tomato is a flaw ("A WHOLE tomato?!"), so it is chopped.
-        new()
-        {
-            Name = "tomato", Line = "Grab a <b>tomato</b>!",
-            Point = t => t.Source("tomato"), Done = t => t.chef.HeldFood is Tomato,
-        },
-        new()
-        {
-            Name = "board", Line = "<b>Chop</b> it!",
-            Point = t => t.Nearest<ChoppingBoard>(), Done = t => Any<ChoppingBoard>(b => b.IsHaveFood()),
-        },
-        // The rest of the burger, one ingredient at a time. The arrow always points at the single next tap
-        // (see WorkOutStack), and the line says what it is and how far the burger has got.
-        new()
-        {
-            Name = "stack", Line = "Stack <b>6 layers</b>!",
+            Name = "make", Line = "Grab a <b>bun</b>!",
             LineNow = t => t.StackStep().Line,
-            Point = t => t.StackStep().Target, Done = t => Any<Plate>(p => p.FinishedBurger != null),
+            Point = t => t.StackStep().Target,
+            Done = t => t.chef.HeldFood is Hamburger || Any<Plate>(p => p.FinishedBurger != null || p.CoversAnOrder),
         },
-        // Picking the burger up comes first: the customer is only the target once it is in his hands.
+        // Picking the burger up comes first: the customer is only the target once it is in his hands. Done as soon
+        // as it is on their table - no waiting for them to finish eating.
         new()
         {
             Name = "serve", Line = "Grab the <b>burger</b>!",
             LineNow = t => t.ServeStep().Line,
-            Point = t => t.ServeStep().Target, Done = t => t.rated,
+            Point = t => t.ServeStep().Target,
+            Done = t => t.rated || NpcFsm.Active.Any(n => n.executingNpcState == ExecutingNpcState.EAT),
+            // The burger went in the bin (or anywhere it is no longer a burger to serve): make another.
+            Lost = t => t.chef.HeldFood is not Hamburger && !Any<Plate>(p => p.FinishedBurger != null || p.CoversAnOrder)
+                        && !t.rated && !NpcFsm.Active.Any(n => n.executingNpcState == ExecutingNpcState.EAT),
         },
-        // The goodbye goes by itself: nothing in the lesson waits for a tap.
-        new() { Name = "done", Line = "You're a chef!\nStars grow your cafe.", Done = t => Time.time - t.stepStarted > 3f },
+        // A short cheer, and the shift is the player's.
+        new()
+        {
+            Name = "done", Line = "Your first <b>burger</b>!\nKeep them coming!",
+            Enter = t => t.Celebrate(), Done = t => Time.time - t.stepStarted > 2.2f,
+        },
     };
 
     // Shown once, after the lesson, the first time a waiting customer is over half way through their patience:
@@ -176,6 +166,24 @@ public class Tutorial : MonoBehaviour
         Focus = null;
         if (card != null) card.Hide();
         if (arrow != null) arrow.gameObject.SetActive(false);
+        sayUntil = -1f;
+    }
+
+    private void Celebrate()
+    {
+        GameSfx.Play(GameSfx.Cue.LevelUp);
+        if (CafeShop.Instance != null) CafeShop.Instance.Confetti(chef.transform.position + Vector3.up * 1.6f);
+    }
+
+    // A line said for a moment over the step's own (the player did something the lesson is not about).
+    private string sayLine;
+    private float sayUntil = -1f;
+
+    public static void Say(string line, float seconds = 2.2f)
+    {
+        if (Instance == null || Instance.step < 0) return;
+        Instance.sayLine = line;
+        Instance.sayUntil = Time.time + seconds;
     }
 
     // The snack tip: the same card and arrow, but the game is not slowed or frozen for it.
@@ -195,6 +203,7 @@ public class Tutorial : MonoBehaviour
         stepStarted = Time.time;
         skipOffered = false;
         Focus = beat.Point?.Invoke(this);
+        beat.Enter?.Invoke(this);
         shownLine = beat.LineNow != null ? beat.LineNow(this) : beat.Line;
         card.Show(shownLine, beat.Done == null ? Next : (Action)null);
     }
@@ -212,6 +221,9 @@ public class Tutorial : MonoBehaviour
         CafeProgress.Taught = true;
         GoogleAnalytics.Event("tutorial_complete");
         Stop();
+        // Now the day can begin properly: its goal, held back while the lesson ran (UIToast).
+        var toast = FindFirstObjectByType<UIToast>();
+        if (toast != null) toast.ShowObjective();
     }
 
     private void Update()
@@ -226,11 +238,15 @@ public class Tutorial : MonoBehaviour
         Focus = beat.Point?.Invoke(this);
         PointArrow();
 
-        if (beat.LineNow != null)
+        if (!tip && beat.Lost != null && step > 0 && beat.Lost(this))
         {
-            var now = beat.LineNow(this);
-            if (now != shownLine) { shownLine = now; card.SetLine(now); }
+            step--;
+            Show();
+            return;
         }
+
+        var now = Time.time < sayUntil ? sayLine : beat.LineNow != null ? beat.LineNow(this) : beat.Line;
+        if (now != shownLine) { shownLine = now; card.SetLine(now); }
         if (beat.Done != null && beat.Done(this)) Next();
         // An optional trick is never forced on anyone, and nothing in the lesson hurries them: after a while
         // the card just offers to move on, and the player decides. (This used to skip the step by itself
@@ -300,7 +316,7 @@ public class Tutorial : MonoBehaviour
         if (Time.time < nextTipCheck) return false;
         nextTipCheck = Time.time + 0.5f;
         if (!CafeProgress.Taught || CafeProgress.SnackTipShown || Time.timeScale == 0f) return false;
-        return NpcFsm.Active.Any(npc => npc.CanTakeSnack && npc.WaitedSeconds > npc.Patience * 0.5f);
+        return NpcFsm.Active.Any(npc => npc.CanTakeSnack && npc.WaitedSeconds > npc.Patience * 0.5f && CustomerInClearView(npc));
     }
 
     #region Finding what to point at
@@ -319,11 +335,8 @@ public class Tutorial : MonoBehaviour
     }
 
     #region Working out the next tap
-    // The six ingredients, one crate each. BurgerReview has no opinion about their ORDER, only about what is
-    // on the plate: raw, burnt or whole things, no patty, no bun, and the same ingredient twice ("Double
-    // Trouble"); the top bun is added by the plate itself. So the classic burger is one of each, in any
-    // order, and the lesson walks through whichever are still missing - never the same one twice.
-    private static readonly string[] Classic = { "bun", "burger", "tomato", "lettuce", "cheese", "onion" };
+    // The lesson walks through the layers of the order being made (Orders.Missing) - the order of the layers does
+    // not matter to BurgerReview, only what is on the plate; the top bun is added by the plate itself.
     private static string Label(string ingredient) => ingredient == "burger" ? "patty" : ingredient;
 
     private struct Step
@@ -397,9 +410,9 @@ public class Tutorial : MonoBehaviour
     // so the honest next tap is the bin. `then` is added after the instruction when there is one.
     private Step StationStep(EdibleBase held, string then = null)
     {
-        var (free, name, doIt) = held is Bun ? (Pick<Oven>().free, "Oven", "<b>Bake</b> it first!")
-            : held is Burger ? (Pick<Pan>().free, "Pan", "<b>Fry</b> it first!")
-            : (Pick<ChoppingBoard>().free, "Board", "<b>Chop</b> it first!");
+        var (free, name, doIt) = held is Bun ? (Pick<Oven>().free, "Oven", "Into the <b>oven</b>!")
+            : held is Burger ? (Pick<Pan>().free, "Pan", "Onto the <b>pan</b>!")
+            : (Pick<ChoppingBoard>().free, "Board", "<b>Chop</b> it!");
         if (free != null) return new Step { Target = free, Line = then == null ? doIt : doIt + "\n" + then };
         return new Step { Target = Nearest<Bin>(), Line = $"{name} busy - <b>bin</b> it." };
     }
@@ -414,45 +427,55 @@ public class Tutorial : MonoBehaviour
         // Keep building the burger that is already started; otherwise the plate nearest to him.
         var plate = plates.FirstOrDefault(p => p.LayerCount > 0)
             ?? plates.OrderBy(p => Vector3.Distance(p.transform.position, chef.transform.position)).FirstOrDefault();
+        // What it is for: the order that plate is making, or the first customer's (the lesson's is a Classic).
+        var order = plate != null && plate.Order != null ? plate.Order
+            : NpcFsm.Active.Where(Orders.Waiting).Select(n => n.Ordered).FirstOrDefault() ?? Orders.LessonRecipe;
 
-        // 1. Something in his hands: where does it go next?
+        // What is already on the plate, cooking or being chopped.
+        var have = new System.Collections.Generic.List<string>();
+        if (plate != null) have.AddRange(plate.LayerNames);
+        foreach (var oven in FindObjectsByType<Oven>(FindObjectsSortMode.None)) if (oven.Food != null) have.Add(oven.Food.Name);
+        foreach (var pan in FindObjectsByType<Pan>(FindObjectsSortMode.None)) if (pan.Food != null) have.Add(pan.Food.Name);
+        foreach (var board in FindObjectsByType<ChoppingBoard>(FindObjectsSortMode.None)) if (board.Food != null) have.Add(board.Food.Name);
+
+        // 1. Something in his hands: where does it go next? Something the order does not need (a tomato he picked up
+        // to give a customer) goes in the bin - it used to be sent through the board and onto the plate, and spoilt
+        // the burger.
         if (held != null)
         {
             if (held.Preparation == Prep.Burnt) return new Step { Target = Nearest<Bin>(), Line = "Burnt! <b>Bin</b> it." };
-            if (held.Preparation == Prep.Good) return new Step { Target = plate, Line = $"Onto a <b>plate</b>! {Layers(plate)}" };
+            if (!Orders.Missing(order, have).Contains(held.Name))
+                return new Step { Target = Nearest<Bin>(), Line = "Not needed - <b>bin</b> it!" };
+            if (held.Preparation == Prep.Good) return new Step { Target = plate, Line = $"Onto a <b>plate</b>! {Layers(plate, order)}" };
             if (held is Bun || held is Burger || held is CuttableBase) return StationStep(held);
             return new Step { Target = Nearest<Bin>(), Line = "Not that - <b>bin</b> it." };
         }
 
-        // 2. Hands empty: whatever has finished is ready to take, and a burnt thing has to go.
-        var ready = Ready();
-        if (ready != null) return new Step { Target = ready, Line = $"Ready! <b>Take</b> it! {Layers(plate)}" };
-        var burnt = BurntOnTheStove();
-        if (burnt != null) return new Step { Target = burnt, Line = "Burnt! <b>Take</b> it out." };
-
-        // 3. Nothing ready: the next ingredient that is not already on a plate, cooking or being chopped,
-        // and whose station is free (lettuce needs none).
-        var have = new System.Collections.Generic.List<string>();
-        foreach (var p in FindObjectsByType<Plate>(FindObjectsSortMode.None)) have.AddRange(p.LayerNames);
-        foreach (var oven in FindObjectsByType<Oven>(FindObjectsSortMode.None)) if (oven.Food != null) have.Add(oven.Food.Name);
-        foreach (var pan in FindObjectsByType<Pan>(FindObjectsSortMode.None)) if (pan.Food != null) have.Add(pan.Food.Name);
-        foreach (var board in FindObjectsByType<ChoppingBoard>(FindObjectsSortMode.None)) if (board.Food != null) have.Add(board.Food.Name);
-        foreach (var name in Classic)
+        // 2. Hands empty: first start every layer the order still needs that is not already on the plate, cooking or
+        // being chopped, and whose station is free (lettuce needs none) - the stations work at the same time.
+        foreach (var name in Orders.Missing(order, have))
         {
-            if (have.Contains(name) || !StationFree(name)) continue;
+            if (!StationFree(name)) continue;
             return new Step
             {
                 Target = Source(name),
-                Line = $"Next: <b>{Label(name)}</b>! {Layers(plate)}",
+                Line = $"Grab a <b>{Label(name)}</b>! {Layers(plate, order)}",
             };
         }
 
+        // 3. Everything is under way: whatever has finished is ready to take, and a burnt thing has to go.
+        var ready = Ready();
+        if (ready != null) return new Step { Target = ready, Line = $"Ready! <b>Take</b> it! {Layers(plate, order)}" };
+        var burnt = BurntOnTheStove();
+        if (burnt != null) return new Step { Target = burnt, Line = "Burnt! <b>Take</b> it out." };
+
         // 4. Everything that can be started is cooking: wait for the first one, pointing at it.
-        return new Step { Target = Cooking(), Line = $"Cooking... {Layers(plate)}" };
+        return new Step { Target = Cooking(), Line = $"Cooking... {Layers(plate, order)}" };
     }
 
-    // How far the burger has got, as the player counts it: "(3/6)".
-    private static string Layers(Plate plate) => $"<color=#B96D8B>({(plate != null ? plate.LayerCount : 0)}/6)</color>";
+    // How far the burger has got, as the player counts it: "(2/4)".
+    private static string Layers(Plate plate, Recipe order) =>
+        $"<color=#B96D8B>({(plate != null ? plate.LayerCount : 0)}/{order.Count})</color>";
 
     private static bool StationFree(string ingredient) => ingredient switch
     {
@@ -471,8 +494,11 @@ public class Tutorial : MonoBehaviour
         if (held is Hamburger) return new Step { Target = Waiting(), Line = "<b>Serve</b> a customer!" };
         if (held != null) return new Step { Target = Nearest<Bin>(), Line = "Hands full - <b>bin</b> it." };
         var finished = FindObjectsByType<Plate>(FindObjectsSortMode.None).Select(p => p.FinishedBurger).FirstOrDefault(b => b != null);
+        // Everything the order needs is on the plate: the player says when it is done (more layers are allowed).
+        var covered = FindObjectsByType<Plate>(FindObjectsSortMode.None).FirstOrDefault(p => p.CoversAnOrder);
+        if (finished == null && covered != null) return new Step { Target = covered, Line = "Done! <b>Tap</b> the plate!" };
         // Handed over and being eaten: the card used to flick back to "pick it up" until they paid.
-        if (finished == null) return new Step { Target = null, Line = "Served! Let's see..." };
+        if (finished == null) return new Step { Target = null, Line = "Served!" };
         return new Step { Target = finished, Line = "Grab the <b>burger</b>!" };
     }
 
@@ -486,45 +512,97 @@ public class Tutorial : MonoBehaviour
     {
         var held = chef.HeldFood;
         if (held is Hamburger) return new Step { Target = Waiting(), Line = "<b>Serve</b> that first!" };
-        if (HoldingSnack) return new Step { Target = WaitingToSnack(), Line = "<b>Tap</b> a hungry customer!" };
+        if (HoldingSnack) return new Step { Target = WaitingToSnack(), Line = "<b>Toss</b> it - tap a hungry customer!" };
 
         if (held != null)
         {
             if (held.Preparation == Prep.Burnt) return new Step { Target = Nearest<Bin>(), Line = "Burnt! <b>Bin</b> it." };
-            if (held is Bun || held is Burger || held is CuttableBase) return StationStep(held);
+            // Not ready yet (a raw patty is no snack): it goes where it gets ready, and lettuce is the snack.
+            if (held is Bun || held is Burger || held is CuttableBase) return StationStep(held, "Then toss <b>lettuce</b>!");
             return new Step { Target = Nearest<Bin>(), Line = "Not that - <b>bin</b> it." };
         }
 
-        // Hands empty. Whatever is ready comes first; then clearing a burnt thing, so a fresh one can go in;
-        // then, if something is already on its way, WAIT for it - starting a second one while the first is
-        // still baking is the confusion this used to cause (the arrow kept sending him back to the buns
-        // and then to an oven that was already full).
+        // Hands empty. Whatever is ready comes first; otherwise lettuce, which needs no cooking at all and is the
+        // quickest snack there is. Never something still cooking: it used to point at a patty on the pan, a tap
+        // took it out raw, the arrow sent it back onto the pan and then pointed at it again (user report).
         var ready = Ready();
         if (ready != null) return new Step { Target = ready, Line = "Hungry customer!\n<b>Take</b> it, toss it!" };
-        var burnt = BurntOnTheStove();
-        if (burnt != null) return new Step { Target = burnt, Line = "Burnt! <b>Take</b> it out." };
-        var cooking = Cooking();
-        if (cooking != null) return new Step { Target = cooking, Line = "Hungry customer!\nToss them a <b>snack</b>!" };
-
-        // Nothing under way: lettuce needs no cooking at all, which makes it the quickest snack there is.
         return new Step { Target = Source("lettuce"), Line = "Hungry customer!\nToss them <b>lettuce</b>!" };
     }
     #endregion
 
-    // The customer who has been waiting longest, so the arrow doesn't flick between tables.
+    // The customer the burger in his hands was made for; otherwise the first one waiting, so the arrow doesn't
+    // flick between tables.
+    // Never one the player cannot see (sitting under the chef card at the bottom of the screen: user report).
     private Component Waiting()
     {
+        if (chef.HeldFood is Hamburger burger && Orders.Waiting(burger.ForCustomer) && CustomerInClearView(burger.ForCustomer)) return burger.ForCustomer;
+        NpcFsm hidden = null;
         foreach (var npc in NpcFsm.Active)
         {
             var state = npc.executingNpcState;
-            if (state == ExecutingNpcState.ORDER || state == ExecutingNpcState.WAIT) return npc;
+            if (state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT) continue;
+            if (CustomerInClearView(npc)) return npc;
+            hidden ??= npc;
         }
-        return null;
+        return hidden;
     }
 
+    #region In clear view
+    // On screen and not under a HUD card: the customers and goal cards and the buttons at the top, the chef card at
+    // the bottom left and the coach's line at the bottom. The lesson seats its customers where they can be seen
+    // (NpcSpawnController) and points only at them.
+    private static readonly string[] HudCovers = { "CustomersCard", "GoalCard", "AudioControls", "HelpBTN", "Wallet", "BonusBTN", "ChefCard", "Coach" };
+    private static RectTransform[] covers;
+
+    public static bool InClearView(Vector3 world)
+    {
+        var cam = Camera.main;
+        if (cam == null) return true;
+        var screen = cam.WorldToScreenPoint(world);
+        if (screen.z < 0f) return false;
+        float margin = 0.04f * Screen.height;
+        if (screen.x < margin || screen.x > Screen.width - margin || screen.y < margin || screen.y > Screen.height - margin) return false;
+        if (covers == null || covers.Length == 0 || covers[0] == null)
+        {
+            var hud = GameObject.Find("<<<UI>>>/StaticCanvas/InGamePanel/HUD");
+            covers = hud == null ? new RectTransform[0]
+                : HudCovers.Select(n => hud.transform.Find(n) as RectTransform).Where(t => t != null).ToArray();
+        }
+        foreach (var cover in covers)
+            if (cover != null && cover.gameObject.activeInHierarchy && RectTransformUtility.RectangleContainsScreenPoint(cover, screen, null))
+                return false;
+        return true;
+    }
+
+    // A customer sitting at `seat`: their body and the order bubble over them, with a little room either side.
+    public static bool SeatInClearView(Vector3 seat)
+    {
+        var cam = Camera.main;
+        if (cam == null) return true;
+        var side = cam.transform.right * 0.45f;
+        foreach (var up in new[] { 0.7f, 2.4f })
+        {
+            var at = seat + Vector3.up * up;
+            if (!InClearView(at) || !InClearView(at + side) || !InClearView(at - side)) return false;
+        }
+        return true;
+    }
+
+    private static bool CustomerInClearView(NpcFsm npc) =>
+        npc.chair != null ? SeatInClearView(npc.chair.CalculateSitPos()) : InClearView(npc.transform.position + Vector3.up);
+    #endregion
+
     // Only a customer who is already waiting for their order, and has not been thrown anything yet, takes a
-    // snack (NpcFsm.CatchThrown): the second thing thrown at anyone is just "I want a BURGER!".
-    private Component WaitingToSnack() => NpcFsm.Active.FirstOrDefault(npc => npc.CanTakeSnack);
+    // snack (NpcFsm.CatchThrown): the second thing thrown at anyone is just "I want a BURGER!". And only one the
+    // player can see and tap - never one sitting under the coach card or the chef card (user report): the most
+    // hungry of those.
+    private static NpcFsm SnackableInView() => NpcFsm.Active
+        .Where(npc => npc.CanTakeSnack && CustomerInClearView(npc))
+        .OrderByDescending(npc => npc.WaitedSeconds / Mathf.Max(1f, npc.Patience))
+        .FirstOrDefault();
+
+    private Component WaitingToSnack() => SnackableInView();
 
     private static bool Any<T>(Func<T, bool> test) where T : Component =>
         FindObjectsByType<T>(FindObjectsSortMode.None).Any(test);

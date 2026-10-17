@@ -74,12 +74,68 @@ public class Plate : PlaceableBase
         ingredient.gameObject.transform.localPosition = desiredPos; 
     }
 
+    #region Orders
+    // A plate is making one customer's order (Orders): it is picked when the first layer goes on (the best match
+    // for what is there, then whoever has waited longest) and handed on to someone else if they leave - for the
+    // hints, the bubble showing what is still missing and Mochi. It does NOT end the burger: the player does, by
+    // tapping the plate with empty hands (Close), or it ends by itself at six layers. (For a while it closed itself
+    // as soon as it held as many layers as the order, and the user lost the fun of it: no six-layer monster for a
+    // cheeseburger customer, no making a bigger order first.)
+    public const int MaxLayers = 6;
+    public NpcFsm ForCustomer { get; private set; }
+    public Recipe Order => ForCustomer != null ? ForCustomer.Ordered : null;
+    public int Target => MaxLayers;
+
+    // Everything some waiting customer ordered is on it (extras or not): worth closing and serving.
+    public bool CoversAnOrder =>
+        !doesHaveHamburger && ingredients.Count > 0 &&
+        (Order != null ? Orders.Missing(Order, LayerNames).Count == 0
+                       : NpcFsm.Active.Any(n => Orders.Waiting(n) && Orders.Missing(n.Ordered, LayerNames).Count == 0));
+
+    // The player says it is done: the top bun goes on and it is a burger.
+    public bool Close()
+    {
+        if (doesHaveHamburger || ingredients.Count == 0) return false;
+        if (ForCustomer == null || !Orders.Waiting(ForCustomer)) Claim();
+        GenerateHamburger(true);
+        return doesHaveHamburger;
+    }
+
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+        Orders.Register(this);
+    }
+
+    protected override void OnDisable()
+    {
+        base.OnDisable();
+        Orders.Unregister(this);
+    }
+
+    private void Update()
+    {
+        if (doesHaveHamburger || ingredients.Count == 0) return;
+        // Placeables switch their colliders off while the chef's hands are empty (taps then go to the food);
+        // a plate with layers on it stays tappable, because empty hands on it mean "done!" (PlayerFSM.CloseBurger).
+        if (placeableCollider != null && !placeableCollider.enabled) placeableCollider.enabled = true;
+        // Their patience ran out, or they were served something else meanwhile: make it for someone else.
+        if (ForCustomer != null && !Orders.Waiting(ForCustomer)) ForCustomer = null;
+        if (ForCustomer == null) Claim();
+
+    }
+
+    private void Claim() => ForCustomer = Orders.BestFor(LayerNames.ToList(), this);
+    #endregion
+
     public bool HasHamburger => doesHaveHamburger;
     public Hamburger FinishedBurger => doesHaveHamburger ? placedHamburger : null;
     public int LayerCount => ingredients.Count;
     // What is on the plate, by ingredient name ("bun", "burger", "tomato"...): the first-shift lesson walks
     // the player through the ingredients that are still missing.
     public IEnumerable<string> LayerNames => ingredients.Select(x => x.Name);
+    // The same with how each was made (the order card ticks a layer only when it is cooked/sliced/baked).
+    public IEnumerable<(string name, Prep prep)> LayerPreps => ingredients.Select(x => (x.Name, x.Preparation));
 
     // A finished burger in hand can be set down on an empty plate (to free the chef's hands). It used to be
     // stacked as a 7th "ingredient" of a new burger.
@@ -101,7 +157,7 @@ public class Plate : PlaceableBase
             return;
         }
 
-        if (ingredients.Count <= 5)
+        if (ingredients.Count < MaxLayers)
         {
             SetDistanceBetweenIngredients();
 
@@ -113,9 +169,36 @@ public class Plate : PlaceableBase
             SetIngredientPos(ingredient);
 
             refTransform.position = ingredient.gameObject.transform.position;
-              
+
+            // The first bun is the bottom bun, whenever it comes: lettuce put on before it ends up on top of it
+            // (user). A second bun just stacks where it is put.
+            if (ingredient.IsBun() && ingredients.Count > 1 && ingredients.Count(x => x.IsBun()) == 1)
+            {
+                var bottom = ingredients[0].transform.localPosition;   // where the stack starts on this plate
+                ingredients.Remove(ingredient);
+                ingredients.Insert(0, ingredient);
+                Restack(bottom);
+            }
+
+            if (ForCustomer == null || !Orders.Waiting(ForCustomer)) Claim();
             GenerateHamburger();
         }
+    }
+
+    // Lays the layers out again from the plate up, in list order, the way they are stacked one by one: each sits
+    // on the one below it, raised by that one's height.
+    private void Restack(Vector3 bottom)
+    {
+        float y = bottom.y;
+        for (int i = 0; i < ingredients.Count; i++)
+        {
+            var piece = ingredients[i];
+            piece.transform.localRotation = Quaternion.identity;
+            piece.transform.localPosition = new Vector3(bottom.x, y, bottom.z);
+            piece.isLastPiece = i == ingredients.Count - 1;
+            y += piece.collider != null ? piece.collider.size.y : 0f;
+        }
+        refTransform.position = ingredients[ingredients.Count - 1].transform.position;
     }
 
     public override void RemoveFood(EdibleBase ingredient)
@@ -132,6 +215,7 @@ public class Plate : PlaceableBase
         {
             ingredients.Remove(ingredient);
             ResetColAndRef();
+            ForCustomer = null;
         }
         else
         {
@@ -144,9 +228,9 @@ public class Plate : PlaceableBase
             HideTopBun();
     }
    
-    private void GenerateHamburger()
+    private void GenerateHamburger(bool closing = false)
     {
-        if(ingredients.Count == 6)
+        if (ingredients.Count > 0 && (closing || ingredients.Count >= MaxLayers))
         {
             SetDistanceBetweenIngredients();
             placeableCollider.enabled = false;
@@ -155,7 +239,6 @@ public class Plate : PlaceableBase
             Hamburger _hamburger = obj.GetComponent<Hamburger>();
             foreach (EdibleBase item in ingredients)
             {
-                print(item);
                 _hamburger.AddIngredient(item);
             }
             if (ingredients.Any(x => x.IsBun()))
@@ -169,6 +252,8 @@ public class Plate : PlaceableBase
             _edibleHam.SetPlaceable(this);
             doesHaveHamburger = true;
             placedHamburger = _hamburger;
+            _hamburger.ForCustomer = ForCustomer;
+            ForCustomer = null;
             GameSfx.Play(GameSfx.Cue.BurgerDone);
 
             ingredients.Clear();
@@ -186,7 +271,7 @@ public class Plate : PlaceableBase
 
     // For hints: would this plate take the food the chef is holding?
     public bool Accepts(EdibleBase food) =>
-        !doesHaveHamburger && (food is Hamburger ? ingredients.Count == 0 : ingredients.Count < 6);
+        !doesHaveHamburger && (food is Hamburger ? ingredients.Count == 0 : ingredients.Count < Target);
 
     #region Additional Features
     /// <summary>

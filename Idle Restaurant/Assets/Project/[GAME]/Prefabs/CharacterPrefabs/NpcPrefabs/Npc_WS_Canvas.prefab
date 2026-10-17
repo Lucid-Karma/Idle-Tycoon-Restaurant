@@ -1082,7 +1082,7 @@ RectTransform:
   m_GameObject: {fileID: 4017452777470806137}
   m_LocalRotation: {x: 0, y: 0, z: 1, w: -0.00000004371139}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.0135, y: 0.0135, z: 1}
+  m_LocalScale: {x: 0.0108, y: 0.0108, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1046277046327539894}
@@ -1091,11 +1091,12 @@ RectTransform:
   - {fileID: 8374703279005126337}
   - {fileID: 2569926739770083933}
   - {fileID: 2258829679898961798}
+  - {fileID: 5168347537412102879}
   m_Father: {fileID: 3067054441428347942}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0.2}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &6554045392199344296
@@ -1570,6 +1571,7 @@ MonoBehaviour:
   gap: 12
   iconSize: 52
   minWidth: 150
+  raise: 110
 --- !u!1 &4941872561419996710
 GameObject:
   m_ObjectHideFlags: 0
@@ -2040,6 +2042,65 @@ MonoBehaviour:
   m_FillOrigin: 2
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!1 &6732316315917714129
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5168347537412102879}
+  - component: {fileID: 8185795256184806530}
+  m_Layer: 0
+  m_Name: Ticket
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &5168347537412102879
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6732316315917714129}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 9056733571781583899}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 1}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &8185795256184806530
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6732316315917714129}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0134abdd6b980054ebbb0b44ee30b7db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  genericIcon: {fileID: 6995560432684954133}
+  bunTop: {fileID: 21300000, guid: a5ddd172ff832d84893629b568779e27, type: 3}
+  bunBottom: {fileID: 21300000, guid: dcfdff318b869a649b175accd4c73a67, type: 3}
+  patty: {fileID: 21300000, guid: a6e396c0ec3623846ae523e5631a01c5, type: 3}
+  cheese: {fileID: 21300000, guid: d72a40acf003a6341a54ddd59884c746, type: 3}
+  lettuce: {fileID: 21300000, guid: 845d4405a82497249aadfa87c2b55ee6, type: 3}
+  tomato: {fileID: 21300000, guid: 00eab64d66a0f3c4fa52eeebc3f0ba00, type: 3}
+  onion: {fileID: 21300000, guid: 13be02de44cae8e48b4e5cf7b2551c82, type: 3}
+  box: {x: 66, y: 62}
+  overlap: 0.4
+  doneAlpha: 0.35
 --- !u!1 &7540131705893067907
 GameObject:
   m_ObjectHideFlags: 0

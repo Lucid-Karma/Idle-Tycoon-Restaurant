@@ -8,6 +8,7 @@ using UnityEngine;
 public class UISplatPop : MonoBehaviour
 {
     [SerializeField] private float hold = 0.7f;
+    private float size = 1f, holdNow = 0.7f;
 
     private CanvasGroup group;
     private TMP_Text label;
@@ -30,8 +31,26 @@ public class UISplatPop : MonoBehaviour
         group.alpha = 0f;
     }
 
-    private void OnEnable() => FoodFight.OnChefSplatted.AddListener(Show);
-    private void OnDisable() => FoodFight.OnChefSplatted.RemoveListener(Show);
+    private void OnEnable()
+    {
+        FoodFight.OnChefSplatted.AddListener(Show);
+        FoodFight.OnMochiSplatted.AddListener(ShowMochi);
+    }
+
+    private void OnDisable()
+    {
+        FoodFight.OnChefSplatted.RemoveListener(Show);
+        FoodFight.OnMochiSplatted.RemoveListener(ShowMochi);
+    }
+
+    // (A perfect burger and a rush are celebrated by UICheerPop: the user wanted them unlike a splat.)
+
+    // Mochi, hit by a tomato: an outraged "MRRAOW!" over his head.
+    private void ShowMochi(Vector3 world)
+    {
+        Show(world, FoodFight.Hit.Splat);
+        if (label != null) label.text = "MRRAOW!";
+    }
 
     private void Show(Vector3 world, FoodFight.Hit hit)
     {
@@ -41,13 +60,15 @@ public class UISplatPop : MonoBehaviour
         if (label != null) label.color = hit == FoodFight.Hit.Arrow ? UITokens.Colors.Ink : labelColor;   // white on yellow didn't read
         age = 0f;
         pop = 0.3f;
+        size = 1f;
+        holdNow = hold;
         popVelocity = 0f;
         rect.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-12f, 12f));
     }
 
     private void LateUpdate()
     {
-        if (age > hold + UITokens.Motion.Slow) return;
+        if (age > holdNow + UITokens.Motion.Slow) return;
         float dt = Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
         age += dt;
 
@@ -56,8 +77,8 @@ public class UISplatPop : MonoBehaviour
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parent, screen, null, out var local))
             rect.anchoredPosition = local + Vector2.up * 70f;
 
-        UITokens.Spring(ref pop, ref popVelocity, 1f, dt);
+        UITokens.Spring(ref pop, ref popVelocity, size, dt);
         rect.localScale = Vector3.one * pop;
-        group.alpha = 1f - Mathf.Clamp01((age - hold) / UITokens.Motion.Slow);
+        group.alpha = 1f - Mathf.Clamp01((age - holdNow) / UITokens.Motion.Slow);
     }
 }

@@ -35,7 +35,7 @@ public class UIShiftHighlights : MonoBehaviour
     }
 
     // Cozy even when it went badly: a rough shift is a story, not a failure.
-    private static string TitleFor(float average, int walkouts) =>
+    public static string TitleFor(float average, int walkouts) =>
         average >= 4.5f && walkouts == 0 ? "Perfect shift!"
         : average >= 3.5f ? "Great shift!"
         : average >= 2.5f ? "Nice shift!"

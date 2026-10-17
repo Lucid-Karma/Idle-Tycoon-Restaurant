@@ -19,11 +19,13 @@ public class HostedCustomerTextController : MonoBehaviour
     private void OnEnable()
     {
         EventManager.OnCustomerWent.AddListener(UpdateCounterText);
+        EventManager.OnLevelStart.AddListener(UpdateCounterText);   // back to 0 for the next shift
     }
 
     private void OnDisable()
     {
-        EventManager.OnCustomerWent.RemoveListener(UpdateCounterText); 
+        EventManager.OnCustomerWent.RemoveListener(UpdateCounterText);
+        EventManager.OnLevelStart.RemoveListener(UpdateCounterText);
     }
 
     public int point = 0;

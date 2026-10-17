@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -68,6 +69,9 @@ public class NpcFsm : MonoBehaviour
 
     #region Parameters
     private Vector3 nextPos;
+    private Vector3 seat;
+    private bool clearingChair;
+    private const float ChairClearance = 1.8f;
 
     // Rush-hour pacing: each customer waits this long (seconds) before leaving hungry. It used to be a flat
     // 240 s, which left no reason to hurry — and no reason to cut corners.
@@ -76,6 +80,12 @@ public class NpcFsm : MonoBehaviour
     public float Patience { get; private set; } = 115f;
     public float WaitedSeconds => waitingTimer;
     public BurgerReview LastReview { get; private set; }
+    // What they ordered as they sat down (Orders.Pick), shown in their bubble (UIOrderTicket). Null until seated.
+    public Recipe Ordered { get; private set; }
+    public static readonly UnityEngine.Events.UnityEvent<NpcFsm> OnOrdered = new();
+    // An order was rated (who, and how it went): a perfect one pops "PERFECT!" over them (UISplatPop).
+    // Static: subscribe with named methods only.
+    public static readonly UnityEngine.Events.UnityEvent<NpcFsm, OrderResult> OnRated = new();
 
     // Regular (skeleton) or an adventurer with a quirk (Customers): patience, pay, what they say.
     [SerializeField] private CustomerKind kind;
@@ -104,8 +114,11 @@ public class NpcFsm : MonoBehaviour
     void OnEnable()
     {
         Active.Add(this);
+        warnedOffFloor = false;
+        if (!Agent.enabled) Agent.enabled = true;   // switched off while they sat (Seat)
         Patience = Random.Range(patienceRange.x, patienceRange.y) * Customers.Of(kind).PatienceScale * CafeShop.PatienceScale;
         LastReview = null;
+        Ordered = null;
         caughtCount = 0;
 
         executingNpcState = ExecutingNpcState.COME;
@@ -115,6 +128,7 @@ public class NpcFsm : MonoBehaviour
 
     void Update()
     {
+        ShutChairBehind();
         currentState.UpdateState(this);
     }
 
@@ -123,6 +137,7 @@ public class NpcFsm : MonoBehaviour
         if(chair != null)
         {
             nextPos = chair.CalculateSitPos();
+            chair.Open(this, true);   // everyone else walks round the chair; this customer walks into it
             Agent.SetDestination(nextPos);
             chair.IsEmpty = false;
         }
@@ -131,6 +146,7 @@ public class NpcFsm : MonoBehaviour
 
     public void DoneWithPath()
     {
+        if (!OnTheFloor()) return;
         // While a new path is being computed remainingDistance can still hold the old (arrived) value.
         if(!Agent.pathPending && Agent.remainingDistance <= Agent.stoppingDistance)
         {
@@ -143,6 +159,9 @@ public class NpcFsm : MonoBehaviour
         if(chair != null)
         {
             transform.rotation = chair.GetSedileRot();
+            Seat();
+            Ordered = Orders.Pick();
+            OnOrdered.Invoke(this);
             OnNpcSitChairDown.Invoke();
             executingNpcState = ExecutingNpcState.WAIT;
             GameSfx.Play(GameSfx.Cue.Seated);
@@ -172,7 +191,7 @@ public class NpcFsm : MonoBehaviour
             if(_hamburger != null)
             {
                 servedAfter = waitingTimer;
-                LastReview = _hamburger.Review;
+                LastReview = BurgerReview.Of(_hamburger.Layers, Ordered);
                 (ServedLine, ServedMood) = Customers.React(kind, LastReview, ScoreManager.Speed01(servedAfter, Patience));
                 OnNpcServed.Invoke();
                 OnNpcEatStart.Invoke();
@@ -186,7 +205,10 @@ public class NpcFsm : MonoBehaviour
     public void React()
     {
         // Quality (how it was made) and speed (how long they waited) both count; see ScoreManager.RateOrder.
-        var order = ScoreManager.Instance.RateOrder(LastReview, servedAfter, Patience, kind);
+        var order = ScoreManager.Instance.RateOrder(LastReview, servedAfter, Patience, kind, Ordered);
+        OnRated.Invoke(this, order);
+        // The money stays on the table until the chef walks by (MoneyPiles); it is already saved.
+        MoneyPiles.Drop(chair.GetTableService().transform.position, order.Earned);
 
         OnNpcSitChairStandUp.Invoke();
         OnNpcPaid.Invoke();
@@ -249,8 +271,46 @@ public class NpcFsm : MonoBehaviour
         executingNpcState = ExecutingNpcState.GO;
     }
 
+    // Seated: on the seat itself, out of the crowd simulation (a seated agent used to be shoved off its seat by
+    // customers walking past, ending up two on one chair), and the chair shuts behind them.
+    private void Seat()
+    {
+        seat = chair.CalculateSitPos();
+        var at = new Vector3(seat.x, transform.position.y, seat.z);
+        if ((at - transform.position).sqrMagnitude < 1f) transform.position = at;
+        Agent.enabled = false;
+        chair.Open(this, false);
+    }
+
+    // Getting up: the chair opens for them, and once the navmesh is back under their feet they walk off to the
+    // door; the chair shuts again once they are clear of it (Update).
+    public void LeaveChair(Vector3 to, float stoppingDistance) => StartCoroutine(Leave(to, stoppingDistance));
+
+    private IEnumerator Leave(Vector3 to, float stoppingDistance)
+    {
+        chair.Open(this, true);
+        var filter = new NavMeshQueryFilter { agentTypeID = Agent.agentTypeID, areaMask = Agent.areaMask };
+        for (int i = 0; i < 30 && !NavMesh.SamplePosition(transform.position, out _, 0.2f, filter); i++) yield return null;
+        Agent.enabled = true;
+        Agent.stoppingDistance = stoppingDistance;
+        if (Agent.isOnNavMesh) Agent.SetDestination(to);
+        else OnTheFloor();
+        clearingChair = true;
+    }
+
+    private void ShutChairBehind()
+    {
+        if (!clearingChair || chair == null) return;
+        var away = transform.position - seat;
+        away.y = 0f;
+        if (away.sqrMagnitude < ChairClearance * ChairClearance) return;
+        clearingChair = false;
+        chair.Open(this, false);
+    }
+
     public void Go()
     {
+        if (!Agent.enabled) return;   // still getting up (Leave)
         if(IsPathEnd())
         {
             ScoreManager.Instance.HostedCustomerCount ++;
@@ -263,9 +323,32 @@ public class NpcFsm : MonoBehaviour
 
     private bool IsPathEnd()
     {
+        if (!OnTheFloor()) return false;
         if(!Agent.pathPending && Agent.remainingDistance <= Agent.stoppingDistance)
             return true;
         return false;
+    }
+
+    // An agent switched on where there is no navmesh under it never moves, and every question about its path
+    // logs an error (a build showed one every frame: a customer standing still at the door). Put it on the nearest
+    // floor and send it on its way again; say so once, with where it was, to find out why.
+    private bool warnedOffFloor;
+    private bool OnTheFloor()
+    {
+        if (!Agent.enabled) return false;
+        if (Agent.isOnNavMesh) return true;
+        var filter = new NavMeshQueryFilter { agentTypeID = Agent.agentTypeID, areaMask = Agent.areaMask };
+        bool found = NavMesh.SamplePosition(transform.position, out var hit, 5f, filter);
+        if (!warnedOffFloor)
+        {
+            warnedOffFloor = true;
+            Debug.LogWarning($"[NpcFsm] {name} off the navmesh at {transform.position} ({executingNpcState}); nearest floor " +
+                             (found ? $"{hit.position}, {Vector3.Distance(hit.position, transform.position):0.00} m away" : "none within 5 m"));
+        }
+        if (!found || !Agent.Warp(hit.position)) return false;
+        if (executingNpcState == ExecutingNpcState.COME) MoveNpc();
+        else if (executingNpcState == ExecutingNpcState.GO) Agent.SetDestination(new Vector3(21.35f, 1.2f, 8.79f));
+        return Agent.isOnNavMesh;
     }
 
     public void SwitchState(NpcStates nextState)
@@ -277,6 +360,8 @@ public class NpcFsm : MonoBehaviour
     private void OnDisable()
     {
         Active.Remove(this);
+        clearingChair = false;
+        if (chair != null) chair.Open(this, false);
         waitingTimer = 0;
     }
 }

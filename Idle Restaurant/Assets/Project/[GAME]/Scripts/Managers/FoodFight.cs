@@ -20,6 +20,14 @@ public class FoodFight : MonoBehaviour
     public enum Hit { Splat, Slip, Arrow }
     // World position of the chef's head when something hits him, and what it was (UISplatPop).
     public static readonly UnityEvent<Vector3, Hit> OnChefSplatted = new();
+    // Mochi (the cat waiter) took a tomato meant for the kitchen: where his head is (UISplatPop: "MRRAOW!").
+    public static readonly UnityEvent<Vector3> OnMochiSplatted = new();
+
+    // How often a customer's tomato goes at Mochi instead of the chef when he is about: rarely - the chef is the
+    // target, as he always was (user, 2026-10-15: it had become 30-60% Mochi). A little more often when Mochi is the
+    // nearer of the two. It costs nothing; now and then he takes it personally and throws back (Waiter.Struck).
+    private const float MochiChance = 0.08f, MochiNearerChance = 0.15f;
+    private static readonly string[] HitByMochiLines = { "Bad kitty!", "OW! Kitty!", "Sorry, kitty!", "Not the cat!" };
 
     [SerializeField] private GameObject tomatoModel;          // the whole-tomato visual the customers throw
     [SerializeField] private GameObject arrowModel;           // what a Ranger shoots (long axis +Z, tip forward)
@@ -85,11 +93,31 @@ public class FoodFight : MonoBehaviour
             yield return ShootArrow(npc, start);
             yield break;
         }
-        var tomato = Instantiate(tomatoModel, start, UnityEngine.Random.rotation);
-        foreach (var c in tomato.GetComponentsInChildren<Collider>()) Destroy(c);
-        foreach (var b in tomato.GetComponentsInChildren<MonoBehaviour>()) Destroy(b);
+        var mochi = MochiInRange(npc);
+        if (mochi == null)
+        {
+            yield return TomatoAtChef(start);
+            yield break;
+        }
+        var tomato = Tomato(start);
         GameSfx.Play(GameSfx.Cue.CustomerThrow);
 
+        yield return Fly(tomato.transform, () => mochi != null ? mochi.Head : tomato.transform.position, customerThrowSeconds, () =>
+        {
+            Splash(tomato.transform.position, ColorOf("tomato"), 28);
+            Destroy(tomato);
+            GameSfx.Play(GameSfx.Cue.Splat);
+            if (mochi == null) return;
+            OnMochiSplatted.Invoke(mochi.Head);
+            mochi.Struck(npc);
+        });
+    }
+
+    // A customer's tomato at the chef: running into it puts him on his back; standing, it splats.
+    private IEnumerator TomatoAtChef(Vector3 start)
+    {
+        var tomato = Tomato(start);
+        GameSfx.Play(GameSfx.Cue.CustomerThrow);
         yield return Fly(tomato.transform, ChefHead, customerThrowSeconds, () =>
         {
             Splash(tomato.transform.position, ColorOf("tomato"), 28);
@@ -107,6 +135,53 @@ public class FoodFight : MonoBehaviour
         });
     }
 
+    private GameObject Tomato(Vector3 at)
+    {
+        var tomato = Instantiate(tomatoModel, at, UnityEngine.Random.rotation);
+        foreach (var c in tomato.GetComponentsInChildren<Collider>()) Destroy(c);
+        foreach (var b in tomato.GetComponentsInChildren<MonoBehaviour>()) Destroy(b);
+        return tomato;
+    }
+
+    // Mochi, if he is in the cafe and the tomato goes his way this time.
+    private Waiter MochiInRange(NpcFsm npc)
+    {
+        if (npc == null || Tutorial.Running) return null;
+        var mochi = FindFirstObjectByType<Waiter>();
+        if (mochi == null || !mochi.isActiveAndEnabled || mochi.Angry) return null;
+        var from = npc.transform.position;
+        bool nearer = (mochi.transform.position - from).sqrMagnitude < (chef.transform.position - from).sqrMagnitude;
+        return UnityEngine.Random.value < (nearer ? MochiNearerChance : MochiChance) ? mochi : null;
+    }
+
+    // His answer: three tomatoes in quick succession at whoever threw it, and a line from them.
+    public void MochiThrowsBack(Waiter mochi, NpcFsm npc) => StartCoroutine(Retaliate(mochi, npc));
+
+    private IEnumerator Retaliate(Waiter mochi, NpcFsm npc)
+    {
+        yield return new WaitForSeconds(0.45f);
+        if (mochi == null || npc == null) yield break;
+        var target = npc.transform.position + Vector3.up * 1.6f;
+        for (int i = 0; i < 3; i++)
+        {
+            if (mochi == null) yield break;
+            var tomato = Tomato(mochi.Head);
+            tomato.transform.localScale *= 0.75f;
+            bool last = i == 2;
+            if (i == 0) GameSfx.Play(GameSfx.Cue.ChefThrow);   // one sound for the volley: three in a row was noise
+            StartCoroutine(Fly(tomato.transform, () => npc != null && npc.isActiveAndEnabled ? npc.transform.position + Vector3.up * 1.6f : target,
+                customerThrowSeconds * 0.7f, () =>
+                {
+                    Splash(tomato.transform.position, ColorOf("tomato"), 16);
+                    Destroy(tomato);
+                    if (last) GameSfx.Play(GameSfx.Cue.Splat);
+                    if (last && npc != null && npc.isActiveAndEnabled)
+                        npc.OnNpcSays.Invoke(HitByMochiLines[UnityEngine.Random.Range(0, HitByMochiLines.Length)], Mood.Shocked);
+                }, arcHeight * 0.6f));
+            yield return new WaitForSeconds(0.16f);
+        }
+    }
+
     // A Ranger's answer: a bow appears in front of them and draws, the arrow leaves it in a quick, flat shot
     // and sticks in the chef's head (or hat) for a moment; the bow lingers, then goes. No animation clip: the
     // customers share the skeleton rig, which has no archery, so the bow and arrow move on their own.
@@ -119,7 +194,18 @@ public class FoodFight : MonoBehaviour
         // camera side instead, a little forward of them.
         var toViewer = Camera.main != null ? -Camera.main.transform.forward : Vector3.zero;
         toViewer.y = 0f;
-        var bow = SpawnBow(npc.transform.position + Vector3.up * 1.45f + flat * 0.3f + toViewer.normalized * 0.6f, flat);
+        // The bow's curve only shows from the side: held facing the chef, it was edge-on to the camera (the chef is
+        // up the screen from the tables), a thin line nobody saw. It faces his way *on the screen* instead - the
+        // aim with the camera's depth taken out - so the bow and its string are always seen side-on.
+        var onScreen = Camera.main != null ? Vector3.ProjectOnPlane(aim, Camera.main.transform.forward) : flat;
+        if (onScreen.sqrMagnitude < 0.0001f) onScreen = flat;
+        // Its limbs run across that direction on the screen; the model's curve sits towards its pivot's back, so
+        // the pivot looks away from the chef for the curve (and not the string) to point at him.
+        var limbs = Camera.main != null ? Vector3.Cross(Camera.main.transform.forward, onScreen).normalized : Vector3.up;
+        // Held out beside them, towards the chef as the screen shows it: in front of them, it overlapped their
+        // head and body on screen and could hardly be seen.
+        var at = npc.transform.position + Vector3.up * 1.45f + onScreen.normalized * 0.95f + toViewer.normalized * 0.3f;
+        var bow = SpawnBow(at, -onScreen.normalized, limbs);
         var nock = bow != null ? bow.position : start;
         var arrow = Instantiate(arrowModel, nock, Quaternion.LookRotation(ChefHead() - nock));
         arrow.transform.localScale *= arrowScale;   // the model is a thin prop: bigger reads from the game camera
@@ -164,12 +250,12 @@ public class FoodFight : MonoBehaviour
         if (arrow != null) Destroy(arrow);
     }
 
-    // The bow, tip to tip `BowHeight` tall, standing upright and facing along `aim` (string towards the archer).
-    private Transform SpawnBow(Vector3 at, Vector3 aim)
+    // The bow, tip to tip `BowHeight` tall, its limbs along `up`; its curve bulges towards -`aim`.
+    private Transform SpawnBow(Vector3 at, Vector3 aim, Vector3 up)
     {
         if (bowModel == null) return null;
         var pivot = new GameObject("Bow").transform;
-        pivot.SetPositionAndRotation(at, Quaternion.LookRotation(aim, Vector3.up));
+        pivot.SetPositionAndRotation(at, Quaternion.LookRotation(aim, up));
         var model = Instantiate(bowModel, pivot);
         model.transform.localPosition = Vector3.zero;
         // KayKit's Unity-axis bow: limbs along Z, the arc bulging towards +X with the string behind it, flat
@@ -211,7 +297,9 @@ public class FoodFight : MonoBehaviour
     }
 
     private Vector3 ChefHead() => chef.transform.position + Vector3.up * 1.9f;
-    private Vector3 ArrowTarget() => chef.transform.position + Vector3.up * 2.1f;   // the top of his head
+    // Into the upper half of his head, from the head bone (his head spans about 1.05-2.15 m: a fixed 2.1 above his
+    // feet only grazed the top of it, so the arrow seemed to fly over his head).
+    private Vector3 ArrowTarget() => chefHead != null ? chefHead.position + Vector3.up * 0.55f : chef.transform.position + Vector3.up * 1.75f;
 
     // Arc from where the object is to a (possibly moving) target; homing, so it always lands. Tumbling
     // food spins; an arrow points along its flight.

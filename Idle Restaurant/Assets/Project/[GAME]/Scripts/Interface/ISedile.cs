@@ -8,4 +8,7 @@ public interface ISedile
     NonStackBase GetTableService();
 
     void UpdateChairState();
+
+    // Lets this customer walk into (or out of) the chair's place; everyone else walks round it.
+    void Open(Object who, bool open);
 }

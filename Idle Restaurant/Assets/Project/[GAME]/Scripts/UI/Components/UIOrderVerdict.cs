@@ -13,6 +13,11 @@ public class UIOrderVerdict : MonoBehaviour
     private void Awake()
     {
         label = GetComponent<TMP_Text>();
+        // A long one-word name ("Cheeseburger") broke in the middle of the word ("Cheesebu / rger"): it shrinks to fit
+        // instead, and only names of two words go on two lines.
+        label.enableAutoSizing = true;
+        label.fontSizeMax = label.fontSize;
+        label.fontSizeMin = 18f;
         Set(waitingText, UITokens.Colors.InkMuted);
     }
 

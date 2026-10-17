@@ -23,7 +23,7 @@ public class GamePanels : Panel
         EventManager.OnGameStart.AddListener(InitializeWelcomePanel);
         EventManager.OnLevelStart.AddListener(InitializeInGamePanel);
         EventManager.OnLevelContine.AddListener(ReinitializeInGamePanel);
-        EventManager.OnLevelFinish.AddListener(InitializeScorePanel);
+        // No result card between shifts any more: service flows on (ShiftFlow).
         EventManager.OnGameEnd.AddListener(InitializeLevelFinishPanel);
         EventManager.OnHelpRequest.AddListener(InitializeHelpPanel);
     }
@@ -33,15 +33,15 @@ public class GamePanels : Panel
         EventManager.OnGameStart.RemoveListener(InitializeWelcomePanel);
         EventManager.OnLevelStart.RemoveListener(InitializeInGamePanel);
         EventManager.OnLevelContine.RemoveListener(ReinitializeInGamePanel);
-        EventManager.OnLevelFinish.RemoveListener(InitializeScorePanel);
         EventManager.OnGameEnd.RemoveListener(InitializeLevelFinishPanel);
         EventManager.OnHelpRequest.RemoveListener(InitializeHelpPanel);
     }
 
+    // The title screen is no longer shown: the game opens straight into the kitchen (GameManager.StartLevel).
     private void InitializeWelcomePanel()
     {
-        InGamePanel.HidePanel();
-        WelcomePanel.ShowPanel();
+        WelcomePanel.HidePanel();
+        InGamePanel.ShowPanel();
         ShowPanel();
     }
 

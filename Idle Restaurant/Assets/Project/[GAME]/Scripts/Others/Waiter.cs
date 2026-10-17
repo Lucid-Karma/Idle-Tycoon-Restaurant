@@ -25,7 +25,6 @@ public class Waiter : MonoBehaviour
     private const float Reach = 1.5f;               // close enough to take a burger or to set it down
     private const float FarthestReach = 2.6f;       // as close as he gets when something is in the way
     private const float LookFor = 0.3f;             // seconds between looks for something to do
-    private const float OnTray = 0.55f;             // how big the burger rides on his tray, in the world
     private const float GiveUpAfter = 14f;          // no single errand should take longer than this
 
     private const float HopRate = 2.4f;             // hops a second at a run, empty-handed
@@ -60,6 +59,34 @@ public class Waiter : MonoBehaviour
     private Vector3 trayRest;
     private Vector3 lastVelocity;
     private Vector2 wobble, wobbleVelocity;     // the burger on the tray: x forward/back, y side to side
+
+    // The layers of the burger on the tray, each with its own little spring (Jiggle).
+    private sealed class Piece
+    {
+        public Transform Item;
+        public Vector3 RestPos;
+        public Quaternion RestRot;
+        public float Height01;       // 0 the bottom layer .. 1 the top one
+        public Vector3 Slide, SlideVelocity;
+        public float Lift, LiftVelocity;
+        public float Twist;          // which way it turns as it hops (+1 / -1)
+    }
+    private readonly List<Piece> pieces = new();
+    // The height of one layer in the burger's own space, and the same distance measured sideways: a burger is
+    // squashed to a tenth in height (its layers are scaled back up), so its own up and its own sideways differ.
+    private float pieceGap, sideGap;
+    private int jiggledHop;
+
+    // In the cafe and not busy with a burger: a burger the chef closes is left on its plate for him (PlayerFSM).
+    public static bool Free
+    {
+        get
+        {
+            var mochi = FindFirstObjectByType<Waiter>();
+            return mochi != null && mochi.isActiveAndEnabled && mochi.carrying == null
+                   && (mochi.job == Job.Waiting || mochi.job == Job.GoingHome);
+        }
+    }
 
     // What the chef shouldn't bother with any more: a burger the waiter has already claimed.
     public static Hamburger Claimed { get; private set; }
@@ -181,8 +208,25 @@ public class Waiter : MonoBehaviour
         }
     }
 
+    // Someone is still sitting at that spot waiting for a burger (their patience can run out while he is on
+    // his way, and a burger put down on an empty chair's spot just sat there for good).
+    private static bool Awaited(ServiceBase spot)
+    {
+        foreach (var npc in NpcFsm.Active)
+        {
+            var state = npc.executingNpcState;
+            if ((state == ExecutingNpcState.COME || state == ExecutingNpcState.ORDER || state == ExecutingNpcState.WAIT)
+                && npc.chair != null && npc.chair.GetTableService() == (NonStackBase)spot) return true;
+        }
+        return false;
+    }
+
     private ServiceBase Table(Hamburger burger)
     {
+        // The customer it was made for first (their order is what it is).
+        var owner = burger.ForCustomer;
+        if (Orders.Waiting(owner) && owner.chair.GetTableService() is ServiceBase mine && !mine.IsHaveFood() && mine.IsSuitable(burger))
+            return mine;
         foreach (var npc in NpcFsm.Active)
         {
             var state = npc.executingNpcState;
@@ -198,7 +242,12 @@ public class Waiter : MonoBehaviour
     {
         // The chef may have taken it, or the customer may have given up, while the cat was on his way.
         var burger = from != null ? from.FinishedBurger : null;
-        if (burger == null || burger != Claimed || to == null || to.IsHaveFood()) { GoHome(); return; }
+        if (burger == null || burger != Claimed) { GoHome(); return; }
+        if (to == null || to.IsHaveFood() || !Awaited(to))
+        {
+            to = Table(burger);
+            if (to == null) { GoHome(); return; }   // nobody waiting any more: the burger stays on its plate
+        }
         if (!Arrived(from.transform.position)) return;
 
         var (start, size) = (burger.transform.position, burger.transform.lossyScale.x);
@@ -206,11 +255,12 @@ public class Waiter : MonoBehaviour
         burger.transform.SetParent(hold, false);
         burger.transform.localPosition = Vector3.zero;
         burger.transform.localRotation = Quaternion.identity;
-        // A full burger is as tall as he is; on the tray it rides small, and goes back to size on the table.
-        // `OnTray` is a size in the world, whatever size he is himself (he is scaled up, and so is his tray).
+        // The burger keeps its size on the tray (it used to shrink to half, and the user did not like it): a burger
+        // as big as he is, swaying on his tray with every hop (Wobble), is the joke.
         carriedScale = burger.transform.localScale;
-        burger.transform.localScale = carriedScale * (OnTray / Mathf.Max(0.01f, hold.lossyScale.x));
+        burger.transform.localScale = carriedScale * (size / Mathf.Max(0.0001f, burger.transform.lossyScale.x));
         carrying = burger;
+        TakePieces(burger);
         SetJob(Job.Delivering);
         GoTo(to.transform.position, false);
         StartCoroutine(Toss(burger.transform, start, size, hold, 0.22f, 0.35f));
@@ -219,8 +269,16 @@ public class Waiter : MonoBehaviour
     private void Deliver()
     {
         if (carrying == null) { GoHome(); return; }
-        // Their patience ran out on the way: take it back to the pass rather than drop it on an empty chair.
-        if (to == null || to.IsHaveFood()) { Drop(false); GoHome(); return; }
+        // Their patience ran out on the way: another customer who is waiting gets it, or it goes back to the pass,
+        // never onto an empty chair's spot.
+        if (to == null || to.IsHaveFood() || !Awaited(to))
+        {
+            var other = Table(carrying);
+            if (other == null) { Drop(false); GoHome(); return; }
+            to = other;
+            GoTo(to.transform.position, false);
+            return;
+        }
         if (!Arrived(to.transform.position)) return;
         Drop(true);
         cheerAt = Time.time;
@@ -239,7 +297,8 @@ public class Waiter : MonoBehaviour
     private void Drop(bool onTable)
     {
         var burger = carrying;
-        var place = onTable && to != null && !to.IsHaveFood() ? (PlaceableBase)to : from;
+        PlaceableBase place = onTable && to != null && !to.IsHaveFood() && Awaited(to) ? to : ReturnPlate(burger);
+        SettlePieces();
         var (start, size) = (burger.transform.position, burger.transform.lossyScale.x);
         burger.transform.SetParent(null, true);
         burger.transform.localScale = carriedScale;
@@ -249,6 +308,16 @@ public class Waiter : MonoBehaviour
             StartCoroutine(Toss(burger.transform, start, size, burger.transform.parent, 0.22f, 0.45f));
         carrying = null;
         Claimed = null;
+    }
+
+    // Where a burger goes back to: the plate it came from if it can still take it (the chef may have started a
+    // new burger there meanwhile), otherwise any plate that can.
+    private Plate ReturnPlate(Hamburger burger)
+    {
+        if (from != null && from.Accepts(burger)) return from;
+        foreach (var plate in Object.FindObjectsByType<Plate>(FindObjectsSortMode.None))
+            if (plate.Accepts(burger)) return plate;
+        return from;
     }
 
     // Carries `item` from `start` to where `destination` is, in an arc, growing or shrinking from the size it
@@ -300,7 +369,7 @@ public class Waiter : MonoBehaviour
 
     private bool Arrived(Vector3 at)
     {
-        if (agent.pathPending) return false;
+        if (!agent.isOnNavMesh || agent.pathPending) return false;
         float flat = Flat(at);
         if (flat <= Reach) return true;
 
@@ -370,6 +439,7 @@ public class Waiter : MonoBehaviour
         float rock = (hops % 2 == 0 ? 1f : -1f) * Mathf.Sin(u * Mathf.PI) * (carry ? 8f : 6f);
         float roll = Mathf.Lerp(rock, nod * SwayDegrees, standing);
 
+        Puff(ref wide, ref tall, ref roll);
         cat.localPosition = new Vector3(0f, lift, 0f);
         cat.localRotation = Quaternion.Euler(lean, 0f, roll);
         cat.localScale = new Vector3(wide, tall, wide);
@@ -394,6 +464,52 @@ public class Waiter : MonoBehaviour
         if (hold != null) Wobble(dt, carry, speed, air, rock, nod);
     }
 
+    #region Tomato fight
+    // A customer's tomato can land on him instead of the chef (FoodFight). He does not take it quietly: his fur
+    // puffs up and he shakes, then he throws tomatoes back at whoever did it. (He had a synthesised voice for a
+    // while; the user found it unnatural and too loud, and he is silent again.)
+    private const float AngrySeconds = 0.9f;
+    private float angryAt = -10f;
+    private float headHeight = -1f;
+
+    public Vector3 Head
+    {
+        get
+        {
+            if (headHeight < 0f)
+            {
+                var renderers = cat != null ? cat.GetComponentsInChildren<Renderer>() : GetComponentsInChildren<Renderer>();
+                float top = transform.position.y + 0.8f;
+                foreach (var r in renderers) top = Mathf.Max(top, r.bounds.max.y);
+                headHeight = top - transform.position.y - 0.15f;
+            }
+            return transform.position + Vector3.up * headHeight;
+        }
+    }
+
+    public bool Angry => Time.time - angryAt < AngrySeconds;
+
+    // Hit by a tomato: he always puffs up and shakes, and only sometimes throws back (user: "only sometimes").
+    private const float ThrowBackChance = 0.4f;
+    public void Struck(NpcFsm thrower)
+    {
+        angryAt = Time.time;
+        if (thrower != null && FoodFight.Instance != null && Random.value < ThrowBackChance)
+            FoodFight.Instance.MochiThrowsBack(this, thrower);
+    }
+
+    // Puffed up and shaking for a moment.
+    private void Puff(ref float wide, ref float tall, ref float roll)
+    {
+        float a = (Time.time - angryAt) / AngrySeconds;
+        if (a < 0f || a >= 1f) return;
+        float puff = Mathf.Sin(Mathf.Min(1f, a * 3f) * Mathf.PI * 0.5f) * (1f - Mathf.Max(0f, a - 0.7f) / 0.3f);
+        wide *= 1f + 0.24f * puff;
+        tall *= 1f + 0.1f * puff;
+        roll += Mathf.Sin(Time.time * 55f) * 7f * puff;
+    }
+    #endregion
+
     // The burger on his tray wobbles the way it does in the chef's hands (CarryWobble): it leans back when he
     // sets off and forward when he stops, sways with every hop, gets a jolt as he lands, and settles with a
     // little spring. A messy burger wobbles more (BurgerReview.Wobbliness). Only the spot it rides on turns,
@@ -409,14 +525,94 @@ public class Waiter : MonoBehaviour
 
         float wobbly = carrying.Review.Wobbliness;
         float run01 = Mathf.Clamp01(speed / Speed);
-        var target = new Vector2(-local.z, local.x) * 1.4f                      // leans against his acceleration
-                   + new Vector2(-3f * run01 + air * 4f, rock * 0.9f)            // tips back running, bobs with the hop
-                   + new Vector2(0f, nod * 2.5f * standing);                       // and sways with him standing
-        target = Vector2.ClampMagnitude(target * wobbly, 16f * wobbly);
+        // A gentle sway (user, twice: "still swings side to side far too much"): it was rock x1.8 with a 22 degree
+        // limit and a loose spring that swung past and back; the hop now tips it a few degrees and it settles.
+        var target = new Vector2(-local.z, local.x) * 0.8f                      // leans against his acceleration
+                   + new Vector2(-1.5f * run01 + air * 2f, rock * 0.5f)          // tips back running, sways a little with the hop
+                   + new Vector2(0f, nod * 1.2f * standing);                       // and sways with him standing
+        target = Vector2.ClampMagnitude(target * wobbly, 8f * wobbly);
         wobbleVelocity += (target - wobble) * (150f * dt);
-        wobbleVelocity *= Mathf.Exp(-8f * dt);
+        wobbleVelocity *= Mathf.Exp(-10f * dt);   // well damped: no swinging past and back
         wobble += wobbleVelocity * dt;
-        hold.localRotation = Quaternion.Euler(wobble.x, 0f, wobble.y);
+        // A tall burger tipping as one stiff block looked wrong (user): the taller it is, the less the whole stack
+        // leans - its layers wobble on their own instead (Jiggle).
+        float block = Mathf.Lerp(1f, 0.5f, Mathf.Clamp01((pieces.Count - 3) / 4f));
+        hold.localRotation = Quaternion.Euler(wobble.x * block, 0f, wobble.y * block);
+        Jiggle(dt, wobbly);
+    }
+
+    // Each layer rides on the one under it a little loosely (user: "the pieces could hop with the sway, as if
+    // about to fall"): every time Mochi lands, the layers are thrown up a touch - the higher, the more - and drop
+    // back with a small tilt, and they slide a little towards the side the tray leans to and spring back. The
+    // bottom layer stays put; nothing ever comes off. A messy burger (BurgerReview.Wobbliness) is looser.
+    private void Jiggle(float dt, float wobbly)
+    {
+        if (pieces.Count < 2) return;
+        bool landed = hops != jiggledHop;
+        jiggledHop = hops;
+        float gap = pieceGap;
+        float gravity = gap * 90f;
+        foreach (var piece in pieces)
+        {
+            if (piece.Item == null) continue;
+            float h = piece.Height01;
+            if (landed && h > 0f)
+            {
+                piece.LiftVelocity += gap * 8f * h * Mathf.Min(wobbly, 1.6f) * Random.Range(0.55f, 1f);
+                piece.Twist = Random.value < 0.5f ? -1f : 1f;
+            }
+            piece.LiftVelocity -= gravity * dt;
+            piece.Lift += piece.LiftVelocity * dt;
+            if (piece.Lift < 0f) { piece.Lift = 0f; piece.LiftVelocity = -piece.LiftVelocity * 0.2f; }
+
+            // Downhill on the tray: the tray's tilt (z about the side, x about forward) moves it sideways.
+            var downhill = new Vector3(-wobble.y, 0f, wobble.x) * (sideGap * 0.03f * h * wobbly);
+            piece.SlideVelocity += (downhill - piece.Slide) * (110f * dt);
+            piece.SlideVelocity *= Mathf.Exp(-5f * dt);
+            piece.Slide += piece.SlideVelocity * dt;
+            piece.Slide = Vector3.ClampMagnitude(piece.Slide, sideGap * 0.3f);
+
+            // Up in the air it turns a little about its own axis. (Never tipped about a level axis: in the
+            // burger's squashed space that would shear the layer instead of tilting it.)
+            float twist = Mathf.Min(piece.Lift / gap, 1f) * 14f * piece.Twist;
+            piece.Item.localPosition = piece.RestPos + piece.Slide + Vector3.up * piece.Lift;
+            piece.Item.localRotation = Quaternion.AngleAxis(twist, Vector3.up) * piece.RestRot;
+        }
+    }
+
+    private void TakePieces(Hamburger burger)
+    {
+        SettlePieces();
+        var items = new List<Transform>();
+        // The layers only: not the plate the burger sits on (a child of it too) nor the empty bun holder.
+        foreach (Transform child in burger.transform)
+            if (child.gameObject.activeSelf && !child.name.StartsWith("plate", System.StringComparison.OrdinalIgnoreCase)
+                && child.GetComponentInChildren<Renderer>() != null)
+                items.Add(child);
+        items.Sort((a, b) => a.localPosition.y.CompareTo(b.localPosition.y));
+        if (items.Count < 2) return;
+        pieceGap = Mathf.Max(0.001f, (items[^1].localPosition.y - items[0].localPosition.y) / (items.Count - 1));
+        var scale = burger.transform.lossyScale;
+        sideGap = pieceGap * Mathf.Abs(scale.y) / Mathf.Max(0.0001f, Mathf.Abs(scale.x));
+        for (int i = 0; i < items.Count; i++)
+            pieces.Add(new Piece
+            {
+                Item = items[i], RestPos = items[i].localPosition, RestRot = items[i].localRotation,
+                Height01 = i / (float)(items.Count - 1), Twist = 1f,
+            });
+        jiggledHop = hops;
+    }
+
+    // Every layer back exactly where it was stacked, before the burger leaves the tray.
+    private void SettlePieces()
+    {
+        foreach (var piece in pieces)
+        {
+            if (piece.Item == null) continue;
+            piece.Item.localPosition = piece.RestPos;
+            piece.Item.localRotation = piece.RestRot;
+        }
+        pieces.Clear();
     }
     #endregion
 }

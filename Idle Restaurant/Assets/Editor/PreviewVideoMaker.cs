@@ -12,14 +12,16 @@ using UnityEngine.Video;
 // The cut is a text file, one line each:
 //   out <file.mp4> <width> <height>
 //   cover <image.png> <seconds>                  the still opening frame (scaled to cover the frame)
-//   clip <file.mp4> <from s> <to s> [centerX]     centerX 0..1: where to centre a narrower crop (portrait)
+//   clip <file.mp4> <from s> <to s> [centerX] [zoom] [centerY] [speed]
+//        centerX/centerY 0..1 (viewport, y up): where to centre the crop; zoom >= 1 pushes in a little;
+//        speed 2 or 3 keeps every 2nd/3rd frame (a sped-up stretch)
 // Every 15th frame is also written next to the video as a JPEG, to check the crops without a video player.
 // Run (in play mode): PreviewVideoMaker.Make("<cut.txt>"), e.g. from the editor bridge with scall.
 public static class PreviewVideoMaker
 {
     const int Fps = 30;
 
-    class Shot { public string Path; public double From, To; public float CenterX = 0.5f; public bool Cover; public float Seconds; }
+    class Shot { public string Path; public double From, To; public float CenterX = 0.5f, CenterY = 0.5f, Zoom = 1f; public int Speed = 1; public bool Cover; public float Seconds; }
 
     static readonly Queue<Shot> shots = new();
     static MediaEncoder encoder;
@@ -27,7 +29,7 @@ public static class PreviewVideoMaker
     static Texture2D readback;
     static VideoPlayer player;
     static Shot current;
-    static long lastFrame = -1, endFrame;
+    static long lastFrame = -1, endFrame, firstFrame;
     static double lastFrameAt;
     static int written, width, height;
     static string outPath, checkDir;
@@ -44,7 +46,12 @@ public static class PreviewVideoMaker
             if (p.Count == 0 || p[0].StartsWith("#")) continue;
             if (p[0] == "out") { outPath = p[1]; width = int.Parse(p[2]); height = int.Parse(p[3]); }
             else if (p[0] == "cover") shots.Enqueue(new Shot { Cover = true, Path = p[1], Seconds = F(p[2]) });
-            else if (p[0] == "clip") shots.Enqueue(new Shot { Path = p[1], From = F(p[2]), To = F(p[3]), CenterX = p.Count > 4 ? F(p[4]) : 0.5f });
+            else if (p[0] == "clip") shots.Enqueue(new Shot
+            {
+                Path = p[1], From = F(p[2]), To = F(p[3]), CenterX = p.Count > 4 ? F(p[4]) : 0.5f,
+                Zoom = p.Count > 5 ? Mathf.Max(1f, F(p[5])) : 1f, CenterY = p.Count > 6 ? F(p[6]) : 0.5f,
+                Speed = p.Count > 7 ? Mathf.Max(1, Mathf.RoundToInt(F(p[7]))) : 1,
+            });
         }
         if (File.Exists(outPath)) File.Delete(outPath);
         checkDir = Path.Combine(Path.GetDirectoryName(outPath), Path.GetFileNameWithoutExtension(outPath) + "_frames");
@@ -124,6 +131,7 @@ public static class PreviewVideoMaker
     {
         double fps = vp.frameRate > 0 ? vp.frameRate : Fps;
         lastFrame = (long)(current.From * fps) - 1;
+        firstFrame = lastFrame + 1;
         endFrame = System.Math.Min((long)(current.To * fps), (long)vp.frameCount - 1);
         lastFrameAt = EditorApplication.timeSinceStartup;
         vp.frame = (long)(current.From * fps);
@@ -138,7 +146,8 @@ public static class PreviewVideoMaker
         lastFrame = index;
         lastFrameAt = EditorApplication.timeSinceStartup;
         if (index >= endFrame) { EndShot(vp); return; }
-        Blit(vp.texture, current.CenterX);
+        if (current.Speed > 1 && (index - firstFrame) % current.Speed != 0) return;
+        Blit(vp.texture, current.CenterX, current.Zoom, current.CenterY);
         Write();
     }
 
@@ -150,13 +159,13 @@ public static class PreviewVideoMaker
         Next();
     }
 
-    // Scale the source to cover the output frame (crop the excess), centred on centerX horizontally.
-    static void Blit(Texture src, float centerX)
+    // Scale the source to cover the output frame (crop the excess), centred on (centerX, centerY), pushed in by zoom.
+    static void Blit(Texture src, float centerX, float zoom = 1f, float centerY = 0.5f)
     {
-        float scale = Mathf.Max(width / (float)src.width, height / (float)src.height);
+        float scale = Mathf.Max(width / (float)src.width, height / (float)src.height) * zoom;
         float visibleW = width / (scale * src.width), visibleH = height / (scale * src.height);
         float x = Mathf.Clamp(centerX - visibleW / 2f, 0f, 1f - visibleW);
-        float y = (1f - visibleH) / 2f;
+        float y = Mathf.Clamp(centerY - visibleH / 2f, 0f, 1f - visibleH);
         Graphics.Blit(src, frame, new Vector2(visibleW, visibleH), new Vector2(x, y));
     }
 

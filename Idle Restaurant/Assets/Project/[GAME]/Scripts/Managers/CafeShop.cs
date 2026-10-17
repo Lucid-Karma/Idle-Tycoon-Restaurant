@@ -188,6 +188,12 @@ public class CafeShop : MonoBehaviour
         return bounds.center;
     }
 
+    // The same confetti, for a big moment elsewhere (the lesson's first burger).
+    public void Confetti(Vector3 at)
+    {
+        if (revealVfx != null) Burst(at);
+    }
+
     private void Burst(Vector3 at)
     {
         var fx = Instantiate(revealVfx, at, Quaternion.identity);

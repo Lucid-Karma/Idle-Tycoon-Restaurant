@@ -48,6 +48,7 @@ public class UIShop : MonoBehaviour
 
     public void Open()
     {
+        MoneyPiles.CollectAll();   // what the wallet shows is what can be spent
         if (gameObject.activeSelf) return;
         EventManager.OnClick.Invoke();
         resumeTimeScale = Time.timeScale;

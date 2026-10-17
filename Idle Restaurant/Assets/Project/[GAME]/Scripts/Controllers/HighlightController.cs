@@ -88,23 +88,21 @@ public class HighlightController : MonoBehaviour
         return variant;
     }
 
-    // Hints only make sense while a shift is running (not on the title, help or result screens).
+    // Hints only make sense once service has started (not on the title screen). Shifts follow each other
+    // without a break now (ShiftFlow), so they stay on between them; the help card and the shop pause the game.
     private bool inShift;
 
     private void OnEnable()
     {
         EventManager.OnLevelStart.AddListener(OnShiftStart);
-        EventManager.OnLevelFinish.AddListener(OnShiftEnd);
         CafeShop.Changed += OnCafeChanged;
     }
 
     private void OnShiftStart() => inShift = true;
-    private void OnShiftEnd() => inShift = false;
 
     private void OnDisable()
     {
         EventManager.OnLevelStart.RemoveListener(OnShiftStart);
-        EventManager.OnLevelFinish.RemoveListener(OnShiftEnd);
         CafeShop.Changed -= OnCafeChanged;
         foreach (var pair in applied) Restore(pair.Key);
         applied.Clear();
@@ -182,7 +180,14 @@ public class HighlightController : MonoBehaviour
 
         if (held is Hamburger burger)
         {
-            // Customers still waiting for their order, and their table spot (tapping either serves them).
+            // The customer it was made for, if they are still waiting; otherwise everyone still waiting, and
+            // their table spot (tapping either serves them).
+            if (Orders.Waiting(burger.ForCustomer) && burger.ForCustomer.chair.GetTableService() is ServiceBase own && own.IsSuitable(burger))
+            {
+                into.Add(own);
+                into.Add(burger.ForCustomer);
+                return;
+            }
             foreach (var npc in NpcFsm.Active)
             {
                 var state = npc.executingNpcState;
@@ -218,6 +223,8 @@ public class HighlightController : MonoBehaviour
         foreach (var oven in ovens) if (oven.Food is Bun bun && bun.Preparation != Prep.Raw) { into.Add(bun); into.Add(oven); }
         foreach (var board in boards) if (board.Food is CuttableBase sliced && sliced.isSliced) into.Add(sliced);
         foreach (var plate in plates) if (plate.FinishedBurger != null) into.Add(plate.FinishedBurger);
+        // Everything an order needs is on it: tap it to finish the burger (adding more is the player's choice).
+        foreach (var plate in plates) if (plate.CoversAnOrder) into.Add(plate);
 
         if (into.Count == 0)
             foreach (var source in sources) into.Add(source);

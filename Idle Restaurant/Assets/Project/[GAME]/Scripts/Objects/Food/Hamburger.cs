@@ -13,10 +13,20 @@ public class Hamburger : EdibleBase
 
     // The six layers as they were stacked, with how each was prepared (read by the customer who eats it).
     public IReadOnlyList<BurgerLayer> Layers => layers;
+    // Whose order it was made for (Plate), so hints, the lesson and Mochi take it to them.
+    public NpcFsm ForCustomer { get; set; }
+
+    public override void OnEnable()
+    {
+        base.OnEnable();
+        Orders.Register(this);
+    }
     public BurgerReview Review => review ??= BurgerReview.Of(layers);
 
     protected override void OnDisable()
     {
+        Orders.Unregister(this);
+        ForCustomer = null;
         collider.size = hamSize;
         collider.center = hamCenter;
 

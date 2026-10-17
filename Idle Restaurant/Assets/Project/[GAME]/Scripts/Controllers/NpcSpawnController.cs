@@ -38,6 +38,14 @@ public class NpcSpawnController : MonoBehaviour
     }
     private void StartDelayedCreation() => StartCoroutine(DelayedCreation());
 
+    // The next shift in the same scene (ShiftFlow): a new opening wave, sized for the tables owned now.
+    public void ResetForNextShift()
+    {
+        waveSent = false;
+        spawnedCount = 0;
+        levelCustomerCount = 3 + CafeShop.ExtraCustomers;
+    }
+
     void Start()
     {
         for (int i = 0; i < npcPrefabs.Length; i++)
@@ -76,6 +84,13 @@ public class NpcSpawnController : MonoBehaviour
             if(npc != null)
             {
                 List<GameObject> specificChairs = targetChairs.Where(IsFree).ToList();
+                // In the first lesson, only seats the player can see: one under the chef card at the bottom of the
+                // screen got pointed at and could not be found (Tutorial.SeatInClearView).
+                if (Tutorial.Running)
+                {
+                    var seen = specificChairs.Where(c => Tutorial.SeatInClearView(c.GetComponent<ISedile>().CalculateSitPos())).ToList();
+                    if (seen.Count > 0) specificChairs = seen;
+                }
                 chairIndex = Random.Range(0, specificChairs.Count); // max is exclusive: the last chair was never picked
                 //Debug.Log("SChairCount: " + specificChairs.Count + " chairIndex: " + chairIndex);
                 npc.GetComponent<NpcFsm>().chair = specificChairs[chairIndex].GetComponent<ISedile>();

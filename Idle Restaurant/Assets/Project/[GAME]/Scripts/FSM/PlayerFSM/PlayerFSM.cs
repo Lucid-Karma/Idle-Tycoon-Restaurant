@@ -85,7 +85,8 @@ public class PlayerFSM : MonoBehaviour
     {
         _playerCam = Camera.main;
         isHolded = false;
-        baseSpeed = Agent.speed;
+        baseSpeed = runSpeed;
+        Agent.acceleration = Mathf.Max(Agent.acceleration, runAcceleration);
         ApplyPerks();
 
         executingState = ExecutingState.IDLE;
@@ -98,6 +99,10 @@ public class PlayerFSM : MonoBehaviour
 
     #region Cafe upgrades
     private float baseSpeed;
+    // His running speed before the coffee (the scene's agent had 3.5: playtesters found him slow). The agent
+    // also gets up to speed and stops quicker, so short hops between stations feel snappy.
+    [SerializeField] private float runSpeed = 4.6f;
+    [SerializeField] private float runAcceleration = 40f;
 
     private void OnEnable() => CafeShop.Changed += OnCafeChanged;
     private void OnDisable() => CafeShop.Changed -= OnCafeChanged;
@@ -106,6 +111,14 @@ public class PlayerFSM : MonoBehaviour
     private void OnCafeChanged(Upgrade upgrade)
     {
         services = null;
+        reachSources = null;
+        reachOvens = null;
+        reachPans = null;
+        reachBoards = null;
+        reachPlates = null;
+        reachBins = null;
+        reachBlocked.Clear();
+        reachOf.Clear();
         ApplyPerks();
     }
 
@@ -119,6 +132,7 @@ public class PlayerFSM : MonoBehaviour
     void Update()
     {
         Steer();
+        UseWhatHeWalksUpTo();
         currentState.UpdateState(this);
     }
 
@@ -157,6 +171,7 @@ public class PlayerFSM : MonoBehaviour
             ahead.Normalize();
             var right = Vector3.Cross(Vector3.up, ahead);
             var heading = right * move.x + ahead * move.y;
+            steerHeading = heading;
 
             Agent.velocity = heading * Agent.speed;
             if (heading.sqrMagnitude > 0.0001f)
@@ -185,6 +200,203 @@ public class PlayerFSM : MonoBehaviour
     }
     #endregion
 
+    #region Using what he walks up to
+    // Moving by hand (WASD / the stick), walking up to something that is useful right now uses it, like a tap
+    // on it would: no need to tap (the "arcade idle" feel of games like Burger Life). Taps work as before, and
+    // a tap's walk is never second-guessed. What counts, by what is in his hands:
+    //   empty   - an ingredient crate; a baked bun, a fried (or burnt) patty, chopped veg; a finished burger;
+    //   food    - a raw bun to a free oven, a raw patty to a free pan, whole veg/cheese to a free board, anything
+    //             onto a plate (a whole cheese or a burnt bun too: mess is part of the game), anything into the bin;
+    //   burger  - the table spot of a customer waiting for one, an empty plate, the bin.
+    // (The bin and unprepared food on plates were left out at first, so nothing could go to waste by accident;
+    // the user wanted both, and "steering into it" already keeps them deliberate.) He has to be close - as close as he can get to
+    // it, plus a little (some crates sit deep on the counter: ReachOf) - and be steering INTO it, for a moment
+    // (ReachDwell): walking along the counter past the crates uses none of them, and standing still uses nothing
+    // (a first version also used what he faced after stopping, and he grabbed crates he had only stopped near).
+    // The same use then waits until he has stepped away from that thing, so pushing on into a crate gives one
+    // bun, not one a frame - but the next, different use of it is fine: veg put on the board can be taken off
+    // again once it is chopped, without walking away first. (Blocking everything around him stopped "take a
+    // tomato, turn to the board beside the crate" - the two are neighbours in this kitchen.)
+    private const float ReachNear = 0.8f, ReachSlack = 0.35f, ReachTable = 1.45f, ReachDwell = 0.2f;
+    private Vector3 steerHeading;
+    private readonly Dictionary<Component, float> reachOf = new();
+    private readonly Dictionary<Collider, Component> reachBlocked = new();   // the use -> the thing it was on
+    private readonly List<Collider> reachDrop = new();
+    private Component reachCandidate;
+    private float reachSince;
+    private IngredientsSource[] reachSources;
+    private Oven[] reachOvens;
+    private Pan[] reachPans;
+    private ChoppingBoard[] reachBoards;
+    private Plate[] reachPlates;
+    private Bin[] reachBins;
+
+    private void UseWhatHeWalksUpTo()
+    {
+        if (!Steering || IsStunned || walkTarget != null || Time.timeScale == 0f || stick == null || !stick.Playing)
+        {
+            reachCandidate = null;
+            return;
+        }
+        reachSources ??= FindObjectsByType<IngredientsSource>(FindObjectsSortMode.None);
+        reachOvens ??= FindObjectsByType<Oven>(FindObjectsSortMode.None);
+        reachPans ??= FindObjectsByType<Pan>(FindObjectsSortMode.None);
+        reachBoards ??= FindObjectsByType<ChoppingBoard>(FindObjectsSortMode.None);
+        reachPlates ??= FindObjectsByType<Plate>(FindObjectsSortMode.None);
+        reachBins ??= FindObjectsByType<Bin>(FindObjectsSortMode.None);
+        services ??= FindObjectsByType<ServiceBase>(FindObjectsSortMode.None);
+
+        // Things he has stepped away from can be used again.
+        reachDrop.Clear();
+        foreach (var pair in reachBlocked)
+        {
+            var place = pair.Value;
+            if (pair.Key == null || place == null || !place.gameObject.activeInHierarchy || ReachDistance(place) > ReachOf(place) + 0.6f)
+                reachDrop.Add(pair.Key);
+        }
+        foreach (var c in reachDrop) reachBlocked.Remove(c);
+
+        Component bestPlace = null;
+        Collider bestUse = null;
+        float best = float.PositiveInfinity;
+        void Consider(Component place, Collider use, float reach)
+        {
+            if (place == null || use == null || !place.gameObject.activeInHierarchy || reachBlocked.ContainsKey(use)) return;
+            float d = ReachDistance(place);
+            if (d > Mathf.Max(reach, ReachOf(place)) || !Meant(place, out float aim, out bool square)) return;
+            // The thing he stands squarely in front of wins over one he only sees past the corner of, even if that
+            // one is nearer: the crates sit side by side, some deeper on the counter than others (the patty crate
+            // behind the cheese crate's corner could not be had at all), and the keyboard only has 8 directions.
+            float cost = d * 0.5f + (square ? 0f : 1.2f) + (1f - aim);
+            if (cost >= best) return;
+            best = cost;
+            bestPlace = place;
+            bestUse = use;
+        }
+
+        var held = HeldFood;
+        if (held == null)
+        {
+            foreach (var source in reachSources) Consider(source, source.GetComponent<Collider>(), ReachNear);
+            foreach (var oven in reachOvens)
+                if (oven.Food is Bun bun && bun.Preparation != Prep.Raw) Consider(OvenBody(oven), bun.collider, ReachNear);
+            foreach (var pan in reachPans)
+                if (pan.Food is Burger patty && patty.Preparation != Prep.Raw) Consider(pan, patty.collider, ReachNear);
+            foreach (var board in reachBoards)
+                if (board.Food is CuttableBase sliced && sliced.isSliced) Consider(board, sliced.collider, ReachNear);
+            foreach (var plate in reachPlates)
+                if (plate.FinishedBurger is { } burger) Consider(plate, burger.collider, ReachNear);
+            // Walking into a plate that has everything an order needs finishes the burger (only then: a half-built
+            // one is never closed just by passing it).
+            foreach (var plate in reachPlates)
+                if (plate.CoversAnOrder) Consider(plate, plate.GetComponent<Collider>(), ReachNear);
+        }
+        else if (held is Hamburger)
+        {
+            foreach (var service in services)
+                if (service.IsSuitable(held) && WaitedFor(service)) Consider(service, service.GetComponent<Collider>(), ReachTable);
+            foreach (var plate in reachPlates) if (plate.Accepts(held)) Consider(plate, plate.GetComponent<Collider>(), ReachNear);
+            foreach (var bin in reachBins) Consider(bin, bin.GetComponent<Collider>(), ReachNear);
+        }
+        else
+        {
+            bool raw = held.Preparation == Prep.Raw || held.Preparation == Prep.Whole;
+            if (held is Bun && raw)
+                foreach (var oven in reachOvens) if (!oven.IsHaveFood()) Consider(OvenBody(oven), oven.GetComponent<Collider>(), ReachNear);
+            if (held is Burger && raw)
+                foreach (var pan in reachPans) if (!pan.IsHaveFood()) Consider(pan, pan.GetComponent<Collider>(), ReachNear);
+            if (held is CuttableBase cut && !cut.isSliced)
+                foreach (var board in reachBoards) if (!board.IsHaveFood()) Consider(board, board.GetComponent<Collider>(), ReachNear);
+            foreach (var plate in reachPlates) if (plate.Accepts(held)) Consider(plate, plate.GetComponent<Collider>(), ReachNear);
+            foreach (var bin in reachBins) Consider(bin, bin.GetComponent<Collider>(), ReachNear);
+        }
+
+        if (bestPlace != reachCandidate)
+        {
+            reachCandidate = bestPlace;
+            reachSince = Time.time;
+        }
+        if (bestPlace == null || Time.time - reachSince < ReachDwell) return;
+
+        // Exactly what a tap on it does once he is beside it.
+        GatherInteractableComponents(bestUse, bestUse.bounds.center);
+        PreferWaitingCustomer();
+        SelectObject();
+        if (selectable is Component used)
+        {
+            LastTapped = used;
+            LastTappedAt = Time.unscaledTime;
+        }
+        Interact();
+        spawnable = null;
+        placeable = null;
+        edible = null;
+        selectable = null;
+        bin = null;
+        approachTarget = null;
+        walkTarget = null;
+        reachCandidate = null;
+
+        reachBlocked[bestUse] = bestPlace;
+    }
+
+    // The oven tray is tapped through the whole oven (TapProxy): the oven body is what he walks up to.
+    private static Component OvenBody(Oven oven)
+    {
+        foreach (var proxy in TapProxy.All)
+            if (proxy != null && proxy.Target == oven) return proxy;
+        return oven;
+    }
+
+    private float ReachDistance(Component c) =>
+        TryBounds(c, out var bounds) ? FlatDistance(Agent.transform.position, bounds) : float.PositiveInfinity;
+
+    // The way he is being steered (not the way he happens to slide along a counter) points into it, within about
+    // 50 degrees of its nearest side. `aim` is how squarely (1 = dead ahead); `square` is whether he stands in
+    // front of one of its sides rather than off one of its corners.
+    private bool Meant(Component c, out float aim, out bool square)
+    {
+        aim = 0f;
+        square = false;
+        if (!TryBounds(c, out var bounds) || steerHeading.sqrMagnitude < 0.0001f) return false;
+        var me = Agent.transform.position;
+        var to = bounds.ClosestPoint(new Vector3(me.x, bounds.center.y, me.z)) - me;
+        to.y = 0f;
+        square = (me.x >= bounds.min.x && me.x <= bounds.max.x) || (me.z >= bounds.min.z && me.z <= bounds.max.z);
+        if (to.sqrMagnitude < 0.0025f) { aim = 1f; return true; }   // already touching it
+        aim = Vector3.Dot(steerHeading.normalized, to.normalized);
+        return aim > 0.64f;
+    }
+
+    // How close he can get to it, plus a little: like a tap's approach (FindApproach), the floor around it that he
+    // can actually walk to (the floor nearest its middle can be behind or under the counter). Things don't move,
+    // so it is worked out once each.
+    private float ReachOf(Component c)
+    {
+        if (reachOf.TryGetValue(c, out float reach)) return reach;
+        reach = ReachNear;
+        if (TryBounds(c, out var bounds))
+        {
+            probePath ??= new NavMeshPath();
+            var filter = new NavMeshQueryFilter { agentTypeID = Agent.agentTypeID, areaMask = Agent.areaMask };
+            Vector3 from = Agent.transform.position;
+            float ring = Mathf.Max(bounds.extents.x, bounds.extents.z) + Agent.radius + 0.1f;
+            float nearest = float.PositiveInfinity;
+            for (int i = 0; i < ApproachProbes; i++)
+            {
+                float angle = i * Mathf.PI * 2f / ApproachProbes;
+                var probe = new Vector3(bounds.center.x + Mathf.Cos(angle) * ring, from.y, bounds.center.z + Mathf.Sin(angle) * ring);
+                if (!NavMesh.SamplePosition(probe, out var hit, 2.5f, filter)) continue;
+                if (!NavMesh.CalculatePath(from, hit.position, filter, probePath) || probePath.status != NavMeshPathStatus.PathComplete) continue;
+                nearest = Mathf.Min(nearest, FlatDistance(hit.position, bounds));
+            }
+            if (!float.IsPositiveInfinity(nearest)) reach = Mathf.Max(ReachNear, nearest + ReachSlack);
+        }
+        reachOf[c] = reach;
+        return reach;
+    }
+    #endregion
+
     public void HandleScreenTap(Vector3 screenPosition)
     {
         if (IsStunned) return;
@@ -201,6 +413,7 @@ public class PlayerFSM : MonoBehaviour
 
         GatherInteractableComponents(tapped, tapHit.point);
         SnapToNearbyService();
+        PreferWaitingCustomer();
         GoToTarget();
     }
 
@@ -251,6 +464,12 @@ public class PlayerFSM : MonoBehaviour
 
         if (!serving)
         {
+            // Not in the first lesson: a new player "giving the tomato to the customer" got one back in the face.
+            if (Tutorial.Running)
+            {
+                Tutorial.Say("They want a <b>burger</b>!");
+                return true;
+            }
             ThrowAt(picked);
             return true;
         }
@@ -466,8 +685,8 @@ public class PlayerFSM : MonoBehaviour
     }
     #endregion
 
-    // The service point is a small white spot; with a burger in hand, a tap on anything non-interactive
-    // near a free one (the chair or table) serves there.
+    // The service point is a small white spot on the table; with a burger in hand, a tap on anything
+    // non-interactive near a free one (the chair or table) serves there.
     private void SnapToNearbyService()
     {
         if (!isHolded || currentFood is not Hamburger) return;
@@ -493,6 +712,48 @@ public class PlayerFSM : MonoBehaviour
         selectable = nearest;
         approachTarget = nearest;
         destination = nearest.transform.position;
+    }
+
+    // A table has a spot for each chair: a burger taken to a table goes to the spot of the customer who is
+    // waiting at it, not to whichever empty spot the finger happened to be nearest.
+    private const float SameTable = 1.8f;
+
+    private void PreferWaitingCustomer()
+    {
+        if (!isHolded || currentFood is not Hamburger || placeable is not ServiceBase tapped) return;
+        if (WaitedFor(tapped)) return;
+
+        ServiceBase best = null;
+        float bestDistance = SameTable;
+        foreach (var npc in NpcFsm.Active)
+        {
+            var state = npc.executingNpcState;
+            if (state != ExecutingNpcState.COME && state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT) continue;
+            if (npc.chair?.GetTableService() is not ServiceBase service || !service.IsSuitable(currentFood)) continue;
+            Vector3 offset = service.transform.position - tapped.transform.position;
+            offset.y = 0f;
+            if (offset.magnitude < bestDistance)
+            {
+                bestDistance = offset.magnitude;
+                best = service;
+            }
+        }
+        if (best == null) return;
+        placeable = best;
+        selectable = best;
+        approachTarget = best;
+        destination = best.transform.position;
+    }
+
+    private static bool WaitedFor(ServiceBase service)
+    {
+        foreach (var npc in NpcFsm.Active)
+        {
+            var state = npc.executingNpcState;
+            if ((state == ExecutingNpcState.COME || state == ExecutingNpcState.ORDER || state == ExecutingNpcState.WAIT)
+                && npc.chair?.GetTableService() == (NonStackBase)service) return true;
+        }
+        return false;
     }
 
     #region Selectables'Methods
@@ -531,8 +792,28 @@ public class PlayerFSM : MonoBehaviour
     {
         if (placeable != null)
         {
+            if (!isHolded && placeable is Plate plate) { CloseBurger(plate); return; }
             DropObject(placeable);
         }
+    }
+
+    // Empty hands on a plate with layers on it: "done!" - the top bun goes on, and he picks the burger up to serve it,
+    // unless Mochi is free to run it out (then it waits on the plate for him).
+    private void CloseBurger(Plate plate)
+    {
+        if (plate.HasHamburger || plate.LayerCount == 0) return;
+        if (!plate.Close()) return;
+        if (Tutorial.Running || !Waiter.Free) StartCoroutine(PickUpNextFrame(plate, plate.FinishedBurger));
+    }
+
+    // A burger made this frame has not run its Start yet (its collider and "can be picked up" are set there): take
+    // it a frame later - unless something else has happened to it meanwhile.
+    private System.Collections.IEnumerator PickUpNextFrame(Plate plate, Hamburger burger)
+    {
+        yield return null;
+        if (burger == null || isHolded || plate.FinishedBurger != burger) yield break;
+        burger.isLastPiece = true;
+        PickUpObject(burger);
     }
 
     void PickUpObject(EdibleBase ingredient) 
@@ -598,7 +879,7 @@ public class PlayerFSM : MonoBehaviour
 
     public void DoneWithPath()
     {
-        if (Steering || Agent.pathPending) return;
+        if (Steering || !Agent.isOnNavMesh || Agent.pathPending) return;
         if (Agent.remainingDistance <= Agent.stoppingDistance)
             executingState = ExecutingState.IDLE;
         else if (ReachedApproach())

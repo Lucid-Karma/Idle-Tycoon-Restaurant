@@ -546,6 +546,19 @@ and a proper onboarding. Built in that order:
   the one in the scene without rebuilding the catalogue), and its lamp no longer stands in front of the plates.
   Check any new seating with every chair's sit spot against the customers' navmesh (NavMesh.SamplePosition with
   an NpcFsm agent's type), not the chef's.
+- **...and every seat must stay reachable from the door with everything bought** (2026-10-15, user: "three
+  customers inside each other, one sitting backwards to the table, one walking through the others"): the bought
+  round tables' carve holes (0.9 of the top) plus the chairs' carve boxes closed both walkways - the terrace's
+  round table cut off the bottom strip at x 12-15, the Big Table (with the original stool chair) the right column
+  at z 15-19. Customers sent past them stopped where their path ended, several on one spot, and sat down there
+  facing wherever they were. Fix: bought tables carve at 0.72 of the top (`CafeGrowthBuilder.TableHole`, step
+  "3c Fit Table Holes"; the carve still grows by the walker's radius, so nobody crosses a tabletop). Verify with a
+  reachability map of the customers' agent type from the door (21.35, 1.2, 8.79), all upgrades bought, while
+  playing (carving is runtime): no cut-off cells, and every seated customer within 0.1 m of their seat.
+- **Store preview videos** (2026-10-15): the cafe grown (level 6, everything bought), a modest wallet (~$205-255),
+  a temporary editor bot tapping through `PlayerFSM.HandleScreenTap` on game time, `GameplayRecorder.BeginDirect`
+  (not the Recorder package: it stalls the editor at ~1 fps) at 2880x1620, cut with `PreviewVideoMaker` (play
+  mode). Spawn gaps under ~4 s make customers walk through each other at the door: keep the crowd natural.
 - Mochi turns to face the camera while he waits in his corner (`Waiter.FaceTheViewer`): from behind he
   was a white blob. His landing squash stays at the original 13 % / 17 % (carrying): the gentler one
   tried for a round looked stiff (user).
@@ -740,9 +753,403 @@ analytics_storage denied (no cookies, cookieless pings) since the game has no co
 `PlatformSession`, `Tutorial`, `CafeShop`, `GamePlatform`. Editor check: `GoogleAnalytics.EditorLog = true` logs
 "[GA] ..." lines. Custom parameters only show in GA reports after being registered as custom dimensions/metrics.
 
+### The arcade-idle flow (October 2026, "hybrid" direction)
+
+Asked (after Burger Life on CrazyGames: walk around, collect money, unlock things in the world, hire staff):
+"can we make a loop like this?" Chosen with the user: **hybrid** - keep burger building (and the Chaos
+Burger joke), wrap it in the arcade-idle meta, in phases:
+
+1. **Shifts flow on (done).** `ShiftFlow` (added to the GameManager's object at runtime by `GameManager.Awake`):
+   when the last customer leaves there is no result card and no pause (`GameManager` no longer pauses on
+   `OnLevelFinish`, `GamePanels` no longer shows the ScorePanel). The toast line shows "Great shift! 4.2 stars
+   +$58" (`UIToast.ShiftSummary`), the empty cafe is the break where `GamePlatform.Midgame` may play (max 1 per
+   8 min), then `ScoreManager.BeginNextShift` + `NpcSpawnController.ResetForNextShift` + `OnLevelStart` again
+   (pips rebuild, objective toast, GA level_start). The shift is still the unit underneath (stats, GA, a bought
+   table adds its customer next shift). Hints stay on between shifts. The old card and "Play again" are unused.
+   Why: avg session was 4.5 min = about one shift; the result card was the natural place to quit.
+2. **Money on the table (done).** `MoneyPiles` (<<<Controllers>>>, built by step 12 `CafeFlowBuilder`): a paid
+   order drops a stack of **banknotes** (one per $2 + 1, max 10; stacked a little untidily, a yellow paper band
+   round it from 4 notes, the last note slid off beside it; slowly turning), a white glint flashing every 0.8-1.6 s
+   (`sparkle.png` on a **SpriteRenderer** - a legacy particle material on a mesh, even with vertex colours, drew
+   nothing), and the amount floating over it ("$12": TextMeshPro 3D, `MoneyLabel.mat` with an ink outline, size 6,
+   billboarded). Notes: a box mesh built in code, `BillFace.mat` (`bill_face.png`, mid green with a "$" in an
+   oval, `Tools/FX/money_art.py`), `BillEdge.mat`, `BillBand.mat` (Yellow), paper-matte, double-sided, 0.72 x
+   0.36 m. History: a plain yellow disc stack read as a cheese wheel; gold coins with a stamped "$" were "not
+   liked"; the user asked for paper money.
+   The pile sits on its table service spot; the chef scoops it by walking within 2.1 m, or it flies home after 20 s; opening the
+   shop sweeps all piles first. The money is **saved at rating time** (nothing lost on quit); only the HUD
+   wallet waits (`EarningTextController` shows Coins - `MoneyPiles.Pending`).
+3. **"Double it" on the HUD (done).** Step 12 copies the result card's BonusBTN under the wallet
+   (`UIRewardedBonus.offerSeconds` = 25: offered for 25 s after each shift). Tested from Boot in the editor:
+   midgame at the break, rewarded paid the shift again.
+- **Table spots stay square (2026-10-12).** The white squares on the tables (`TableService` spots, one per chair)
+   were hidden, then made round discs, and finally put back exactly as committed by the user's choice: leave
+   them alone. Lessons: they are prefab instances whose scene overrides include `m_StaticEditorFlags`
+   (2147483647; the upgrade tables' copies are 0 by design) - reverting a property override drops the scene's
+   own value, so restore by value, not by revert; and any non-cube mesh on them reads the baked lightmap wrongly
+   (dark patches) because the lighting was baked for the cube. Kept from those tries: a burger tapped onto an
+   empty spot goes to the spot of the customer waiting at that table (`PlayerFSM.PreferWaitingCustomer`).
+4. Next: unlock pads in the world instead of the shop menu for furniture/stations, dirty tables, station levels.
+
+### Faster chef, using things by walking up to them, an oven door (2026-10-12)
+
+Asked: "the player can move faster; besides tapping, walking up to an ingredient or object can use it; the bun
+oven could open and close."
+- **Speed**: `PlayerFSM.runSpeed` 4.6 (the scene's agent had 3.5) and `runAcceleration` 40, the coffee's +15% on
+  top. `PlayerAnimationController` plays the run cycle faster with him (speed / 3.5, max 1.45) so feet don't slide.
+- **Walk-up use** (`PlayerFSM.UseWhatHeWalksUpTo`), only while **steering by hand** (WASD / stick); taps unchanged
+  and a tap's walk never second-guessed. Empty hands: crates, a baked bun / fried or burnt patty / chopped veg,
+  a finished burger. Holding: raw bun -> free oven, raw patty -> free pan, whole veg/cheese -> free board,
+  prepared (Good) food -> plate, burger -> the spot of a customer waiting for one. Never the bin; raw or burnt
+  food onto a plate stays a tap. Rules, each from a failed play test:
+  - he must be *steering into* it (stick heading within ~50 deg of it); walking along the counter past the crates
+    uses nothing, and standing still uses nothing (a version that used what he faced after stopping grabbed crates
+    he had only stopped near);
+  - among several, the one he is aimed at wins over a nearer one (cost = distance + 4 x (1 - aim)); with 8 keyboard
+    directions on an isometric camera the key combo decides which neighbouring crate he walks into;
+  - reach = how close the walkable floor around it gets (ring probes with complete paths, like FindApproach) + 0.35;
+    the navmesh point nearest a crate's middle can be behind the counter (the patty crate was unreachable);
+  - after a use, that same *use* waits until he steps away (one bun per push, not one a frame), but the next
+    different use of the same thing is fine (veg put on the board is taken off once chopped without walking away);
+    blocking everything near him broke "tomato crate -> board", which are neighbours.
+  Tested by an in-editor bot driving simulated keys along navmesh paths (bridge calls are far too slow for a chef at
+  4.6 m/s): crates, oven, pan, board and back, plate, serving a waiting customer by walking up, bin ignored. Keyboard
+  input only reaches play mode with the editor focused unless InputSystem.settings.backgroundBehavior is IgnoreFocus
+  (set and restored around tests; the settings object is in memory, not an asset).
+- **Oven door** (`OvenDoor` on OvenStuff, set up by step 12): the model's own `oven_door` turns about its hinge
+  (local X): 90 = open as modelled, **15 = closed** (at 0 it sinks inside the oven body). Open when the chef nears
+  with a raw bun (2.2 m), shut while baking (the bun shows through the door's window), open when ready or burnt,
+  shut once taken; a 0.35 s peek on every put-in/take-out. The door was taken out of static batching (only that
+  part) so it can move.
+
+### Second pass on walk-up use, the oven tray, the Ranger's bow, Mochi (2026-10-12)
+
+User report after playing: "unprepared food (whole cheese, burnt bun) can't go on plates; I want to throw anything
+in the bin; I never managed to get the patties; the oven's tray isn't animated; I never see the Ranger's bow and the
+arrow lands above his head; when a customer leaves while Mochi is serving, the burger stays on the table."
+- **Walk-up use now includes** anything onto a plate (any prep: mess is part of the game) and the **bin** (any food,
+  a burger too); a burger can also be set down on an empty plate. Steering *into* it keeps both deliberate.
+- **Ranking is "the one he stands in front of"**: cost = 0.5 x distance + 1.2 if he is off its corner (not within its
+  x or z extent) + (1 - aim to its nearest side). The patty crate sits deeper than the cheese crate whose corner
+  sticks out beside it; with 8 keyboard directions neither W nor W+A pointed at it and the cheese/bun crate always
+  won. Tested: patty crate, patty to pan, cooked patty off the pan, patty and a whole cheese onto a plate, a tomato
+  into the bin.
+- **Oven tray** (`OvenDoor`, OvenStuff is the tray): opening = door swings down first, then the tray slides out;
+  closing = tray (with the bun: `NonStackBase.Slot` follows it) slides in first, then the door shuts. `trayTravel`
+  0.4 m (0.6 hid the bun behind the oven top). OvenStuff is out of static batching too.
+- **Ranger's bow** (`FoodFight.ShootArrow`): it was there but invisible - held facing the chef it was edge-on to the
+  camera, and in front of the customer it overlapped them on screen. It now faces the chef's way *on the screen*
+  (the aim with the camera depth removed, limbs across it, curve towards him: `SpawnBow(at, -onScreen, limbs)`) and
+  is held out beside the archer towards the chef (0.95 m along that, 0.3 towards the camera). Compared by spawning
+  four orientations side by side and looking. The arrow now aims at the head bone + 0.55 (the head spans ~1.05-2.15
+  above his feet; a fixed 2.1 only grazed the top).
+- **Mochi** (`Waiter`): before fetching, on the way and at the moment of putting it down he checks that a customer
+  still waits at that spot (`Awaited`); if not, the burger goes to another waiting customer, or back to a plate that
+  can take it (`ReturnPlate`) - never onto an empty chair's spot. Tested both: redirected to another customer, and
+  back on the plate when everyone had left.
+
+### Straight into the kitchen (2026-10-12)
+
+CrazyGames Basic Launch day 2: desktop 4/15, mobile 3/15 (need 9). Gameplay conversion 37% (desktop 54%, mobile 26%):
+on CrazyGames a player only counts once `gameplayStart` fires, and that waited for the title screen's Start button.
+Now `GameManager.StartLevel` raises `OnLevelStart` one frame after the scene starts (every time, not only after a
+restart) and `GamePanels.InitializeWelcomePanel` hides the title poster instead of showing it: the game opens in the
+kitchen, a new player straight into the lesson ("Tap the buns!"). Tested from Boot (SDK initialised, gameplayStart
+reported, GA level_start + tutorial_begin) and as a returning player (no lesson, customers arriving). The Welcome
+panel and StartBTN still exist in the scene, unused. Next in the agreed plan: specific orders (customers ask for a
+given burger), daily goals, new content every 1-2 shifts, then D1 hooks (offline earnings, daily reward).
+
+### Specific orders (2026-10-12)
+
+The user got bored "after about the 5th customer: always the same thing" - every customer wanted *any six layers*.
+Now every customer orders a recipe as they sit down (`Orders.Pick`, `NpcFsm.Ordered`), and burgers are judged
+against it. Chosen with the user: **a plate finishes at the order's size** (3-6 layers).
+- **Menu** (`Orders.Menu`, opens with the cafe level; the newest level's recipes are twice as likely):
+  Lv1 Classic (bun, patty, lettuce, tomato) and Cheeseburger (bun, patty, cheese); Lv2 Onion Burger (bun, patty,
+  onion, cheese); Lv3 Garden (bun, lettuce, tomato, onion - no patty) and Deluxe (5); Lv4 Double (two patties);
+  Lv5 Big Stack (2 patties, 2 cheese); Lv6 The Tower (6). The lesson always orders a Classic. A level-up toast says
+  "New recipe: X".
+- **Plate** (`Plate.ForCustomer/Order/Target`): when the first layer goes on it claims the waiting, unclaimed customer
+  whose order best matches what is there (then longest wait, and only orders at least that big); it becomes a burger at
+  `Target` layers (6 with nobody to make it for); if the customer leaves it re-claims someone else. The finished
+  `Hamburger.ForCustomer` steers hints (only that customer is hinted), the lesson's serve arrow and Mochi.
+  `Orders.Plates/Burgers` keep the live ones (register in OnEnable/OnDisable).
+- **Review** (`BurgerReview.Of(layers, order)`): wanted layers score by prep; an extra layer scores 0.3 and is a flaw
+  ("I didn't order onion!", a second one of something ordered once is "Two of those?!"); a missing one scores 0 and is
+  a flaw ("Where's my cheese?!", "Where's the patty?!"); flaws counted per wrong layer, capped at 6. Exactly as ordered:
+  titled with the recipe ("Cheeseburger") and "Just what I ordered!". Without an order the old rules (wobble only).
+  Pay: +$1 for a 5-layer order, +$2 for 6 (`ScoreManager.SizeBonus`).
+- **Bubble** (`UIOrderTicket` in Npc_WS_Canvas' order bubble, step 13 `CafeOrdersBuilder`): the order drawn as a mini
+  burger from flat ink-outlined layer sprites (`Tools/UI/order_layers.py` -> `Graphics/Sprites/Orders/layer_*.png`),
+  bottom bun to top bun; layers already on the plate being made for them fade to 35%. The order bubble is 1.35x the
+  eating bubble (scale 0.0135 x 1.35, raised 0.2). TRAP: the bubbles' local scale is 0.0135 under a 1:1 canvas -
+  writing "1.35" made it 100x and a giant sesame bun filled the screen. Set absolute values from the eating bubble.
+- Lesson stack step: "Make their order!" with "Next: lettuce! (3/4)" from `Orders.Missing`.
+- Tested: Big Stack finished at 5 for the Mage (burnt patty -> "Charcoal Special"), a plate with patty+bun+cheese+lettuce
+  claimed the Tower (best match) and stayed open at 4/6, the lesson's Classic -> 5 stars "Classic", review cases.
+- Testing trap: editing/compiling scripts while in play mode reloads the domain and nulls PlayerFSM's state (NREs in
+  Update) - stop play before any compile.
+
+### Days, goals, break cards, daily treat, lighter start (2026-10-12)
+
+Asked after the Basic Launch metrics (playtime 4.5 min, "bored after the 5th customer"): day structure and goals,
+frequent novelty in the first 10 minutes, a daily reward, a shorter load.
+
+- **Days** (`DayGoals`, added at runtime by `GameManager.Awake`): each shift is "Day N" (N = `ShiftsPlayed + 1`) with
+  one goal, shown by the start toast ("Day 5   Reach a rush of x3") and under the customers card (`UIDayGoal`: "DAY 5
+  GOAL", bar + count, teal check when met, cross if lost; hidden during the lesson). Days 1-6 are fixed: Perfect(2),
+  Earn, Special, NoWalkouts, Rush x3, Average >= 4; later days are drawn from the day number (same day = same goal),
+  never the same kind twice in a row. Targets: Perfect 2 (+1 every 4 days, max 4); Earn min(35 + 5·day, 90,
+  customers × 7); Special = one of the newest unlocked recipes, serve 2 made exactly as ordered (3 after day 10) and
+  `Orders.Special` gets weight 4 that day; Rush x3 (x4 after day 10). `OnLevelStart` can fire twice: the day starts once.
+- **Day result** (`DayGoals.Finish`, called by ShiftFlow): day stars 1 = finished, 2 = goal met, 3 = goal met and
+  average >= 4 (for the Average goal: and nobody left hungry). Met goal pays 10 + 2·day coins (max 40). A missed goal
+  costs nothing. GA `day_end` (day, goal, goal_met, day_stars); 3 stars -> `HappyTime`.
+- **Break cards** (`UIBreakCard` under HUD, step 15 `CafeDaysBuilder`, menu "15 Days: Goals, Break Cards and Daily
+  Treat"): replace the summary toast. ShiftFlow plays, then sends the next wave (min `Breather` 3.5 s, then midgame ad):
+  1. "DAY N DONE" + TitleFor title + 3 stars + rows (goal ✓/✗ +$bonus, average rating, earned today) + footer
+     "12 more stars to level 3: Garden & Deluxe" (`ShiftFlow.NewsAt`).
+  2. one "CAFE LEVEL N / New in the cafe!" card per level gained that day: tiles for new recipes (drawn with the order
+     layer sprites via `UIOrderTicket.Stack`), the new customer kind (portrait, quirk) and shop items (max 4 tiles,
+     "+n more in the shop").
+  3. the daily treat when due.
+  Each card ~2.6 s (+ per star/tile), a tap on the card moves on, paused while timeScale is 0, no scrim (non-modal),
+  `CanvasGroup.blocksRaycasts` off while hidden so it never eats kitchen taps. Rows/tiles are clones of templates.
+- **Customer portraits** `Graphics/Sprites/Customers/customer_<kind>.png`: rendered by step 15 from the Npc prefabs
+  (idle pose, IconCamera/RenderMatted like the shop icons). **Banknote icon** `icon_money.png` from `Tools/UI/icon_money.py`.
+- **Daily treat** (`DailyTreat`): paid on the first day finished each calendar day (`Cafe.DailyDate` yyyyMMdd,
+  `Cafe.DailyStreak`); streak continues if the last claim was yesterday, else restarts at 1; rewards 20/30/40/50/70/90/150,
+  week repeats. Card shows the week (today's tile yellow) and "Come back tomorrow for +$X". GA `daily_treat`. Keys are
+  cleared by Reset Cafe Progress.
+- **Lighter start** (step 14 + `Boot`): the game scene loads async while the SDK starts (activated once the SDK answers
+  or after 6 s); title screen art and TMP's LiberationSans/EmojiOne left the build (Fredoka is TMP's default font, no
+  default sprite sheet - don't use emoji/★ glyphs in TMP text). Measure the load on the next build.
+- Tested in play mode: goal card, Day 6 card (missed goal, 1 star), daily treat card, a level-up during the day ->
+  "CAFE LEVEL 2" card (Onion Burger stack, Knight portrait, Toque, Second Stove, "+1 more in the shop"), next day
+  started as Day 3 with "Serve 2 Onion Burgers".
+
+### Chairs, Mochi's tomato fight, the lesson's guide; money and voice taken back (2026-10-12)
+
+User report + requests: customers walked through chairs and ended up two on one seat; the lesson pointed at a
+customer hidden under the UI; Mochi's carried burger shrank; Mochi could have a voice; customers could throw
+tomatoes at Mochi and he answers aggressively; the lesson should be fun as well as teach.
+
+- **Chairs carve the navmesh** (`Chair` adds a carving `NavMeshObstacle` box round its meshes + the seat at
+  runtime). The bake never had chairs in it. The customer heading to a chair opens it for themselves
+  (`ISedile.Open(who, open)`), and on sitting down (`NpcFsm.Seat`) their agent is switched **off** (a seated agent was
+  shoved off its seat by walkers) and the chair shuts behind them; on getting up (`NpcFsm.LeaveChair`) the chair
+  opens, they wait until the navmesh is back under them, the agent comes on and they walk; the chair shuts again 1.8 m
+  later. Tested: a whole shift with zero walk-throughs / off-seat / overlaps; chef and Mochi still reach the tables.
+  TRAP (cost two builds): the obstacle box is a FIXED size (0.8 x 1.2 x 1.07 m, centre 0.115 forward). Built from the
+  chair's MeshFilter it worked in the editor, but in a build static-batched chairs hold the scene's combined mesh, the
+  box covered the whole cafe and carved the navmesh away: customers froze at the door, every frame logged
+  "GetRemainingDistance can only be called on an active agent...". `NpcFsm.OnTheFloor` now re-places an agent that
+  is off the navmesh and logs `[NpcFsm] ... off the navmesh` once. Always run the WebGL build locally and read the
+  browser console before handing it over.
+- **Lesson seats only in clear view** (`Tutorial.SeatInClearView`: on screen, not under CustomersCard / GoalCard /
+  top buttons / ChefCard / Coach). `NpcSpawnController` prefers such chairs while `Tutorial.Running`; `Waiting()`
+  points at a visible customer first.
+- **Mochi carries the burger at full size** with a squash-and-stretch spring of its own on the tray (`Waiter.Bounce`,
+  messier burgers jiggle more).
+- **Mochi is silent.** A synthesised voice (kitten-like mews, a yowl, a hiss) was tried and removed: the user found
+  it unnatural, grating and too loud ("if he can't mew quietly, calmly and sweetly, he shouldn't mew at all"). Don't
+  add a voice back without a real, soft recording the user approves. Keep the game quiet in general: one sound per
+  event, not one per projectile.
+- **Tomatoes at Mochi** (`FoodFight.MochiInRange`): after the lesson, a customer's tomato goes at Mochi 30% of the
+  time (60% if he is nearer than the chef). "MRRAOW!" pop over him (`FoodFight.OnMochiSplatted` -> UISplatPop), his fur
+  puffs up and shakes (`Waiter.Puff`), then **three quick tomatoes back** at the thrower (`FoodFight.MochiThrowsBack`,
+  one throw sound and one splat for the volley), who says "Bad kitty!" / "Not the cat!"... Costs nothing. Rangers
+  still shoot the chef.
+- **Lesson v3 - as short as it goes** (`Tutorial`; user: "it feels even worse than before... test it a lot, find
+  bugs, logic errors, reasons players quit; make it as short as possible", and "not only obedient players"). Played
+  with a test harness that does exactly what the arrow says, plus disobedient players. Found and fixed:
+  - The first six steps were a fixed sequence (buns, oven, patty, pan, tomato, board): a raw bun put straight on the
+    plate left "Into the oven!" pointing at an empty oven forever (dead end); same for a patty taken before the bun.
+    Now the whole lesson is ONE dynamic step (`WorkOutStack`: the single next tap from where things stand) + serve +
+    a 2.2 s "Your first burger! Keep them coming!" with confetti and the jingle. Order: start every missing layer whose
+    station is free first, then collect what is ready (the stations work in parallel).
+  - The order is `Orders.LessonRecipe` (Cheeseburger: bun, patty, cheese - shortest real burger using all three
+    stations); cooking x3 during the lesson. 14 taps for an obedient player (was 18 + ~14 s of watching at the end).
+  - Serve ends the moment the customer starts eating (not when they finish and pay); if the burger is binned the
+    step goes back (`Beat.Lost`) instead of "Served!" forever.
+  - A held item the order does not need -> "Not needed - bin it!" (a tomato used to be chopped and put on the plate,
+    spoiling the burger).
+  - Throwing food at customers is off during the lesson (a new player "giving the tomato to the customer" got a
+    tomato in the face): `Tutorial.Say("They want a burger!")` instead. `Tutorial.Say` = a line for a moment.
+  - Removed: Mochi walking about as a guide (distracting; blocked the lettuce crate; appeared then vanished), the card
+    sliding side to side (it covered customers and bubbles), the end tomato joke (punishment right after success),
+    "Hire me in the shop!". The day's goal toast waits until the lesson ends (`UIToast.ShowObjectiveOnStart`).
+  - Chairs: NON-carving obstacles were tried and are wrong (paths still cross chairs, avoidance pushed a customer in
+    circles, never seated); carving stays. Testing trap: the bridge's `tapon` on an NpcFsm taps a child collider that can
+    be off screen (x = -295): tap customers at their head (`npcscreen` + `tap x y`, scratchpad taptarget.sh).
+  - Scenarios that all complete now: obedient, give tomato to customer, raw bun on plate, patty/cheese first, whole
+    cheese on plate, bin the burger, burger onto another plate, tap customer/plate/bin empty-handed.
+- Other quit reasons found: the LAST ORDER name broke mid-word ("Cheesebu/rger") -> `UIOrderVerdict` auto-sizes; Boot
+  showed a flat colour for seconds while the game scene loaded -> a quiet "Loading..." (Boot builds it at runtime).
+- **Money piles v2** (`MoneyPiles`, user: "the money suddenly flying to the player looks like a bug"): stacks stand
+  still (no turning), thicker notes (0.06) and taller stacks (amount/2 + 2 notes, 3-12), the first soft colours again
+  (`Tools/FX/money_art.py`: paper 170,226,178, oval 214,245,214, ink 44,120,86; `BillEdge` 0.86,0.95,0.86 in step 12).
+  Cashing in happens **in place**: the stack lifts a little and shrinks away while "+$6" rises over it and fades
+  (0.9 s); the wallet counts it at that moment. Triggered by the chef walking past (2.1 m) or after 20 s by itself -
+  never flying across the room. Rebuild with `CafeGrowthBuilder.BuildMoneyPiles` after changing the art.
+
+### Burger freedom, a calmer day's end, felt rewards (2026-10-14)
+
+User: "we lost the freedom to make the burger we want" (the plate closed itself at the order's size: no six-layer
+burger for a cheeseburger customer, no bigger order made first); order bubbles too big (customers hidden); rewards
+"given without noticing" ("Double it" not understood); day-end cards too fast to read; Help closing; Mochi's burger
+"like jelly".
+
+- **The player closes the burger.** `Plate.Target` is always 6 (closes itself only at six). Empty hands on a plate
+  with layers = "done!": `PlayerFSM.CloseBurger` -> `Plate.Close()` (top bun) -> the chef picks it up a frame later
+  (`PickUpNextFrame`: a burger made this frame has not run Start, so `isLastPiece`/collider are not ready) - or, when
+  Mochi is bought and free (`Waiter.Free`), it waits on the plate and Mochi runs it out. Same tap count as before
+  (it used to be one tap to take the auto-closed burger). A plate with layers keeps its collider on with empty
+  hands (`Plate.Update`; placeables switch theirs off while hands are empty). `Plate.CoversAnOrder` (all of some
+  waiting order is on it, extras allowed) pulses the plate as a hint and lets walk-up use close it.
+  `Orders.BestFor` no longer requires the order to be at least as big as the stack (extras only lower the score).
+  Lesson: "Done! Tap the plate!" (serve beat). Tested: 6 layers on a cheeseburger plate, closing a 2-layer burger,
+  the lesson end to end, Mochi delivering a closed burger.
+- **Order bubble** 0.8x the eating bubble (was 1.35x), `CafeOrdersBuilder` (step 13).
+- **Day's end** (`UIBreakCard`, step 15): no timers - each card waits for its button: "Next" / "Next day" (teal,
+  a copy of Help's Back button). "Double it" moved from the HUD into the day's card ("Double +$58", video icon,
+  `UIRewardedBonus` with offerSeconds 0, the HUD BonusBTN is moved into `BreakCard/Buttons/DoubleBTN`); a watched ad
+  fires `UIRewardedBonus.Doubled` and the "Earned today" row counts up in yellow with "x2!".
+- **Felt rewards:** the wallet counts up with a punch (`EarningTextController`); a perfect burger / a rush of 3+
+  pops a cheer over the customer (`NpcFsm.OnRated` -> `UICheerPop`, see below).
+- **Help:** any tap that is not a button closes it; "Show me again" closes it as it starts the lesson (`HelpPanel`).
+- **Mochi's burger** no longer squashes/stretches (jelly); it sways side to side more than in the chef's hands
+  (`Waiter.Wobble`: rock x1.8, looser damping, bigger clamp).
+
+### Cheers, goal done, tomorrow's treat, the bun goes under (2026-10-14)
+
+- **Perfect / Rush are not splats** (user: the comic "SPLAT!" burst suits a tomato, not these). `UICheerPop`
+  (`HUD/CheerPop`, built by `CafeDaysBuilder.BuildCheerPop`, step 15): a warm-white pill from the HUD's family with
+  a deep-yellow star + "Perfect!" (a teal bolt + "Rush x3!" for a rush; both: "Perfect!  Rush x3!" with the rush
+  smaller in dark teal), springs in (back-out), floats 70 px up, fades at 1.6 s, six small stars/bolts burst out of
+  it. A perfect also dings (`GameSfx.Cue.Ready`). `UISplatPop` shows splats only again.
+- **The day's goal says when it is met** (it sat silently in its corner): `DayGoals.GoalMet` (static event, once a
+  day) -> LevelUp jingle, toast "Goal done!  +$N at closing" (check icon, teal, 3 s), the goal card's label turns
+  "GOAL DONE!" in teal; GA `day_goal_met`. `DayGoals.Bonus` = min(40, 10 + 2 x day).
+- **Today's play pays tomorrow** (user: a reason to come back, but stay as long as possible today): every day
+  (shift) finished puts +$10 into tomorrow's treat (`DailyTreat.Save`, up to +$100 a calendar day), paid with the
+  next treat (`Claim` returns the savings from an earlier day; today's own savings wait). The day's card has a row
+  "Tomorrow's treat  +10 $50" (berry), so each extra day visibly grows it; the treat card's footer says "Includes
+  +$X you saved by playing yesterday" or "Every day you finish today adds +$10 to tomorrow's". Keys
+  `Cafe.TreatSaved` / `Cafe.TreatSavedDate` (cleared by Reset Cafe Progress).
+- **The first bun is the bottom bun** whenever it is put on (`Plate.UseFood` -> `Restack`): lettuce then bun ends
+  bun, lettuce. Only the first bun; a second one stacks where it is put.
+
+### A day is a real day; shifts live inside it (2026-10-14)
+
+User: "playing the second shift of today it says DAY 2 GOAL, as if I came back the next day - 12 or 24 hours
+should pass; shifts on the same day must not look like different days." `CafeDay` (Managers/CafeDay.cs) keeps the
+cafe's real day: a new day begins with the first shift after the **calendar date has changed and at least 12 hours
+have passed** since the day began (a session running past midnight stays the same day; two sessions in one
+afternoon are never two days). Keys `Cafe.Day`, `Cafe.DayStart` (unix seconds), `Cafe.DayShifts`, `Cafe.DayGap`.
+- HUD goal card: "DAY 1 · SHIFT 2"; start toast "Day 1 · Shift 2   <goal>"; shift card kicker
+  "SHIFT 2 DONE · DAY 1", "Earned this shift", the last card's button "Next shift".
+- `DayGoals.Day` is still the shift's number over the whole game (it picks the goal and sizes the bonus), so every
+  shift keeps a fresh goal; `CafeDayNumber`/`ShiftOfDay` are for display (`DayGoals.Label`, `DayGoals.Now`).
+- The daily treat goes by cafe days (`Cafe.TreatDay`; old calendar-stamp saves are migrated): paid on the first
+  shift of each cafe day; the row continues when the previous cafe day began the calendar day before
+  (`CafeDay.Gap` 1). Kicker "DAILY TREAT · 2 DAYS IN A ROW". Every shift adds +$10 to tomorrow's
+  (`Cafe.TreatSavedDay`). Tested: shift 2 of day 1 (no second treat, "+10 $50"), day 2 after 30 h (treat +$50
+  incl. +$20 saved), a day begun 2 h ago is not over.
+
+- **Snack tip fixes** (user report): the tip never points at food that is still cooking (a tap took the patty out
+  raw, the arrow sent it back to the pan and pointed at it again): something ready, else lettuce; held unready food
+  -> its station + "Then toss lettuce!". It only starts when a hungry customer is in clear view, and points at the
+  hungriest one in clear view (never one under the coach or chef card) - `Tutorial.SnackableInView`.
+
+### Double feedback, Mochi's loose layers, covers from the game itself (2026-10-14)
+
+- **Double button:** the video icon sits at the face's left edge and the words fill the rest (it was at a fixed
+  -66 px, made for "Double it", and ran into "Double +$71"; `CafeDaysBuilder`, step 15). A watched video now also
+  toasts "Doubled!  +$71 to your wallet" (`UIToast.OnDoubled`) besides the card's yellow count-up. During
+  CrazyGames' Basic Launch there are no ads (`adsDisabledBasicLaunch`): the button says "No videos yet" for 2.5 s and
+  leaves for the session (it used to vanish without a word - that was the "nothing happened" the user saw).
+- **Mochi's burger:** each layer rides on a little spring (`Waiter.Jiggle`): every landing throws the upper
+  layers up a touch (higher = more) and they drop back with a small twist, and they slide towards the side the tray
+  leans; the bottom layer stays, nothing falls. The taller the burger, the less the whole stack leans as one block.
+  Trap: a Hamburger is scaled (1, 0.1, 1) with its layers scaled back up (1, 10, 1) - its own up and sideways
+  units differ 10x, so offsets are converted (`sideGap`) and layers are never tipped about a level axis (that
+  shears them); the plate under the burger is left out.
+- **Store covers v4** (`Desktop/ChibiCovers/v4`): the AI-painted covers had fries, drinks, bunny/cat customers, a
+  menu board, lamps and a second cook. Now a real render inside GameScene (`Assets/Editor/StoreCoverRenderer.cs`,
+  `RenderAll(dir)` via bridge scall; DontSave staging, nothing saved): the chef (Cheer pose) lifting a tall burger
+  on a plate beside his head, two Big Tables with Barbarian, Mage, a Regular, Rogue, Ranger, Knight and burgers,
+  the kitchen behind with gaussian depth of field, a kitchen table up front with patties in the pan, tomato slices,
+  cheese, ketchup and mustard; the wall's "CHIBI BURGER" letters hidden. `Tools/Covers/compose_store.py` adds the
+  game's own logo (GameTitle with the ink outline) and a soft light behind it.
+
+### The long goal: a Grill House (2026-10-14, phase 1 of 2)
+
+User: "an ultimate goal - opening a pizzeria, a grill restaurant or an ice-cream shop with money saved over all the
+days". Chosen: a **Grill House** (the KayKit pack already has the roast dinner, stew, steak, ham, potatoes, carrot
+and a steak crate: no extra download; pizza and ice cream have no models), saved in **the same wallet** as the
+shop (spending in the shop sets it back - that is the choice), **goal first, restaurant later**.
+- `GrandGoal` (static): $2,000 (~5-6 days of ~5 shifts with the shop bought), keys `Cafe.GrillTeased` /
+  `Cafe.GrillReached`. After the player's 2nd shift a card "NEXT BIG GOAL / Open a Grill House!" with the three
+  dishes (rendered by step 15 into `Graphics/Sprites/Grill/`: roast dinner, hearty stew, big steak).
+- `UIGrandGoal` (the user's choice after three tries): its FIRST design - dish left, "NEXT: GRILL HOUSE", "$660 /
+  $2,000", a bar - 300x100 in the top-right, right edge on the 32 px screen margin (the buttons' edge), top at 132 px
+  (a clear gap under the buttons). Rejected: right-aligned to the wallet (off-axis), a tab under the wallet (tiny),
+  a twin of the day's goal card. HUD frame: status top-left, wallet+buttons+Grill House top-right, Last order
+  bottom-left, order ticket bottom-right; the middle (kitchen, tables, tomato and burger statues) stays clear.
+- **Frosted cards** (`UIFrostedCard`): the order ticket (idle 0.55) and the Grill House card (0.7) fade only their
+  background, never their words; solid while the pointer is over them and for 2 s after a change (a layer on the
+  plate / money coming in). Fading whole cards washed the text out.
+- Each shift card has a row "Grill House  $X / $2,000" ("Ready!" when full); once full, a card "You saved $2,000!"
+  (3 stars) - "Your Grill House opens soon - the money stays yours". It takes no money until phase 2 exists.
+- GA: `grand_goal_teased`, `grand_goal_reached`.
+- **Phase 2 (next):** the Grill House itself - a second kitchen (re-dressed from this one) where the grill cooks
+  steaks (cook/burn like the patty), carrots are chopped, plates are composed (main + side), with its own orders and
+  customers; switching between the two restaurants; then a third goal for later.
+- Mochi's burger sway was toned down again (rock x0.5, max 8 degrees, damping 10): the user wants it gentle.
+
+### Basic Launch data: the first reward came too late (2026-10-15)
+
+CrazyGames Basic Launch (10/10-14/10, 454 plays, desktop 3/15, needs 9): average play 3m10s (score 2 at 6m15s),
+D1 1.03% (2 at 1.30%), gameplay conversion 47.6% (2 at 55%), CTR 1.2% (bottom 20%), loading 13.6 s, rating 10/10
+(13 likes, 0 dislikes). With 8 customers a shift plus the lesson, the first break card came at ~5 minutes: most
+players never saw a single reward. Note: three "score 2"s make 6, still under 9.
+- **Shifts ramp up**: 3, 4, 5, 6, 7, then 8 customers (`ScoreManager.CustomersForShift(ShiftsPlayed)`, plus tables).
+  The first shift is the lesson's customer and two more; first card at ~2.5-3 min for a real player (3:34 with the
+  slow test harness).
+- **Cafe levels** lowered to match (stars 8/30/60/100/150, was 15/40/80/130/190): level 2 still at the first break.
+- **Day 1 goal** is "Serve a perfect burger" (1): the lesson's burger meets it, "Goal done!" as the lesson ends
+  instead of a red "missed" on the first card.
+- **Download** (`WebSizeTrimmer`): Visual Scripting package removed (unused, its runtime was compiled into the wasm);
+  URP's ten film-grain noise textures (2.5 MB, ~1.4 MB after Brotli - noise doesn't compress) replaced by a 4x4
+  stand-in in both places URP keeps them (`StubFilmGrain` for the global settings - an EMPTY list is refilled
+  from the package, a non-empty one is not - and `LeanPostProcess`, a renderer copy `PostProcessData_Web`). Result: 16.27 -> 14.93 MB
+  download (data 9.68 -> 8.35 MB; the wasm did not change - stripping had already dropped Visual Scripting).
+  Measured, NOT worth it or no effect: the music (WebGL audio ignores mono/quality: same size), the shop/customer
+  icons (RGBA32, 4.6 MB raw but 510 KB after Brotli - DXT would be larger) and the shadowmasks (ARGB4444 is forced
+  by WebGL's lightmap encoding; mostly flat, compress well). `WebSizeTrimmer.Sizes(n)` lists stored texture sizes.
+  After any `git checkout` of UniversalRenderPipelineGlobalSettings.asset, re-run `WebSizeTrimmer.StubFilmGrain`.
+
+### The order card: what goes in, and that you're free (2026-10-15)
+
+User: perfect burgers were hard because the bubble's little burger (layer strips in a 66 px ring) can't be read,
+and the bubble can't grow without hiding the customers; "the player should easily know what to use - and still
+know they are free". `UIOrderCard` (`HUD/OrderCard`, step 15) is a horizontal ticket in the BOTTOM-RIGHT corner,
+440 px, mirroring the "Last order" card bottom-left (what you served / what you're making). Header: customer
+portrait, "ORDER", recipe name, extras in grey on the right ("+ Tomato · extra" - allowed, never red). A tile per
+ingredient left to right as stacked: the ingredient rendered from the game's models (`Sprites/Ingredients/`), its
+name and how it must be made ("Patty / cooked", "Tomato / sliced", "Bun / baked", "Lettuce / fresh"); faded until
+it is on the plate, then a teal tick, or a red badge if on but not ready (flame raw, knife-fork whole, cross
+burnt). Footer: "Exactly this = Perfect · any burger still sells" / "All there - close it for a Perfect!".
+Shows the burger in the chef's hands, else the plate with most layers, else the longest-waiting customer. 80%
+opaque, fully visible with the pointer over it (user's choice) and for 2 s after any change (touch). Hidden in the
+lesson and during the break cards. Placement history: right-edge column covered the onion crate and took its taps;
+left column covered the big tomato statue the user likes; the bottom-right corner is empty floor with every
+upgrade (measured tappable screen rects). Fredoka has no star glyph - write "Perfect", not a star.
+
 ### Next ideas (not built yet)
 
-- Money earned while away (the waiter makes this honest now), so there is a reason to come back.
+- Money earned while away (the waiter makes this honest now) - tomorrow's treat covers part of this.
 - Orders with exact layers in the speech bubble (the 6-layer plate already supports duplicates,
   e.g. "double patty, no onion"); a Mage asking for a specific burger.
 - More kitchen: an auto-chopper, a warming shelf that keeps a finished burger from going cold.

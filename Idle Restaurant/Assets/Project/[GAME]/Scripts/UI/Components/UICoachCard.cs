@@ -2,11 +2,12 @@ using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.UI;
 
 // Mochi's card along the bottom of the screen during the first shift (Tutorial): his face, one line, and
 // on the two steps that are only a hello and a goodbye, a "tap to go on". It never covers the kitchen - it
 // sits under it - and it is never modal: the player can keep playing straight through it.
+// It stays where it is, along the bottom: versions that slid from side to side (it covered customers), grew,
+// hopped and popped up a big winking Mochi were tried and looked unprofessional to the user.
 public class UICoachCard : MonoBehaviour, IPointerClickHandler
 {
     [SerializeField] private CanvasGroup group;
@@ -19,9 +20,11 @@ public class UICoachCard : MonoBehaviour, IPointerClickHandler
     private Vector2 restPosition;
     private float shownAt = -1f;
 
+    private RectTransform Rect => (RectTransform)transform;
+
     private void Awake()
     {
-        restPosition = ((RectTransform)transform).anchoredPosition;
+        restPosition = Rect.anchoredPosition;
         group.alpha = 0f;
         group.blocksRaycasts = false;
         gameObject.SetActive(false);
@@ -34,7 +37,7 @@ public class UICoachCard : MonoBehaviour, IPointerClickHandler
         onTap = tap;
         SetHint("tap to go on", tap != null);
         group.blocksRaycasts = tap != null;
-        shownAt = Time.unscaledTime;
+        if (shownAt < 0f) shownAt = Time.unscaledTime;
     }
 
     // A step that waits for the player to act can still let them move on, if they want to: the card
@@ -83,11 +86,11 @@ public class UICoachCard : MonoBehaviour, IPointerClickHandler
         if (shownAt < 0f) return;
         float age = Time.unscaledTime - shownAt;
         group.alpha = Mathf.Clamp01(age / fade);
-        // Slides up into place, and Mochi nods along while he is talking.
-        var rt = (RectTransform)transform;
-        rt.anchoredPosition = restPosition + Vector2.down * (40f * (1f - Mathf.Clamp01(age / (fade * 2f))));
+        // Slides up into place.
+        Rect.anchoredPosition = restPosition + Vector2.down * (40f * (1f - Mathf.Clamp01(age / (fade * 2f))));
         if (face != null)
         {
+            // Mochi nods along while he is talking.
             float nod = Mathf.Sin(Time.unscaledTime * 4f);
             face.localRotation = Quaternion.Euler(0f, 0f, nod * 5f);
             face.localScale = Vector3.one * (1f + Mathf.Abs(nod) * 0.03f);

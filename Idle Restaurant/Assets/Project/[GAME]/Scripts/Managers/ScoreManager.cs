@@ -12,6 +12,7 @@ public struct OrderResult
     public int Stars;         // rounded rating: what the order adds to the cafe's stars (CafeProgress)
     public Mood Mood;         // how the customer took it (their quirk can change the burger's own mood)
     public int RushStreak;    // orders served in a row, each within RushWindow of the previous one
+    public Recipe Order;      // what the customer had ordered (null: nothing in particular)
     public bool Speedy => Speed01 >= 0.8f;
 }
 
@@ -36,15 +37,21 @@ public class ScoreManager : Singleton<ScoreManager>
     public int ShiftEarned { get; private set; }
     public int ShiftStars { get; private set; }
 
-    // 8 customers a shift, more with bigger dining upgrades. Fixed for the whole shift on first use, so a
-    // table bought mid-shift adds its customer from the next shift (the pips and the end stay consistent).
-    public const int BaseCustomers = 8;
+    // 8 customers a shift, more with bigger dining upgrades - but the first shifts are shorter: 3, 4, 5, 6, 7, then 8.
+    // CrazyGames' Basic Launch (2026-10-15) measured 3m10s of play on average, and with 8 customers (plus the lesson)
+    // the first shift's card came at about 5 minutes: most players never saw a single reward - the day's stars, the
+    // money, the cafe's level, the shop. Now the first shift is the lesson's customer and two more, so the first
+    // break comes at about 2-3 minutes, and each shift is a little longer than the one before. Fixed for the whole
+    // shift on first use, so a table bought mid-shift adds its customer from the next shift (the pips and the end
+    // stay consistent).
+    public const int BaseCustomers = 8, FirstShiftCustomers = 3;
+    public static int CustomersForShift(int shiftsPlayed) => Mathf.Min(BaseCustomers, FirstShiftCustomers + shiftsPlayed);
     private int customersThisShift;
     public int CustomersPerLevel
     {
         get
         {
-            if (customersThisShift == 0) customersThisShift = BaseCustomers + CafeShop.ExtraCustomers;
+            if (customersThisShift == 0) customersThisShift = CustomersForShift(CafeProgress.ShiftsPlayed) + CafeShop.ExtraCustomers;
             return customersThisShift;
         }
     }
@@ -84,7 +91,10 @@ public class ScoreManager : Singleton<ScoreManager>
         return 1f - Mathf.Clamp01((waitedSeconds - grace) / Mathf.Max(1f, patience - grace));
     }
 
-    public OrderResult RateOrder(BurgerReview review, float waitedSeconds, float patience, CustomerKind kind = CustomerKind.Regular)
+    // A five-layer order pays $1 more than a four, a six-layer one $2: the bigger burger took longer.
+    public static int SizeBonus(Recipe order) => order != null ? Mathf.Max(0, order.Count - 4) : 0;
+
+    public OrderResult RateOrder(BurgerReview review, float waitedSeconds, float patience, CustomerKind kind = CustomerKind.Regular, Recipe order = null)
     {
         float speed01 = Speed01(waitedSeconds, patience);
         // Stars are how happy this customer was: their own taste (a Barbarian loves a mess, a Mage only a
@@ -102,7 +112,8 @@ public class ScoreManager : Singleton<ScoreManager>
                    + (review.IsPerfect ? PerfectBonus : 0)
                    + Mathf.Min(RushStreak - 1, MaxRushBonus)
                    + Customers.Bonus(kind, review, speed01)
-                   + (rating >= 4f ? CafeShop.TipJar : 0);
+                   + (rating >= 4f ? CafeShop.TipJar : 0)
+                   + SizeBonus(order);
         earned = Mathf.Max(1, earned);
         int stars = Mathf.RoundToInt(rating);
 
@@ -116,7 +127,7 @@ public class ScoreManager : Singleton<ScoreManager>
         LastOrder = new OrderResult
         {
             Review = review, Rating = rating, Speed01 = speed01, Earned = earned, Stars = stars,
-            Mood = mood, RushStreak = RushStreak
+            Mood = mood, RushStreak = RushStreak, Order = order
         };
 
         hostedCustomer++;
@@ -146,6 +157,24 @@ public class ScoreManager : Singleton<ScoreManager>
     }
 
     private bool levelFinished;
+
+    // The next shift in the same scene (ShiftFlow): everything counted per shift starts again; the till, the
+    // stars and the cafe's level carry on. A table bought during the last shift adds its customer now.
+    public void BeginNextShift()
+    {
+        levelFinished = false;
+        HostedCustomerCount = 0;
+        hostedCustomer = 0;
+        totalLevelScore = 0f;
+        currentBurgerScore = 0f;
+        customersThisShift = 0;
+        ShiftEarned = 0;
+        ShiftStars = 0;
+        ServedCount = PerfectCount = ChaosCount = WalkoutCount = BestStreak = RushStreak = 0;
+        lastServeTime = float.NegativeInfinity;
+        titleCounts.Clear();
+        SignatureBurger = null;
+    }
 
     // Called whenever a customer walks out. The shift ends once, when every customer of the shift has left.
     // (It used to end as soon as 8 customers had been *rated* while another was still walking out, dividing

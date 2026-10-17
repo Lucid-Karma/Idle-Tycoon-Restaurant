@@ -32,13 +32,49 @@ public class EarningTextController : MonoBehaviour
         EventManager.OnLevelFinish.RemoveListener(UpdateLevelEarningText); 
     }
 
-    // The wallet shows the till (kept between shifts); the result card shows what this shift earned.
+    // The wallet shows the till (kept between shifts) minus the money still lying on the tables, which it
+    // counts up as the chef picks it up (MoneyPiles); the result card shows what this shift earned.
     [SerializeField] private bool shiftOnly;
+
+    private int shown = int.MinValue, target;
+    private float countFrom, countAt = -10f, punch;
+    private const float CountSeconds = 0.6f;
 
     private void UpdateEarningText()
     {
         var score = ScoreManager.Instance;
-        EarningText.text = "$" + (shiftOnly ? score.ShiftEarned : score.totalLevelEarning);
+        int value = shiftOnly ? score.ShiftEarned : score.totalLevelEarning - MoneyPiles.Pending;
+        if (shown == int.MinValue || value < target || !isActiveAndEnabled)
+        {
+            // First show, or spending: straight to the number.
+            shown = target = value;
+            EarningText.text = "$" + value;
+            return;
+        }
+        if (value == target) return;
+        countFrom = shown;
+        target = value;
+        countAt = Time.unscaledTime;
+        punch = 1f;
+    }
+
+    private void Update()
+    {
+        if (shown == target) { Settle(); return; }
+        float t = Mathf.Clamp01((Time.unscaledTime - countAt) / CountSeconds);
+        shown = Mathf.RoundToInt(Mathf.Lerp(countFrom, target, 1f - (1f - t) * (1f - t)));
+        if (t >= 1f) shown = target;
+        EarningText.text = "$" + shown;
+        Settle();
+    }
+
+    // A small punch as money comes in.
+    private void Settle()
+    {
+        if (punch <= 0f) return;
+        punch = Mathf.MoveTowards(punch, 0f, Mathf.Min(Time.unscaledDeltaTime, 1f / 30f) / 0.35f);
+        float s = 1f + 0.18f * Mathf.Sin(punch * Mathf.PI);
+        EarningText.rectTransform.localScale = new Vector3(s, s, 1f);
     }
 
     private void UpdateLevelEarningText() => UpdateEarningText();

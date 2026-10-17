@@ -11,9 +11,11 @@ public static class CafeProgress
     private const string CoinsKey = "Cafe.Coins", StarsKey = "Cafe.Stars", OwnedKey = "Cafe.Owned",
                          HatKey = "Cafe.Hat", ShiftsKey = "Cafe.Shifts", TaughtKey = "Cafe.Taught", SnackTipKey = "Cafe.SnackTip";
 
-    // Total stars needed for level 1, 2, 3... Every served order gives its rounded rating (0-5 stars), so a
-    // shift of 8 customers is worth about 20-35: level 2 after the first shift, the last level after ~10.
-    public static readonly int[] LevelStars = { 0, 15, 40, 80, 130, 190 };
+    // Total stars needed for level 1, 2, 3... Every served order gives its rounded rating (0-5 stars). The first
+    // shifts are short (3, 4, 5... customers, ScoreManager.CustomersForShift), so the steps are lower than they were
+    // with 8 a shift (15/40/80/130/190): level 2 still comes at the first break - the lesson's customer alone is
+    // usually worth 5 - then a level every one or two shifts, the last after ~8.
+    public static readonly int[] LevelStars = { 0, 8, 30, 60, 100, 150 };
     public static int MaxLevel => LevelStars.Length;
 
     // Money, stars or purchases changed (UI refresh). Static: subscribe with named methods only.
@@ -121,6 +123,7 @@ public static class CafeProgress
     {
         Load();
         GamePlatform.SetInt(ShiftsKey, ++shifts);
+        CafeDay.ShiftFinished();
         Save();
     }
 
@@ -161,7 +164,11 @@ public static class CafeProgress
     [UnityEditor.MenuItem("Tools/Chibi Cafe/Reset Cafe Progress")]
     public static void ResetAll()
     {
-        foreach (var key in new[] { CoinsKey, StarsKey, OwnedKey, HatKey, ShiftsKey, TaughtKey, SnackTipKey }) GamePlatform.DeleteKey(key);
+        foreach (var key in new[] { CoinsKey, StarsKey, OwnedKey, HatKey, ShiftsKey, TaughtKey, SnackTipKey, DailyTreat.DateKey, DailyTreat.StreakKey,
+                                     DailyTreat.SavedKey, DailyTreat.SavedDateKey, DailyTreat.TreatDayKey, DailyTreat.SavedDayKey,
+                                     CafeDay.NumberKey, CafeDay.StartKey, CafeDay.ShiftsKey, CafeDay.GapKey,
+                                     GrandGoal.TeasedKey, GrandGoal.ReachedKey })
+            GamePlatform.DeleteKey(key);
         GamePlatform.Flush();
         loaded = false;
         Changed?.Invoke();

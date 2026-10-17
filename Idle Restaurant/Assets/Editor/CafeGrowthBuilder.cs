@@ -337,8 +337,7 @@ public static partial class CafeGrowthBuilder
         // The walkable meshes are the original bake (without any upgrade); bought furniture cuts its own hole.
         // (Baking with every upgrade in place left invisible obstacles and made the rugs raised walkable
         // platforms: the chef hovered over them and jittered next to the customers.)
-        foreach (var table in root.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("table_round")))
-            Carve(table, round: true);
+        CarveTables(root);
         Carve(root.Find("Upgrade Board/kitchentable_A"), round: false);
         foreach (var name in new[] { "lamp_standing", "cactus_medium_B", "cactus_small_B" })
             Carve(root.Find("Upgrade Cozy/" + name), round: true);
@@ -353,7 +352,33 @@ public static partial class CafeGrowthBuilder
     }
 
     // A carving NavMeshObstacle the size of the object's footprint: active only once the upgrade is bought.
-    static void Carve(Transform t, bool round)
+    // A bought table's hole is a little smaller than its top (the carve grows by the walker's radius anyway, so
+    // nobody walks through the top): at the full top the holes of the terrace's round table, the Big Table and their
+    // chairs closed the dining room's two walkways - the bottom strip at x 12-15 and the right column at z 15-19 -
+    // and the customers headed past them stopped where the path ended and "sat" there, three on one spot (user,
+    // 2026-10-15). Check new seating with every seat reachable from the door (customers' agent type), all bought.
+    const float TableHole = 0.72f;
+
+    static void CarveTables(Transform root)
+    {
+        foreach (var table in root.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("table_round")))
+            Carve(table, round: true, TableHole);
+    }
+
+    // Re-cuts the bought tables' holes in the scene as the builder now does (without rebuilding the upgrades).
+    [MenuItem("Tools/Chibi Cafe/3c Fit Table Holes")]
+    public static void FitTableHoles()
+    {
+        var root = GameObject.Find("Level").transform.Find("Upgrades");
+        var hidden = root.Cast<Transform>().Where(g => !g.gameObject.activeSelf).ToList();
+        foreach (var g in hidden) g.gameObject.SetActive(true);   // renderer bounds need them active
+        CarveTables(root);
+        foreach (var g in hidden) g.gameObject.SetActive(false);
+        EditorSceneManager.MarkSceneDirty(root.gameObject.scene);
+        EditorSceneManager.SaveScene(root.gameObject.scene);
+    }
+
+    static void Carve(Transform t, bool round, float fit = 0.9f)
     {
         var bounds = RendererBounds(t);
         var obstacle = Get<UnityEngine.AI.NavMeshObstacle>(t.gameObject);
@@ -365,7 +390,7 @@ public static partial class CafeGrowthBuilder
         if (round)
         {
             obstacle.shape = UnityEngine.AI.NavMeshObstacleShape.Capsule;
-            obstacle.radius = 0.5f * Mathf.Max(size.x, size.z) * 0.9f;
+            obstacle.radius = 0.5f * Mathf.Max(size.x, size.z) * fit;
             obstacle.height = size.y;
         }
         else

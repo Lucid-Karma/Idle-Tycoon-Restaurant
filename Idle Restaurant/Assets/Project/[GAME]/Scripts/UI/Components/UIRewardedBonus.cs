@@ -15,8 +15,18 @@ public class UIRewardedBonus : MonoBehaviour
 {
     [SerializeField] private TMP_Text label;
     [SerializeField] private CanvasGroup card;   // blocked while the ad is up
+    // On the HUD (shifts flow on without a result card, ShiftFlow) the offer is a short window after each
+    // shift: it goes away by itself after this many seconds. 0 = it stays (the result card's copy).
+    [SerializeField] private float offerSeconds;
+    private float offeredAt;
 
     public static bool WatchedThisCard { get; private set; }
+    // The day's money was paid a second time (how much): the day card counts it up (UIBreakCard).
+    // Static: subscribe with named methods only.
+    public static event System.Action<int> Doubled;
+
+    [UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics() => Doubled = null;
     private static bool adsOff;
     // A special offer, not an expectation (CrazyGames' rule): after a watched video it rests for a while.
     private const float RestAfterWatching = 6f * 60f;
@@ -51,7 +61,15 @@ public class UIRewardedBonus : MonoBehaviour
         gameObject.SetActive(show);
         if (!show) return;
         button.interactable = true;
-        if (label != null) label.text = idleText;
+        // What it is worth, on the button itself: "Double +$58".
+        if (label != null) label.text = $"Double +${bonus}";
+        offeredAt = Time.unscaledTime;
+    }
+
+    private void Update()
+    {
+        if (offerSeconds > 0f && !GamePlatform.AdShowing && Time.unscaledTime - offeredAt > offerSeconds)
+            gameObject.SetActive(false);
     }
 
     private void Watch()
@@ -73,11 +91,15 @@ public class UIRewardedBonus : MonoBehaviour
                 ScoreManager.Instance.AddTip(bonus);
                 EventManager.OnScoreUpdate.Invoke();
                 GameSfx.Play(GameSfx.Cue.Coin);
-                if (label != null) label.text = "Doubled!";   // the EARNED tile above shows the new total
+                if (label != null) label.text = "Doubled!";   // the day card counts the money up (Doubled)
+                Doubled?.Invoke(bonus);
                 break;
             case GamePlatform.AdOutcome.AdsOff:
+                // CrazyGames' Basic Launch: no ads at all yet. Say so for a moment instead of vanishing without a
+                // word (user: "I doubled it and nothing happened"), then leave for the session.
                 adsOff = true;
-                gameObject.SetActive(false);
+                if (label != null) label.text = "No videos yet";
+                StartCoroutine(GoAway());
                 break;
             case GamePlatform.AdOutcome.AdBlock:
                 if (label != null) label.text = "Ad blocker on";
@@ -89,10 +111,16 @@ public class UIRewardedBonus : MonoBehaviour
         }
     }
 
+    private IEnumerator GoAway()
+    {
+        yield return new WaitForSecondsRealtime(2.5f);
+        gameObject.SetActive(false);
+    }
+
     private IEnumerator ReadyAgain()
     {
         yield return new WaitForSecondsRealtime(2.5f);
         button.interactable = true;
-        if (label != null) label.text = idleText;
+        if (label != null) label.text = $"Double +${bonus}";
     }
 }

@@ -8,9 +8,8 @@ public class NpcGoState : NpcStates
     {
         fsm.OnNpcWalk.Invoke();
         fsm.OnNpcEatEnd.Invoke();
-        fsm.Agent.stoppingDistance = 1f;
-        fsm.Agent.SetDestination(new Vector3(21.35f, 1.2f, 8.79f));
         fsm.chair.IsEmpty = true;   // !!!
+        fsm.LeaveChair(new Vector3(21.35f, 1.2f, 8.79f), 1f);
     }
 
     public override void UpdateState(NpcFsm fsm)

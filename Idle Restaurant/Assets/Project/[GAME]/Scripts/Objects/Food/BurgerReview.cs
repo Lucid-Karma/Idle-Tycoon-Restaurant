@@ -24,6 +24,8 @@ public enum Mood
 // What a customer makes of a burger. Mess is content, not failure: every sloppy layer lowers the
 // quality stars a little, but also gives the burger a name and the customer a line to say. The worst
 // mistake names the burger; three or more make it a "Chaos Burger" (the one on the poster).
+// Judged against what they ordered (Orders, Recipe): a missing or an extra layer is a flaw too ("Where's my
+// cheese?!", "I didn't order onion!"), and a burger made exactly as ordered is named after the recipe.
 public sealed class BurgerReview
 {
     public float Quality01 { get; }
@@ -33,6 +35,8 @@ public sealed class BurgerReview
     public Mood Mood { get; }
     public bool IsPerfect => Flaws == 0;
     public bool IsChaos => Flaws >= ChaosFlaws;
+    // Made of exactly the layers the order asked for (however well each was made).
+    public bool AsOrdered { get; private set; }
 
     public const int ChaosFlaws = 3;
 
@@ -46,22 +50,85 @@ public sealed class BurgerReview
     }
 
     // Listed from most to least noticeable: the first one found names the burger.
-    private enum Flaw { RawPatty, NoPatty, BurntPatty, WholeOnion, WholeTomato, WholeCheese, NoBun, BurntBun, RawBun, Duplicate }
+    private enum Flaw { RawPatty, NoPatty, BurntPatty, Missing, Extra, WholeOnion, WholeTomato, WholeCheese, NoBun, BurntBun, RawBun, Duplicate }
 
     private static readonly string[] Titles =
     {
-        "Moo Burger", "Veggie Surprise", "Charcoal Special", "Onion Tears", "Tomato Bomb",
-        "Cheese Brick", "Naked Burger", "Toasty Tower", "Doughy Deluxe", "Double Trouble"
+        "Moo Burger", "Veggie Surprise", "Charcoal Special", "Mix-up Burger", "Surprise Burger", "Onion Tears",
+        "Tomato Bomb", "Cheese Brick", "Naked Burger", "Toasty Tower", "Doughy Deluxe", "Double Trouble"
     };
 
-    // Short on purpose: said in a speech bubble over a seated customer, read in a glance.
+    // Short on purpose: said in a speech bubble over a seated customer, read in a glance. ({0}: the ingredient.)
     private static readonly string[] Reactions =
     {
-        "It's still mooing!", "Where's the patty?!", "Extra crispy!", "A whole onion?!",
-        "A WHOLE tomato?!", "A cheese brick?!", "Where's the bun?", "Too toasty!",
+        "It's still mooing!", "Where's the patty?!", "Extra crispy!", "Where's my {0}?!", "I didn't order {0}!",
+        "A whole onion?!", "A WHOLE tomato?!", "A cheese brick?!", "Where's the bun?", "Too toasty!",
         "Cold bun... eh.", "Two of those?!"
     };
 
+    // Against an order. Every layer the recipe wants and gets scores by how it was made; a layer it did not ask
+    // for scores 0.3 and is a flaw; a layer it wanted but did not get scores 0 and is a flaw.
+    public static BurgerReview Of(IReadOnlyList<BurgerLayer> layers, Recipe order)
+    {
+        if (order == null) return Of(layers);
+        var needs = order.Needs();
+        var flaws = new SortedSet<Flaw>();
+        string missingName = null, extraName = null;
+        float total = 0f;
+        int extras = 0;
+
+        foreach (var layer in layers)
+        {
+            if (needs.TryGetValue(layer.Name, out int left) && left > 0)
+            {
+                needs[layer.Name] = left - 1;
+                total += LayerScore(layer, flaws);
+            }
+            else
+            {
+                extras++;
+                total += 0.3f;
+                bool doubled = order.Needs().ContainsKey(layer.Name);
+                flaws.Add(doubled ? Flaw.Duplicate : Flaw.Extra);
+                extraName ??= doubled ? null : layer.Name;
+                LayerScore(layer, flaws);   // a raw patty is still a raw patty
+            }
+        }
+        int missing = 0;
+        foreach (var pair in needs)
+        {
+            if (pair.Value <= 0) continue;
+            missing += pair.Value;
+            if (pair.Key == "burger") flaws.Add(Flaw.NoPatty);
+            else if (pair.Key == "bun") flaws.Add(Flaw.NoBun);
+            else { flaws.Add(Flaw.Missing); missingName ??= pair.Key; }
+        }
+
+        float quality = total / Mathf.Max(1, order.Count + extras);
+        bool asOrdered = missing == 0 && extras == 0;
+        // Each wrong layer counts (capped: past a handful it is chaos either way).
+        int count = Mathf.Min(6, flaws.Count + Mathf.Max(0, missing - 1) + Mathf.Max(0, extras - 1));
+
+        if (flaws.Count == 0)
+            return Ordered(new BurgerReview(quality, 0, order.Name, "Just what I ordered!", Mood.Delighted), asOrdered);
+
+        Flaw worst = flaws.Min;
+        bool shocked = worst == Flaw.RawPatty || count > ChaosFlaws;
+        var mood = shocked ? Mood.Shocked : Mood.Amused;
+        if (count >= ChaosFlaws)
+            return Ordered(new BurgerReview(quality, count, "Chaos Burger", "What IS this?!", mood), asOrdered);
+        string reaction = string.Format(Reactions[(int)worst],
+            Orders.Label(worst == Flaw.Missing ? missingName : extraName ?? ""));
+        return Ordered(new BurgerReview(quality, count, Titles[(int)worst], reaction, mood), asOrdered);
+    }
+
+    private static BurgerReview Ordered(BurgerReview review, bool asOrdered)
+    {
+        review.AsOrdered = asOrdered;
+        return review;
+    }
+
+    // Without an order (a burger nobody ordered: its wobble in the chef's hands).
     public static BurgerReview Of(IReadOnlyList<BurgerLayer> layers)
     {
         var seen = new HashSet<string>();
@@ -92,7 +159,7 @@ public sealed class BurgerReview
         var mood = shocked ? Mood.Shocked : Mood.Amused;
         if (flaws.Count >= ChaosFlaws)
             return new BurgerReview(quality, flaws.Count, "Chaos Burger", "What IS this?!", mood);
-        return new BurgerReview(quality, flaws.Count, Titles[(int)worst], Reactions[(int)worst], mood);
+        return new BurgerReview(quality, flaws.Count, Titles[(int)worst], string.Format(Reactions[(int)worst], ""), mood);
     }
 
     private static float LayerScore(BurgerLayer layer, SortedSet<Flaw> flaws)

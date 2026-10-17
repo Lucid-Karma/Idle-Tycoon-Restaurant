@@ -13,12 +13,14 @@ public class UIToast : MonoBehaviour
         public readonly string Text;
         public readonly Sprite Sprite;
         public readonly Color Tint;
+        public readonly float Hold;
 
-        public Message(string text, Sprite sprite, Color tint)
+        public Message(string text, Sprite sprite, Color tint, float hold)
         {
             Text = text;
             Sprite = sprite;
             Tint = tint;
+            Hold = hold;
         }
     }
 
@@ -34,6 +36,7 @@ public class UIToast : MonoBehaviour
     private RectTransform rect;
     private Vector2 restPos;
     private float age = float.MaxValue;
+    private float hold;
     private int lastEarning;
 
     private void Awake()
@@ -46,37 +49,72 @@ public class UIToast : MonoBehaviour
 
     private void OnEnable()
     {
-        EventManager.OnLevelStart.AddListener(ShowObjective);
+        EventManager.OnLevelStart.AddListener(ShowObjectiveOnStart);
         EventManager.OnScoreUpdate.AddListener(OnScoreUpdate);
         EventManager.OnOrderRated.AddListener(OnOrderRated);
         EventManager.OnCustomerProtest.AddListener(OnProtest);
         CafeProgress.LeveledUp += OnCafeLevelUp;
+        DayGoals.GoalMet += OnGoalMet;
+        UIRewardedBonus.Doubled += OnDoubled;
     }
 
     private void OnDisable()
     {
-        EventManager.OnLevelStart.RemoveListener(ShowObjective);
+        EventManager.OnLevelStart.RemoveListener(ShowObjectiveOnStart);
         EventManager.OnScoreUpdate.RemoveListener(OnScoreUpdate);
         EventManager.OnOrderRated.RemoveListener(OnOrderRated);
         EventManager.OnCustomerProtest.RemoveListener(OnProtest);
         CafeProgress.LeveledUp -= OnCafeLevelUp;
+        DayGoals.GoalMet -= OnGoalMet;
+        UIRewardedBonus.Doubled -= OnDoubled;
     }
 
     private void Start() => lastEarning = ScoreManager.Instance.totalLevelEarning;
 
-    private void ShowObjective() =>
-        Show($"Rush hour! Serve {ScoreManager.Instance.CustomersPerLevel} customers", boltIcon ? boltIcon : personIcon, UITokens.Colors.Berry);
+    // "Day 2 · Shift 3   Serve 2 perfect burgers": the shift and its goal (DayGoals), which then stays under the
+    // customers card.
+    // Not over the first lesson (two things to read at once): the lesson shows it when it ends.
+    private void ShowObjectiveOnStart()
+    {
+        if (CafeProgress.Taught) ShowObjective();
+    }
+
+    public void ShowObjective()
+    {
+        var (day, shift) = DayGoals.Now;
+        Show($"Day {day} · Shift {shift}   <color=#{Hex(UITokens.Colors.Berry)}>{DayGoals.ForDay(DayGoals.Today).Text}</color>",
+            boltIcon ? boltIcon : personIcon, UITokens.Colors.Berry, 2.6f);
+    }
+
+    // Between two shifts (ShiftFlow), instead of the old result card: "Great shift!  4.2 stars  +$58".
+    public void ShiftSummary(float averageStars, int walkouts, int earned)
+    {
+        string title = UIShiftHighlights.TitleFor(averageStars, walkouts);
+        Show($"{title}   <color=#{Hex(UITokens.Colors.DeepYellow)}>{averageStars.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}<size=80%> stars</size></color>"
+             + $"   <color=#{Hex(UITokens.Colors.DarkTeal)}>+${earned}</color>", starIcon, UITokens.Colors.DeepYellow, 3.2f);
+    }
 
     // Spending fires OnScoreUpdate without an order; purchases show up in the kitchen itself (CafeShop),
     // and snack tips over the customer, so this only keeps the reference value in sync.
     private void OnScoreUpdate() => lastEarning = ScoreManager.Instance.totalLevelEarning;
 
+    // "Goal done!  +$16 at closing": the day's goal was just reached (DayGoals).
+    private void OnGoalMet(DayGoal goal, int bonus) =>
+        Show($"Goal done!   <color=#{Hex(UITokens.Colors.DarkTeal)}>+${bonus}</color> at closing", checkIcon, UITokens.Colors.Teal, 3f);
+
+    // "Doubled!  +$71 to your wallet": the video was watched and the shift's money paid again (UIRewardedBonus);
+    // the day card counts it up as well.
+    private void OnDoubled(int bonus) =>
+        Show($"Doubled!   <color=#{Hex(UITokens.Colors.DarkTeal)}>+${bonus}</color> to your wallet", starIcon, UITokens.Colors.DeepYellow, 3f);
+
     // "Cafe level 3!  Barbarians drop by", queued behind the order that earned the stars.
     private void OnCafeLevelUp(int level)
     {
-        string news = Customers.ArrivesAt(level, out var kind) ? Customers.Of(kind).Plural + " drop by" : "New in the shop";
+        var recipe = System.Linq.Enumerable.FirstOrDefault(Orders.NewAt(level));
+        string news = recipe != null ? "New recipe: " + recipe.Name
+            : Customers.ArrivesAt(level, out var kind) ? Customers.Of(kind).Plural + " drop by" : "New in the shop";
         queued.Enqueue(new Message($"Cafe level {level}!   <color=#{Hex(UITokens.Colors.DarkTeal)}>{news}</color>",
-            starIcon, UITokens.Colors.DeepYellow));
+            starIcon, UITokens.Colors.DeepYellow, holdTime));
     }
 
     // "Charcoal Special  +$7  RUSH x2"
@@ -104,26 +142,27 @@ public class UIToast : MonoBehaviour
 
     private void OnProtest() => Show("A customer left hungry", personIcon, UITokens.Colors.Tomato);
 
-    private void Show(string text, Sprite sprite, Color tint)
+    private void Show(string text, Sprite sprite, Color tint, float holdFor = -1f)
     {
         label.text = text;
         icon.sprite = sprite;
         icon.color = tint;
+        hold = holdFor > 0f ? holdFor : holdTime;
         age = 0f;
     }
 
     private void LateUpdate()
     {
-        if (age > holdTime + UITokens.Motion.Slow)
+        if (age > hold + UITokens.Motion.Slow)
         {
             if (queued.Count == 0) return;
             var next = queued.Dequeue();
-            Show(next.Text, next.Sprite, next.Tint);
+            Show(next.Text, next.Sprite, next.Tint, next.Hold);
         }
         age += Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
 
         float fadeIn = Mathf.Clamp01(age / UITokens.Motion.Normal);
-        float fadeOut = 1f - Mathf.Clamp01((age - holdTime) / UITokens.Motion.Slow);
+        float fadeOut = 1f - Mathf.Clamp01((age - hold) / UITokens.Motion.Slow);
         float a = Mathf.Min(fadeIn, fadeOut);
         group.alpha = a;
         float ease = 1f - Mathf.Pow(1f - fadeIn, 3f);

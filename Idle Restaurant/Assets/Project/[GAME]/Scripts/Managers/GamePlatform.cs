@@ -43,28 +43,77 @@ public static class GamePlatform
     }
 
     #region Saving
-    public static int GetInt(string key, int fallback) =>
-        OnCrazyGames ? CrazySDK.Data.GetInt(key, fallback) : PlayerPrefs.GetInt(key, fallback);
+    // Every value read once and remembered (a missing key too): some are asked for every frame (GrandGoal.Teased
+    // and CafeProgress.Taught from the HUD), and on CrazyGames each read is a call into the SDK's JavaScript - the
+    // first build with the Grill House card logged a read of "Cafe.GrillTeased" every frame. Writes and deletes
+    // go through here too, so the copy never goes stale. Starts over if the storage changes (the SDK becoming ready
+    // after an early read from PlayerPrefs), and with each play session in the editor.
+    private static readonly System.Collections.Generic.Dictionary<string, int?> ints = new();
+    private static readonly System.Collections.Generic.Dictionary<string, string> strings = new();
+    private static readonly System.Collections.Generic.HashSet<string> stringsRead = new();
+    private static bool cachedForCrazy;
 
-    public static string GetString(string key, string fallback) =>
-        OnCrazyGames ? CrazySDK.Data.GetString(key, fallback) : PlayerPrefs.GetString(key, fallback);
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ForgetCache()
+    {
+        ints.Clear();
+        strings.Clear();
+        stringsRead.Clear();
+    }
+
+    private static bool Storage()
+    {
+        bool crazy = OnCrazyGames;
+        if (crazy != cachedForCrazy) { ForgetCache(); cachedForCrazy = crazy; }
+        return crazy;
+    }
+
+    private static bool Has(bool crazy, string key) => crazy ? CrazySDK.Data.HasKey(key) : PlayerPrefs.HasKey(key);
+
+    public static int GetInt(string key, int fallback)
+    {
+        bool crazy = Storage();
+        if (!ints.TryGetValue(key, out var value))
+        {
+            value = Has(crazy, key) ? (crazy ? CrazySDK.Data.GetInt(key, fallback) : PlayerPrefs.GetInt(key, fallback)) : (int?)null;
+            ints[key] = value;
+        }
+        return value ?? fallback;
+    }
+
+    public static string GetString(string key, string fallback)
+    {
+        bool crazy = Storage();
+        if (!stringsRead.Contains(key))
+        {
+            strings[key] = Has(crazy, key) ? (crazy ? CrazySDK.Data.GetString(key, fallback) : PlayerPrefs.GetString(key, fallback)) : null;
+            stringsRead.Add(key);
+        }
+        return strings[key] ?? fallback;
+    }
 
     public static void SetInt(string key, int value)
     {
-        if (OnCrazyGames) CrazySDK.Data.SetInt(key, value);
+        if (Storage()) CrazySDK.Data.SetInt(key, value);
         else PlayerPrefs.SetInt(key, value);
+        ints[key] = value;
     }
 
     public static void SetString(string key, string value)
     {
-        if (OnCrazyGames) CrazySDK.Data.SetString(key, value);
+        if (Storage()) CrazySDK.Data.SetString(key, value);
         else PlayerPrefs.SetString(key, value);
+        strings[key] = value;
+        stringsRead.Add(key);
     }
 
     public static void DeleteKey(string key)
     {
-        if (OnCrazyGames) CrazySDK.Data.DeleteKey(key);
+        if (Storage()) CrazySDK.Data.DeleteKey(key);
         else PlayerPrefs.DeleteKey(key);
+        ints[key] = null;
+        strings[key] = null;
+        stringsRead.Add(key);
     }
 
     // The Data module saves by itself (debounced); PlayerPrefs needs telling.

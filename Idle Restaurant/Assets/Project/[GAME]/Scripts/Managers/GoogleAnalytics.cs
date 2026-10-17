@@ -12,6 +12,8 @@ using UnityEngine;
 //   level_start           a shift starts: shift_number, cafe_level
 //   level_end             a shift ends: shift_number, stars (average 0-5), earned, perfect, chaos, walkouts, best_streak
 //   level_up              the cafe levels up: level
+//   day_end               a day's goal settled: day, goal (kind), goal_met, day_stars (1-3)
+//   daily_treat           the day's treat for coming back: streak (day of the row), value
 //   spend_virtual_currency  a shop upgrade bought: item_name, value, virtual_currency_name = coins
 //   ad_midgame / ad_rewarded  outcome
 // Sent from PlatformSession (session events), Tutorial, CafeShop and GamePlatform (ads).

@@ -23,6 +23,9 @@ public class NonStackBase : PlaceableBase
         }
     }
 
+    // Where the food sits (OvenDoor slides the oven's along with its tray).
+    public Transform Slot => FoodSlot;
+
     public override void EnableCollider()
     {
         if(currentObject == null)

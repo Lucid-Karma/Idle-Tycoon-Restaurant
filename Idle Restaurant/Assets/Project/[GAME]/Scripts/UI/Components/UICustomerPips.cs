@@ -13,7 +13,10 @@ public class UICustomerPips : MonoBehaviour
     private float[] pop;
     private int shown;
 
-    private void Start()
+    private void Start() => Build();
+
+    // Each shift can have more customers than the last (a table bought), and starts with none served.
+    private void Build()
     {
         int count = ScoreManager.Instance.CustomersPerLevel;
         if (totalLabel != null) totalLabel.text = "/ " + count;
@@ -32,8 +35,24 @@ public class UICustomerPips : MonoBehaviour
         Refresh(false);
     }
 
-    private void OnEnable() => EventManager.OnCustomerWent.AddListener(OnCustomerWent);
-    private void OnDisable() => EventManager.OnCustomerWent.RemoveListener(OnCustomerWent);
+    private void OnEnable()
+    {
+        EventManager.OnCustomerWent.AddListener(OnCustomerWent);
+        EventManager.OnLevelStart.AddListener(OnShiftStart);
+    }
+
+    private void OnDisable()
+    {
+        EventManager.OnCustomerWent.RemoveListener(OnCustomerWent);
+        EventManager.OnLevelStart.RemoveListener(OnShiftStart);
+    }
+
+    private void OnShiftStart()
+    {
+        if (pips == null) return;   // not built yet: Start does it
+        shown = 0;
+        Build();
+    }
 
     private void OnCustomerWent() => Refresh(true);
 

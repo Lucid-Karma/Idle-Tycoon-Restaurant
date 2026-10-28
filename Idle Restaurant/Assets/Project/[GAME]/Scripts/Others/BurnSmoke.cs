@@ -11,6 +11,10 @@ using UnityEngine;
 public class BurnSmoke : MonoBehaviour
 {
     [SerializeField] private Material particleMaterial;   // URP particle material with a soft round blob (step 7)
+    // The other kitchen effects (KitchenFx) are hard-edged, not smoke: the food fight's splash material
+    // (Hyper Casual FX Circles_AB) with these textures - a four-point sparkle, a disc, a sheet of 2x2 rings.
+    [SerializeField] private Material crispMaterial;
+    [SerializeField] private Texture2D sparkleTexture, discTexture, ringsTexture;
 
     private static BurnSmoke instance;
 
@@ -29,12 +33,16 @@ public class BurnSmoke : MonoBehaviour
         if (instance != null && food != null) instance.Burnt(food);
     }
 
+    // Where an effect on this food shows best: over it, a little toward the camera (out of the oven's door).
+    public static Vector3 InFrontOf(EdibleBase food) => instance != null ? instance.Origin(food) : TopOf(food);
+
     private void Awake()
     {
         instance = this;
         var cam = Camera.main;
         towardViewer = cam != null ? Vector3.ProjectOnPlane(-cam.transform.forward, Vector3.up).normalized : Vector3.back;
         puff = Build("Puff", burst: true);
+        KitchenFx.Create(gameObject, crispMaterial, sparkleTexture, discTexture, ringsTexture);
     }
 
     private void OnDestroy()

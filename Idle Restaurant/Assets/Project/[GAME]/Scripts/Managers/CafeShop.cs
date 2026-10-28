@@ -56,6 +56,9 @@ public class CafeShop : MonoBehaviour
         foreach (var upgrade in upgrades) Apply(upgrade, false);
     }
 
+    // The pictures for the shop come later (ShopIcons): nobody opens the shop in the first seconds.
+    private void Start() => ShopIcons.Begin(upgrades, 3f);
+
     private void OnDestroy()
     {
         if (Instance == this) Instance = null;
@@ -158,7 +161,7 @@ public class CafeShop : MonoBehaviour
     // Unscaled: the result screen keeps the game paused behind it.
     private IEnumerator Reveal(List<GameObject> batch)
     {
-        if (revealSound != null) revealSound.Play();
+        if (revealSound != null && Audio.IsMusicOn) revealSound.Play();
         foreach (var go in batch)
         {
             if (go == null || !go.activeInHierarchy) continue;

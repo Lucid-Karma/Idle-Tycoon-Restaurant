@@ -10,8 +10,22 @@ using UnityEngine.UI;
 // 16.7 s on CrazyGames); it is only switched on once the SDK has answered, so its Awake/Start read the right save.
 // Meanwhile a quiet "Loading..." sits in the middle of the screen: a flat colour with nothing on it for several
 // seconds (measured in a local build) looks like a game that has frozen.
+// The background load runs at High priority (2026-10-17): WebGL has no loading thread, so an async load only gets
+// a slice of each frame (Normal = ~10 ms, and the page's frame limiter adds idle time between frames) - the game
+// scene's 12,000 objects took 13 s to arrive in a local build while the engine had been ready after 5. High gives
+// it ~50 ms a frame (the screen only shows "Loading..." meanwhile); it goes back to Normal once the scene is in.
+// On the web the page's own loading screen (WebGL template ChibiCafe) stays up until the game scene is in
+// (ChibiGameReady), so this scene shows nothing of its own there: one loading screen, not two (2026-10-20).
 public class Boot : MonoBehaviour
 {
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")] private static extern void ChibiGameReady();
+    private const bool PageShowsLoading = true;
+#else
+    private static void ChibiGameReady() { }
+    private const bool PageShowsLoading = false;
+#endif
+
     [SerializeField] private string gameScene = "GameScene";
     private const float MaxWait = 6f;
     private const float ShowLoadingAfter = 0.4f;   // a fast load never flashes it
@@ -24,13 +38,22 @@ public class Boot : MonoBehaviour
     private void Start()
     {
         startedAt = Time.realtimeSinceStartup;
+        Application.backgroundLoadingPriority = ThreadPriority.High;
+        SceneManager.sceneLoaded += OnGameSceneLoaded;
         loading = SceneManager.LoadSceneAsync(gameScene);
         loading.allowSceneActivation = false;
         GamePlatform.Init(OnSdkReady);
-        BuildLoadingText();
+        if (!PageShowsLoading) BuildLoadingText();
     }
 
     private void OnSdkReady() => sdkDone = true;
+
+    private static void OnGameSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        SceneManager.sceneLoaded -= OnGameSceneLoaded;
+        Application.backgroundLoadingPriority = ThreadPriority.Normal;
+        ChibiGameReady();
+    }
 
     private void Update()
     {

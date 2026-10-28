@@ -1,0 +1,9 @@
+<!-- Code the IL2CPP linker must keep whole when the CrazyGames build strips managed code at Medium (2026-10-17):
+     the game and the CrazyGames SDK (both in Assembly-CSharp; the SDK's JavaScript calls back into it by method
+     name through SendMessage, which the linker can't see), the SDK's jslib side (firstpass) and the Input System
+     (it finds its device layouts by reflection). Everything else - engine, URP, TextMeshPro - is stripped. -->
+<linker>
+  <assembly fullname="Assembly-CSharp" preserve="all"/>
+  <assembly fullname="Assembly-CSharp-firstpass" preserve="all"/>
+  <assembly fullname="Unity.InputSystem" preserve="all"/>
+</linker>

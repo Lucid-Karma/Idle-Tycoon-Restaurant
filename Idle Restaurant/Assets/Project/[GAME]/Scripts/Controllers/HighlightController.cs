@@ -9,23 +9,22 @@ using UnityEngine;
 //   highlight, no glow): where the held food can go (pan, oven, chopping board, a plate, a waiting customer
 //   and their table), food that is ready to take, or the ingredient crates when hands are empty and nothing
 //   is ready.
-// Materials are swapped on the renderers and restored exactly. Hinted Lit materials are swapped for copies
-// using Chibi/HintLit (made once per original material), whose colour follows a global pulse. A swap keeps
-// the material count, so it also works on statically batched renderers.
+// Materials are swapped on the renderers and restored exactly. A hint is shown the way the yellow is: its own
+// materials for half the beat, a solid pink material for the other half (user, 2026-10-27: "can't the materials
+// just change colour, like the yellow?"). It used to blend towards the pink in a copy of each material with a
+// shader of its own (Chibi/HintLit), and on the web the copy lost the scene's baked light: hinted things went
+// darker than themselves. A swap keeps the material count, so it also works on statically batched renderers.
 public class HighlightController : MonoBehaviour
 {
     [SerializeField] private Material highlightMaterial;   // solid yellow: hover and tap target
-    [SerializeField] private Material hintTemplate;        // Chibi/HintLit material (keeps the shader in builds)
-    [SerializeField] private Material hintMaterial;        // solid raspberry, for the rare non-Lit material
+    [SerializeField] private Material hintMaterial;        // a solid Lit material: copied in pink for the hint
     [SerializeField] private float targetMinTime = 0.35f;  // a tap stays lit at least this long
     [SerializeField] private float hintPulseSeconds = 1f;  // one breath: own look → raspberry → own look
-    [SerializeField, Range(0f, 1f)] private float hintPeak = 0.9f;
 
-    private static readonly int HintAmountId = Shader.PropertyToID("_HintAmount");
-    private static readonly int HintColorId = Shader.PropertyToID("_HintColor");
-    private readonly Dictionary<Material, Material> hintVariants = new();
 
-    private enum Look { None, Hint, Full }
+    private enum Look { None, Hint, Full, HintOff, HintOn }   // (HintOff/HintOn: a hint, at this moment of its beat)
+    private Material pink;
+    private bool pinkNow;
 
     private readonly Dictionary<Renderer, Material[]> originals = new();
     private readonly Dictionary<Renderer, Look> applied = new();
@@ -47,8 +46,11 @@ public class HighlightController : MonoBehaviour
         _camera = Camera.main;
         player = FindFirstObjectByType<PlayerFSM>();
         FindUtensils();
-        Shader.SetGlobalColor(HintColorId, UITokens.Colors.Raspberry);
-        Shader.SetGlobalFloat(HintAmountId, 0f);
+        // A light, clear pink (user, 2026-10-27: "from its own colour to pink is enough" - the deep raspberry it
+        // used went darker than the thing itself on the way, in shade and at night).
+        pink = new Material(hintMaterial) { name = "Hint pink" };
+        pink.SetColor("_BaseColor", UITokens.Hex(0xFF7BB0));
+        if (pink.HasProperty("_Color")) pink.SetColor("_Color", UITokens.Hex(0xFF7BB0));
     }
 
     // Again after a purchase: a second stove brings a pan of its own.
@@ -65,27 +67,7 @@ public class HighlightController : MonoBehaviour
 
     private void OnDestroy()
     {
-        foreach (var variant in hintVariants.Values) if (variant != null && variant != hintMaterial) Destroy(variant);
-        hintVariants.Clear();
-    }
-
-    // The original with its colour free to drift towards the hint colour; one copy per original material.
-    private Material HintVariant(Material original)
-    {
-        if (original == null || original.shader == null || original.shader.name != "Universal Render Pipeline/Lit")
-        {
-#if UNITY_EDITOR
-            if (original != null && hintVariants.TryAdd(original, hintMaterial))
-                Debug.LogWarning($"[Highlight] '{original.name}' ({original.shader?.name}) isn't URP Lit: hinted with the plain raspberry material");
-#endif
-            return hintMaterial;
-        }
-        if (!hintVariants.TryGetValue(original, out var variant))
-        {
-            variant = new Material(original) { name = original.name + " (hint)", shader = hintTemplate.shader };
-            hintVariants[original] = variant;
-        }
-        return variant;
+        if (pink != null) Destroy(pink);
     }
 
     // Hints only make sense once service has started (not on the title screen). Shifts follow each other
@@ -162,8 +144,9 @@ public class HighlightController : MonoBehaviour
             hintSignature = signature;
             hintSince = Time.unscaledTime;
         }
+        // Own look first (newly hinted things don't pop straight to pink), pink for the second half of each beat.
         float phase = (Time.unscaledTime - hintSince) / Mathf.Max(0.1f, hintPulseSeconds);
-        Shader.SetGlobalFloat(HintAmountId, hintPeak * (0.5f - 0.5f * Mathf.Cos(phase * 2f * Mathf.PI)));
+        pinkNow = Mathf.Repeat(phase, 1f) >= 0.5f;
     }
 
     private void CollectHints(List<Component> into)
@@ -270,23 +253,22 @@ public class HighlightController : MonoBehaviour
         foreach (var pair in wanted)
         {
             var renderer = pair.Key;
-            if (applied.TryGetValue(renderer, out var look) && look == pair.Value) continue;
+            var want = pair.Value == Look.Hint ? (pinkNow ? Look.HintOn : Look.HintOff) : pair.Value;
+            if (applied.TryGetValue(renderer, out var look) && look == want) continue;
             if (!originals.TryGetValue(renderer, out var original))
                 originals[renderer] = original = renderer.sharedMaterials;
 
-            Material[] materials;
-            if (pair.Value == Look.Full)
+            if (want == Look.HintOff)
             {
-                materials = new Material[original.Length];
-                for (int i = 0; i < materials.Length; i++) materials[i] = highlightMaterial;
+                renderer.sharedMaterials = original;
+                applied[renderer] = want;
+                continue;
             }
-            else
-            {
-                materials = new Material[original.Length];
-                for (int i = 0; i < materials.Length; i++) materials[i] = HintVariant(original[i]);
-            }
+            var solid = want == Look.Full ? highlightMaterial : pink;
+            var materials = new Material[original.Length];
+            for (int i = 0; i < materials.Length; i++) materials[i] = solid;
             renderer.sharedMaterials = materials;
-            applied[renderer] = pair.Value;
+            applied[renderer] = want;
         }
     }
 

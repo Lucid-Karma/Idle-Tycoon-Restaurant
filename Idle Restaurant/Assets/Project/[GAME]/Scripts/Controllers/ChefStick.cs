@@ -101,6 +101,7 @@ public class ChefStick : MonoBehaviour
         if (events == null) return false;
         uiHits.Clear();
         events.RaycastAll(new PointerEventData(events) { position = position }, uiHits);
+        if (Tutorial.TapsThrough(position)) return false;   // what the lesson or the tip points at, under a card
         foreach (var hit in uiHits)
             if (hit.module is UnityEngine.UI.GraphicRaycaster raycaster && raycaster.GetComponent<Canvas>().renderMode != RenderMode.WorldSpace)
                 return true;

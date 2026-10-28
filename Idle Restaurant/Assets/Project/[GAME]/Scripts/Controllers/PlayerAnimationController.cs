@@ -18,7 +18,7 @@ public class PlayerAnimationController : MonoBehaviour
         PlayerFSM.OnPlayerSlip.AddListener(OnSlip);
     }
 
-    private void OnSlip() => InvokeTrigger("Slip");
+    private void OnSlip() => InvokeTrigger(PlayerFSM.SlipsForward ? "SlipForward" : "Slip");
 
     private void OnDisable()
     {

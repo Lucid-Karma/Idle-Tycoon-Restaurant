@@ -559,6 +559,64 @@ and a proper onboarding. Built in that order:
   a temporary editor bot tapping through `PlayerFSM.HandleScreenTap` on game time, `GameplayRecorder.BeginDirect`
   (not the Recorder package: it stalls the editor at ~1 fps) at 2880x1620, cut with `PreviewVideoMaker` (play
   mode). Spawn gaps under ~4 s make customers walk through each other at the door: keep the crowd natural.
+- **Load time** (2026-10-17, CrazyGames reported 13.6 s): the cost was not the download but Boot's async load of
+  GameScene, ~9 s (WebGL has no loading thread; measured 1015d: scene at 10.9 s, gameplay 13.2 s). Boot now loads at
+  `ThreadPriority.High` (back to Normal once the scene is in): build 1017 = scene 2.5 s, gameplay 3.4-3.7 s local,
+  5.4 s at 20 Mbit/s. Also: music streamed from StreamingAssets/music_loop.m4a (`Audio`, the editor plays the WAV by
+  path), shop pictures from StreamingAssets/shop (`ShopIcons`, step 4 writes them there; the catalogue holds no
+  sprite refs), shadowmask R8 + directional lightmaps 128 on WebGL (one mixed light, channel 0), no mips on
+  screen-only UI sprites, Medium managed stripping in CrazyGamesBuild (+ Assets/link.xml), ScorePanel/FarewellPanel
+  removed (never shown). Download 14.8 -> 13.2 MB: data.unity3d is LZ4 inside the .br, so asset trimming gains less
+  than expected. **Measure load in a VISIBLE browser pane** (show the preview pane, cold cache: delete IndexedDB
+  "UnityCache" and "/idbfs"): a hidden pane runs Unity at ~1 fps and gave false 13-14 s readings. Pane clicks are too
+  short for the Input System (dropped) and drags over 0.45 s are joystick holds; UI buttons work with a short drag.
+- **Whose burger it is** (2026-10-17, user: "even a perfect burger, Mochi can take it to the wrong customer"): a
+  plate used to keep the customer it picked for its first layer (a bun - everybody's) whatever was stacked after.
+  Now `Orders.BestFor` runs on every layer and when closing: exact order 2000 > all of it with extras 1000 > layers
+  wanted x100 - extras x30, + waited x0.5, + 60 for the customer it is already for; closing an exact order may take
+  the customer from a plate still being stacked. `Waiter.Table` falls back to the best `Orders.Fit`, not the first
+  customer in the list.
+- **The chef's hats are his own** (2026-10-17, user: "the shop's hats are the same as the customers'"): step 2
+  repaints the knight helmet, wizard hat and bear hat with the chef's palette sheet (scarlet / white / gold) by
+  moving their UVs between cells (`CafeGrowthBuilder.ChefColours`) - his material, no new texture. Re-render only
+  the hat icons after it (step 4 re-renders all 14; the terrace's spread-out pieces frame badly, keep its old icon).
+- **The first minute** (2026-10-20; CrazyGames "gameplay conversion" = players who play at least 1 minute: ours
+  34% - desktop 45%, mobile 24% - top games 80%+; 66% left inside the first minute). Measured with a bot that plays
+  the lesson like a careful new player (1 s per tap): before, 13 taps and 37.5 s to the first coins, $20 (first shop
+  buy) at 161 s. Now (Tutorial 4th version): the first order is `Orders.FirstRecipe` (bun + patty, not on the menu)
+  and `Tutorial.ReadyKitchen` puts a baked bun in the oven and a fried patty on the pan when the lesson starts
+  (`IngredientsSource.SpawnInto`), so it is 6 taps: first serve 15.7 s, first coins 18.8 s (21.8 s at 1.5 s per tap);
+  a cheer, then the second customer's Cheeseburger from scratch with the same arrow; $20 at 55-67 s.
+- **Forgiving taps** (`PlayerFSM.NearestInteractive`): on a phone held sideways (740x360) crates, bin and plates
+  are 21-31 px (fingertip ~44). A tap that misses everything interactive (and no customer near) goes to the
+  nearest interactive thing within 7% of the screen height on touch, 3% with a mouse.
+- **Phone held upright**: the WebGL template shows "Turn your phone sideways" (#chibi-rotate) - the game keeps
+  its wide shape and would be a thin strip with ~10 px crates.
+- **Lesson spotlight** (2026-10-20; first try with manga focus lines + the arrow was "too chaotic"): `UISpotlight`
+  (a mesh Graphic on its own overlay canvas, sortingOrder 5 - above the HUD, which dims too; Mochi's card canvas is
+  raised to 10 - its OWN nested canvas with overrideSorting: raising rootCanvas lifted the whole HUD over the dim)
+  dims everything to Ink 60% except an oval around Tutorial.Focus and glides between targets. The snack tip uses it
+  too (no tap blocking: optional, the shift is live) and ends - to come back later - when no hungry customer is left
+  in clear view (it pointed at nothing while the only customer sat under the card). No arrow
+  any more, no lines in the lesson; a blocked tap makes the oval pulse.
+- **Opening titles** (`LessonIntro`, user: "Stylized Action, like an opening title sequence with cinematic shots"):
+  once a session, before the lesson's first step, ~4 s: cinematic bars, the HUD faded out, the ortho camera snapping
+  close-up to close-up (chef "CHIBI BURGER CAFE!", oven "BAKE!", pan "FRY!", the first customer walking in "SERVE!")
+  with whip pans (Sweep `UISpeedLines`), hits (Radial lines, flash, shake, Dutch roll, a slammed label, pop sound),
+  then a pull-out "LET'S COOK!". Captions (user's pick 2026-10-21, after Permanent Marker and Fredoka-on-pills were
+  rejected): Bangers (OFL, `Graphics/Font/Bangers`, static SDF of 46 glyphs built by Tools/Chibi Cafe/16
+  `TitleFontBuilder`, its material has OUTLINE_ON + UNDERLAY_ON so the build keeps that variant), no label: warm
+  white face (LET'S COOK yellow), ink outline 0.3, offset shadow in the shot's colour, ~21% of screen height, tilted.
+  Tutorial.titleFont references it. Unscaled time; any tap skips (Tutorial.AcceptsTap); the camera,
+  HUD alpha and size are restored exactly. Measured with it: first coins ~22 s, $20 at ~59 s. (Recording it with
+  GameplayRecorder is misleading: capture locks game time, the titles run on real time.) `Tutorial.AcceptsTap` (first thing in
+  PlayerFSM.HandleScreenTap): during the lesson a tap only counts within 6% of screen height of the focus and is aimed
+  at it; elsewhere it does nothing but Punch the lines. The burger can be closed before its customer sits (they walk
+  in), the lesson's customers sit nearest the door and the first comes at once: first coins 19.4 s (1 s/tap).
+- **One loading screen** (2026-10-20): the template's bar stays up (download = 0-85%, then creeping) until Boot
+  calls `ChibiGameReady` (jslib) when GameScene is loaded (20 s safety); Boot draws no "Loading..." of its own on the
+  web. CrazyGames shows its own screen before ours (page/ads): ours is the build downloading and starting - removing
+  it would leave a blank screen for the same time.
 - Mochi turns to face the camera while he waits in his corner (`Waiter.FaceTheViewer`): from behind he
   was a white blob. His landing squash stays at the original 13 % / 17 % (carrying): the gentler one
   tried for a round looked stiff (user).

@@ -31,6 +31,17 @@
         <div id="chibi-status">Warming up the kitchen...</div>
       </div>
       <div id="unity-warning"> </div>
+      <!-- A phone held upright: the game keeps its own wide shape, so it would be a thin strip with tiny targets.
+           Asked to turn the phone; the game goes on underneath and the card goes away when it is turned. -->
+      <div id="chibi-rotate" style="display:none; position:fixed; inset:0; z-index:10; align-items:center; justify-content:center; flex-direction:column; gap:18px; background:rgba(16,38,58,0.92); color:#FFF9F4; font-family:ui-rounded,'SF Pro Rounded','Nunito','Segoe UI',system-ui,sans-serif; text-align:center">
+        <svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true" style="animation:chibi-turn 2.4s ease-in-out infinite">
+          <rect x="30" y="12" width="36" height="72" rx="8" fill="none" stroke="#FFF9F4" stroke-width="5"/>
+          <circle cx="48" cy="74" r="3.5" fill="#F4C95D"/>
+        </svg>
+        <div style="font-size:22px; font-weight:700">Turn your phone sideways</div>
+        <div style="font-size:15px; opacity:0.8">The kitchen needs room!</div>
+      </div>
+      <style>@keyframes chibi-turn { 0%, 25% { transform: rotate(0deg) } 55%, 100% { transform: rotate(-90deg) } }</style>
 #if SHOW_DIAGNOSTICS
       <img id="diagnostics-icon" src="TemplateData/webmemd-icon.png">
 #endif
@@ -69,6 +80,16 @@
       }
       fitCanvas();
       window.addEventListener("resize", fitCanvas);
+
+      // Phones held upright get the "turn it sideways" card (see #chibi-rotate).
+      var rotateCard = document.querySelector("#chibi-rotate");
+      function checkUpright() {
+        var phone = /iPhone|iPod|Android/i.test(navigator.userAgent) && Math.min(screen.width, screen.height) < 600;
+        rotateCard.style.display = phone && window.innerHeight > window.innerWidth ? "flex" : "none";
+      }
+      checkUpright();
+      window.addEventListener("resize", checkUpright);
+      window.addEventListener("orientationchange", checkUpright);
 
       // Shows a temporary message banner/ribbon for a few seconds, or
       // a permanent error message on top of the canvas if type=='error'.
@@ -163,12 +184,26 @@
       var script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {
+        // One loading screen from the first byte to the kitchen: downloading fills the bar to 85%, the engine starting
+        // and the game scene loading creep it on, and it goes when the game says its scene is up (ChibiGameReady),
+        // or after 20 s whatever happens - never a screen that stays forever.
+        var loadingBar = document.querySelector("#unity-loading-bar");
+        var barFull = document.querySelector("#unity-progress-bar-full");
+        var shown = 0, creep = null;
+        function setBar(p) { shown = Math.max(shown, p); barFull.style.width = 100 * shown + "%"; }
+        window.chibiGameReady = function () {
+          if (creep) clearInterval(creep);
+          setBar(1);
+          setTimeout(function () { loadingBar.style.display = "none"; }, 120);
+        };
         createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          setBar(0.85 * progress);
           // Downloading is most of the wait; the last stretch is the engine starting up.
           if (progress >= 0.9) document.querySelector("#chibi-status").textContent = "Lighting the stove...";
               }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
+                document.querySelector("#chibi-status").textContent = "Lighting the stove...";
+                creep = setInterval(function () { setBar(shown + (0.98 - shown) * 0.08); }, 100);
+                setTimeout(window.chibiGameReady, 20000);
 #if SHOW_DIAGNOSTICS
                 document.getElementById("diagnostics-icon").onclick = () => {
                   unityDiagnostics.openDiagnosticsDiv(unityInstance.GetMetricsInfo);

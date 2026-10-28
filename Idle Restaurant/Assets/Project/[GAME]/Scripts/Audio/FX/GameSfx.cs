@@ -39,8 +39,13 @@ public class GameSfx : MonoBehaviour
     private int nextVoice;
     private readonly float[] lastPlayed = new float[Enum.GetValues(typeof(Cue)).Length];
 
+    // Every cue as it happens, sound on or off: the moments themselves, for whoever wants to react to them
+    // (the camera experiment shakes on a few - Experiments/CameraAB).
+    public static event Action<Cue> Played;
+
     public static void Play(Cue cue)
     {
+        Played?.Invoke(cue);
         if (instance != null) instance.PlayCue(cue);
     }
 
@@ -78,6 +83,9 @@ public class GameSfx : MonoBehaviour
             sizzle.volume = 0f;
             sizzle.spatialBlend = 0f;
             sizzle.outputAudioMixerGroup = first.outputAudioMixerGroup;
+            // Its import has "Preload Audio Data" off, so nothing loads it until asked: ask now (Update waits
+            // for it to be decoded before starting it - the build that only waited never heard it, 2026-10-17).
+            if (sizzleLoop.loadState == AudioDataLoadState.Unloaded) sizzleLoop.LoadAudioData();
         }
     }
 
@@ -88,7 +96,14 @@ public class GameSfx : MonoBehaviour
         // Paused (menus, the result card): the kitchen goes quiet too.
         float target = sizzlers.Count > 0 && Audio.IsMusicOn && Time.timeScale > 0f ? sizzleVolume : 0f;
         sizzle.volume = Mathf.MoveTowards(sizzle.volume, target, Time.unscaledDeltaTime * sizzleVolume * 4f);
-        if (sizzle.volume > 0f && !sizzle.isPlaying) { sizzle.time = UnityEngine.Random.Range(0f, sizzle.clip.length); sizzle.Play(); }
+        // (Not before the clip is decoded: on the web its length isn't known until then - "Trying to get length of
+        // sound which is not loaded yet" in the console.)
+        if (sizzle.volume > 0f && !sizzle.isPlaying)
+        {
+            var state = sizzle.clip.loadState;
+            if (state == AudioDataLoadState.Loaded) { sizzle.time = UnityEngine.Random.Range(0f, sizzle.clip.length); sizzle.Play(); }
+            else if (state == AudioDataLoadState.Unloaded) sizzle.clip.LoadAudioData();
+        }
         else if (sizzle.volume <= 0f && sizzle.isPlaying) sizzle.Stop();
     }
 
@@ -121,11 +136,12 @@ public class GameSfx : MonoBehaviour
 
     private void PlayCue(Cue cue)
     {
-        if (!Audio.IsMusicOn) return;
+        if (!Audio.IsMusicOn || LessonIntro.Playing) return;   // (the titles have sounds of their own)
         // The same cue twice in one moment (two tips at once) plays once.
         float now = Time.unscaledTime;
         if (now - lastPlayed[(int)cue] < 0.06f) return;
         lastPlayed[(int)cue] = now;
+
 
         foreach (var sound in sounds)
         {

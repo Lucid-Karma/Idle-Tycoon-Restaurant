@@ -12,9 +12,13 @@ public class NeonRandomFlicker : MonoBehaviour
     private bool isOn = true;
     private bool isMusicOn;
 
+    // Its buzz under everything else (user, 2026-10-28: "turn the LED's flickering crackle down a little").
+    private const float BuzzShare = 0.5f;
+
     void Start()
     {
         isMusicOn = Audio.IsMusicOn;
+        if (flickerSound != null) flickerSound.volume *= BuzzShare;
         nextFlickerTime = Time.time + Random.Range(minTime, maxTime);
     }
 

@@ -92,6 +92,13 @@ public class NpcSpawnController : MonoBehaviour
                     if (seen.Count > 0) specificChairs = seen;
                 }
                 chairIndex = Random.Range(0, specificChairs.Count); // max is exclusive: the last chair was never picked
+                // The lesson's customers take the seat nearest the door: the first burger is ready in seconds now
+                // (Tutorial.ReadyKitchen), and a walk across the room kept it waiting (2026-10-20).
+                if (Tutorial.Running)
+                {
+                    var door = new Vector3(21.35f, 1.2f, 8.79f);
+                    chairIndex = specificChairs.IndexOf(specificChairs.OrderBy(c => Vector3.Distance(c.transform.position, door)).First());
+                }
                 //Debug.Log("SChairCount: " + specificChairs.Count + " chairIndex: " + chairIndex);
                 npc.GetComponent<NpcFsm>().chair = specificChairs[chairIndex].GetComponent<ISedile>();
 
@@ -121,7 +128,8 @@ public class NpcSpawnController : MonoBehaviour
     {
         for (int i = 0; i < levelCustomerCount; i++)
         {
-            timeBreak = i == 0 ? Random.Range(firstArrival.x, firstArrival.y) : Random.Range(openingGap.x, openingGap.y);
+            timeBreak = i == 0 ? (CafeProgress.Taught ? Random.Range(firstArrival.x, firstArrival.y) : 0.3f)   // the lesson's first customer at once
+                               : Random.Range(openingGap.x, openingGap.y);
             yield return new WaitForSeconds(timeBreak);
             CreateNpc();
         }

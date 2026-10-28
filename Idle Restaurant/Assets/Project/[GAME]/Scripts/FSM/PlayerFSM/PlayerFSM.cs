@@ -83,11 +83,16 @@ public class PlayerFSM : MonoBehaviour
 
     void Start()
     {
+        // His agent is off in the scene and switched on here: in a build the scene's objects can be enabled before
+        // the NavMeshSurface has added its navmesh, and an agent enabled then logs "Failed to create agent because
+        // there is no valid NavMesh" (2026-10-17). By Start every OnEnable, the surface's included, has run.
+        if (!Agent.enabled) Agent.enabled = true;
         _playerCam = Camera.main;
         isHolded = false;
         baseSpeed = runSpeed;
         Agent.acceleration = Mathf.Max(Agent.acceleration, runAcceleration);
         ApplyPerks();
+        LooseDust();
 
         executingState = ExecutingState.IDLE;
         currentState = playerIdleState;
@@ -103,6 +108,41 @@ public class PlayerFSM : MonoBehaviour
     // also gets up to speed and stops quicker, so short hops between stations feel snappy.
     [SerializeField] private float runSpeed = 4.6f;
     [SerializeField] private float runAcceleration = 40f;
+
+    // The puffs at his feet: little clouds kicked up a few at a time, staying close behind him and fading. They used
+    // to live in his own space and swung round with him whenever he turned; left in the world (2026-10-28) they
+    // trailed out in long lines - so now they are thrown out in small bunches, carry most of his speed (so they stay
+    // near his heels, no further than the old ones went) and die quickly, and a turn no longer swings them.
+    private void LooseDust()
+    {
+        var dust = ParticleSystem;
+        if (dust == null) return;
+        var main = dust.main;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.emitterVelocityMode = ParticleSystemEmitterVelocityMode.Transform;
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 0.8f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.5f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.22f, 0.36f);
+        var emission = dust.emission;   // a puff every step or so
+        emission.rateOverTime = 0f;
+        emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 2, 4, -1, 0.17f) });
+        var follow = dust.inheritVelocity;
+        follow.enabled = true;
+        follow.mode = ParticleSystemInheritVelocityMode.Initial;
+        follow.curveMultiplier = 0.82f;
+        var drift = dust.velocityOverLifetime;   // a little lift as they settle
+        drift.enabled = true;
+        drift.space = ParticleSystemSimulationSpace.World;
+        drift.x = new ParticleSystem.MinMaxCurve(0f, 0f);
+        drift.y = new ParticleSystem.MinMaxCurve(0.1f, 0.3f);
+        drift.z = new ParticleSystem.MinMaxCurve(0f, 0f);
+        var fade = dust.colorOverLifetime;
+        fade.enabled = true;
+        var g = new Gradient();
+        g.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                  new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0.7f, 0.5f), new GradientAlphaKey(0f, 1f) });
+        fade.color = g;
+    }
 
     private void OnEnable() => CafeShop.Changed += OnCafeChanged;
     private void OnDisable() => CafeShop.Changed -= OnCafeChanged;
@@ -140,7 +180,7 @@ public class PlayerFSM : MonoBehaviour
     {
         // On a touch screen the stick sends taps itself, when the finger lifts without having dragged.
         if (ChefStick.TouchDriven) return;
-        if(Input.GetMouseButtonDown(0) && !PointerUtility.IsOverUI())
+        if(Input.GetMouseButtonDown(0) && (!PointerUtility.IsOverUI() || Tutorial.TapsThrough(Input.mousePosition)))
             HandleScreenTap(Input.mousePosition);
     }
 
@@ -155,6 +195,9 @@ public class PlayerFSM : MonoBehaviour
     private void Steer()
     {
         if (stick == null && (stick = GetComponent<ChefStick>()) == null) return;
+        // Down on the floor (or frozen by a splat): steering waits. It used to let go of him at once - "stopped,
+        // so idle" - and the Idle trigger cut his fall short: he only stumbled (user, 2026-10-28).
+        if (IsStunned) return;
         Vector2 move = stick.Move;
         bool wanted = move.sqrMagnitude > 0.0025f && stick.Playing && !IsStunned
                       && executingState != ExecutingState.INTERACT && Time.timeScale > 0f;
@@ -400,6 +443,9 @@ public class PlayerFSM : MonoBehaviour
     public void HandleScreenTap(Vector3 screenPosition)
     {
         if (IsStunned) return;
+        // The first lesson only takes taps on what its arrow points at (and aims them at it).
+        if (!Tutorial.AcceptsTap(screenPosition, out var aim)) return;
+        screenPosition = aim;
 
         ray = _playerCam.ScreenPointToRay(screenPosition);
         bool hitSomething = Physics.Raycast(ray, out RaycastHit tapHit, 100);
@@ -407,14 +453,54 @@ public class PlayerFSM : MonoBehaviour
         Collider tapped = hitSomething ? ResolveTap(tapHit.collider) : null;
 
         // An interactive object under the finger always wins; otherwise a tap near a customer serves them
-        // (burger in hand) or throws them what the chef is holding.
-        if (!(tapped != null && IsInteractive(tapped)) && TryCustomerAt(screenPosition)) return;
+        // (burger in hand) or throws them what the chef is holding; otherwise a tap just beside a crate, a station
+        // or a plate means that thing (NearestInteractive).
+        Vector3 point = hitSomething ? tapHit.point : Vector3.zero;
+        if (!(tapped != null && IsInteractive(tapped)))
+        {
+            if (TryCustomerAt(screenPosition)) return;
+            var near = NearestInteractive(screenPosition);
+            if (near != null) { tapped = ResolveTap(near); point = near.bounds.center; hitSomething = true; }
+        }
         if (!hitSomething) return;
 
-        GatherInteractableComponents(tapped, tapHit.point);
+        GatherInteractableComponents(tapped, point);
         SnapToNearbyService();
         PreferWaitingCustomer();
         GoToTarget();
+    }
+
+    // Forgiving taps (2026-10-20): on a phone held sideways the crates, the bin and the plates are 20-30 px across,
+    // well under a fingertip (44 px), and a tap that missed one walked the chef to the floor beside it. Now a tap
+    // within this distance of something interactive (its box as seen on screen) counts as a tap on it - a share of the
+    // screen's height: generous for fingers, small for a mouse pointer.
+    private const float TouchSlop = 0.07f, MouseSlop = 0.03f;
+
+    private Collider NearestInteractive(Vector3 screenPosition)
+    {
+        var cam = _playerCam != null ? _playerCam : Camera.main;
+        float best = Screen.height * (ChefStick.TouchDriven ? TouchSlop : MouseSlop);
+        Collider found = null;
+        foreach (var col in FindObjectsByType<Collider>(FindObjectsSortMode.None))
+        {
+            if (!col.enabled || !col.gameObject.activeInHierarchy || col.isTrigger && col.GetComponent<TapProxy>() == null) continue;
+            var resolved = ResolveTap(col);
+            if (resolved == null || !IsInteractive(resolved)) continue;
+            var b = col.bounds;
+            if (b.size.magnitude > 6f) continue;   // a statically batched collider can report the whole kitchen
+            float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+            for (int i = 0; i < 8; i++)
+            {
+                var p = cam.WorldToScreenPoint(new Vector3(i % 2 == 0 ? b.min.x : b.max.x, (i / 2) % 2 == 0 ? b.min.y : b.max.y, i < 4 ? b.min.z : b.max.z));
+                if (p.z < 0f) continue;
+                minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x); minY = Mathf.Min(minY, p.y); maxY = Mathf.Max(maxY, p.y);
+            }
+            float dx = Mathf.Max(minX - screenPosition.x, 0f, screenPosition.x - maxX);
+            float dy = Mathf.Max(minY - screenPosition.y, 0f, screenPosition.y - maxY);
+            float d = Mathf.Sqrt(dx * dx + dy * dy);
+            if (d < best) { best = d; found = col; }
+        }
+        return found;
     }
 
     public Collider ResolveTap(Collider col)
@@ -657,9 +743,12 @@ public class PlayerFSM : MonoBehaviour
     private bool slipped;
 
     // Hit by a tomato while running: he slips on it, lands on his back and gets up again, still holding
-    // whatever he was carrying.
-    public void Slip(float seconds)
+    // whatever he was carrying. Hit from behind, he goes down on his face instead (and hops back up).
+    public bool SlipsForward { get; private set; }
+
+    public void Slip(float seconds, bool forward = false)
     {
+        SlipsForward = forward;
         stunnedUntil = Time.time + seconds;
         Agent.isStopped = true;
         Agent.velocity = Vector3.zero;

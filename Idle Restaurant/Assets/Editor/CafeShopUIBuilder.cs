@@ -205,6 +205,8 @@ public static partial class CafeGrowthBuilder
     static void BuildResultCard(Transform canvas, UIShop shop)
     {
         var card = (RectTransform)canvas.Find("ScorePanel/BackgroundIMG/ResultCard");
+        // The result card (ScorePanel) was removed from the scene on 2026-10-17: nothing to build into any more.
+        if (card == null) return;
 
         // What this shift earned (the wallet itself now carries over).
         var earned = card.Find("EarnedTile/EarningTXT").GetComponent<EarningTextController>();

@@ -227,15 +227,24 @@ public class Waiter : MonoBehaviour
         var owner = burger.ForCustomer;
         if (Orders.Waiting(owner) && owner.chair.GetTableService() is ServiceBase mine && !mine.IsHaveFood() && mine.IsSuitable(burger))
             return mine;
+        // Otherwise whoever's order it fits best (it used to be the first customer in the list, whatever they had
+        // ordered), then whoever has waited longest; someone still sitting down or ordering last.
+        var layers = new List<string>();
+        foreach (var layer in burger.Layers) layers.Add(layer.Name);
+        ServiceBase best = null;
+        float bestScore = float.NegativeInfinity;
         foreach (var npc in NpcFsm.Active)
         {
             var state = npc.executingNpcState;
             if (state != ExecutingNpcState.COME && state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT) continue;
             if (npc.chair == null || npc.chair.GetTableService() is not ServiceBase service) continue;
             if (service.IsHaveFood() || !service.IsSuitable(burger)) continue;
-            return service;
+            float score = state == ExecutingNpcState.WAIT && npc.Ordered != null
+                ? 10000f + Orders.Fit(layers, npc.Ordered) + npc.WaitedSeconds * 0.5f
+                : 0f;
+            if (score > bestScore) { bestScore = score; best = service; }
         }
-        return null;
+        return best;
     }
 
     private void Fetch()

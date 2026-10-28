@@ -135,6 +135,8 @@ public static partial class CafeGrowthBuilder
         var old = hud.Find("BonusBTN");
         if (old != null) Object.DestroyImmediate(old.gameObject);
         var source = GameObject.Find("<<<UI>>>/StaticCanvas/ScorePanel/BackgroundIMG/ResultCard/InteractionArea/Row/BonusBTN");
+        // The result card (ScorePanel) was removed from the scene on 2026-10-17: nothing to build into any more.
+        if (source == null) { Debug.LogWarning("[CafeFlow] no result card to copy the bonus button from"); return; }
         var bonus = Object.Instantiate(source, hud);
         bonus.name = "BonusBTN";
         // Under the wallet, right edges lined up.

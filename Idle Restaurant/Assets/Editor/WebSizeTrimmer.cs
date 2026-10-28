@@ -37,8 +37,8 @@ public static class WebSizeTrimmer
     }
 
     // - FBX models (characters, furniture): mesh compression Medium (positions/UVs stored at lower precision).
-    // - The farewell panel's two pictures (ExitPanel*.png) are only shown after the Exit button, which the web build
-    //   hides: 32 px in WebGL builds instead of 512x362 uncompressed.
+    // - The farewell panel's two pictures (ExitPanel*.png) were shrunk to 32 px here; the panel and both pictures
+    //   were deleted on 2026-10-17 (never shown), so that part now finds nothing.
     static int ModelsAndPanels()
     {
         int n = 0;

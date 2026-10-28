@@ -39,6 +39,7 @@ public class FoodFight : MonoBehaviour
     [SerializeField] private float arrowStuckSeconds = 1.6f;  // it stays stuck in his head (or hat) a moment
     [SerializeField] private float arrowScale = 1.6f;
     [SerializeField] private Material splatMaterial;          // round particle for the splash
+    public Material SplatMaterial => splatMaterial;          // (also the unlit glow of the seasonal decorations)
     [SerializeField] private float chefThrowSeconds = 0.55f;
     [SerializeField] private float customerThrowSeconds = 0.7f;
     [SerializeField] private float arcHeight = 2.4f;
@@ -82,11 +83,29 @@ public class FoodFight : MonoBehaviour
         }));
     }
 
-    public void CustomerThrows(NpcFsm npc) => StartCoroutine(ThrowBack(npc));
+    public void CustomerThrows(NpcFsm npc) => StartCoroutine(Warned(npc));
+
+    // Who is throwing something at the chef right now (the follow camera keeps them in the picture with him).
+    public static NpcFsm Thrower { get; private set; }
+    private const float WarnSeconds = 0.9f;
+
+    // A throw is seen coming (user, 2026-10-27: with the closer camera "we can't tell they threw something until it
+    // hits us"): a red "!" over the thrower - or at the screen's edge, pointing at them - for a moment before the
+    // throw and while it flies, and the camera takes them in.
+    private IEnumerator Warned(NpcFsm npc)
+    {
+        if (npc != null)
+        {
+            Thrower = npc;
+            UIOrderTags.Warn(npc, WarnSeconds + customerThrowSeconds);
+        }
+        yield return ThrowBack(npc);
+        if (Thrower == npc) Thrower = null;
+    }
 
     private IEnumerator ThrowBack(NpcFsm npc)
     {
-        yield return new WaitForSeconds(throwBackDelay);
+        yield return new WaitForSeconds(Mathf.Max(throwBackDelay, npc != null ? WarnSeconds : 0f));
         var start = (npc != null ? npc.transform.position : chef.transform.position + Vector3.forward * 6f) + Vector3.up * 1.6f;
         if (npc != null && npc.Kind == CustomerKind.Ranger && arrowModel != null)
         {
@@ -127,7 +146,10 @@ public class FoodFight : MonoBehaviour
             bool slip = chef.IsRunning;
             if (slip)
             {
-                chef.Slip(slipSeconds);
+                // From behind (flying the way he runs): onto his face; otherwise onto his back.
+                var flight = chef.transform.position - start;
+                flight.y = 0f;
+                chef.Slip(slipSeconds, Vector3.Dot(flight.normalized, chef.transform.forward) > 0.3f);
                 GameSfx.Play(GameSfx.Cue.Slip);
             }
             else if (chef.HeldFood == null) chef.Splat(stunSeconds);

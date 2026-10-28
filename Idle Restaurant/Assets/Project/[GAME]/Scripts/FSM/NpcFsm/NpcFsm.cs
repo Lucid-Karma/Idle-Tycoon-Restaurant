@@ -82,6 +82,10 @@ public class NpcFsm : MonoBehaviour
     public BurgerReview LastReview { get; private set; }
     // What they ordered as they sat down (Orders.Pick), shown in their bubble (UIOrderTicket). Null until seated.
     public Recipe Ordered { get; private set; }
+    // Their order's number (1, 2, 3...: the smallest one free as they sit down), worn by their bubble, the plate and
+    // the burger made for them and the order card (UIOrderTags), so who a burger is for is a matter of matching two
+    // numbers (user: "clear enough for a five-year-old"). 0 until they order; kept until they leave.
+    public int Ticket { get; private set; }
     public static readonly UnityEngine.Events.UnityEvent<NpcFsm> OnOrdered = new();
     // An order was rated (who, and how it went): a perfect one pops "PERFECT!" over them (UISplatPop).
     // Static: subscribe with named methods only.
@@ -119,11 +123,15 @@ public class NpcFsm : MonoBehaviour
         Patience = Random.Range(patienceRange.x, patienceRange.y) * Customers.Of(kind).PatienceScale * CafeShop.PatienceScale;
         LastReview = null;
         Ordered = null;
+        Ticket = 0;
         caughtCount = 0;
 
         executingNpcState = ExecutingNpcState.COME;
         currentState = comeState;
         currentState.EnterState(this);
+        vanishing = false;
+        if (Model != null) { Model.localScale = Vector3.zero; StartCoroutine(Appear()); }
+        SeasonalDecor.Dress(this);   // a ghost at Halloween, a slower stroll in winter
     }
 
     void Update()
@@ -154,12 +162,20 @@ public class NpcFsm : MonoBehaviour
         }
     }
 
+    private int FreeTicket()
+    {
+        int ticket = 1;
+        while (Active.Exists(n => n != this && n.Ticket == ticket)) ticket++;
+        return ticket;
+    }
+
     public void Order()
     {
         if(chair != null)
         {
             transform.rotation = chair.GetSedileRot();
             Seat();
+            Ticket = FreeTicket();
             Ordered = Orders.Pick();
             OnOrdered.Invoke(this);
             OnNpcSitChairDown.Invoke();
@@ -310,15 +326,48 @@ public class NpcFsm : MonoBehaviour
 
     public void Go()
     {
-        if (!Agent.enabled) return;   // still getting up (Leave)
+        if (!Agent.enabled || vanishing) return;   // still getting up (Leave), or already on the way out
         if(IsPathEnd())
+            StartCoroutine(Vanish());
+    }
+
+    // Coming in and going out (user, 2026-10-27: customers popped into existence at the door and blinked out of it):
+    // the model - not the root, whose scale the navmesh agent would take - grows in with a little bounce, and on the
+    // way out swells a touch and shrinks away; only then is the customer gone (and counted).
+    private Transform model;
+    private bool vanishing;
+    private Transform Model => model != null ? model : model = transform.Find("Model");
+
+    private IEnumerator Appear()
+    {
+        var m = Model;
+        if (m == null) yield break;
+        for (float t = 0f; t < 1f; t += Time.deltaTime / 0.35f)
         {
-            ScoreManager.Instance.HostedCustomerCount ++;
-            Agent.stoppingDistance = 0;
-            gameObject.SetActive(false);
-            EventManager.OnCustomerWent.Invoke();
-            ScoreManager.Instance.FinishLevel();
+            float back = 1.70158f, x = t - 1f;   // ease out, with an overshoot
+            m.localScale = Vector3.one * (1f + (back + 1f) * x * x * x + back * x * x);
+            yield return null;
         }
+        m.localScale = Vector3.one;
+    }
+
+    private IEnumerator Vanish()
+    {
+        vanishing = true;
+        if (Agent.isOnNavMesh) Agent.isStopped = true;
+        var m = Model;
+        for (float t = 0f; m != null && t < 1f; t += Time.deltaTime / 0.28f)
+        {
+            float k = t < 0.3f ? 1f + 0.15f * (t / 0.3f) : 1.15f * (1f - (t - 0.3f) / 0.7f);
+            m.localScale = Vector3.one * Mathf.Max(0f, k);
+            yield return null;
+        }
+        ScoreManager.Instance.HostedCustomerCount ++;
+        if (Agent.isOnNavMesh) Agent.isStopped = false;
+        Agent.stoppingDistance = 0;
+        gameObject.SetActive(false);
+        EventManager.OnCustomerWent.Invoke();
+        ScoreManager.Instance.FinishLevel();
     }
 
     private bool IsPathEnd()

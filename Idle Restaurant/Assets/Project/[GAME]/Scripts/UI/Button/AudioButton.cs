@@ -2,9 +2,9 @@ using UnityEngine;
 
 public class AudioButton : MonoBehaviour
 {
+    // The click comes after the switch: turning the sound on clicks (it's back), turning it off is silent.
     public void MusicOnOff()
     {
-        EventManager.OnClick.Invoke();
         if(Audio.IsMusicOn)
         {
             EventManager.OnMusicOff.Invoke();
@@ -13,5 +13,6 @@ public class AudioButton : MonoBehaviour
         {
             EventManager.OnMusicOn.Invoke();
         }
+        EventManager.OnClick.Invoke();
     }
 }

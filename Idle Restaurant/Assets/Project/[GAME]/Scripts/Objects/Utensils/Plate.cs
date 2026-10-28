@@ -75,9 +75,9 @@ public class Plate : PlaceableBase
     }
 
     #region Orders
-    // A plate is making one customer's order (Orders): it is picked when the first layer goes on (the best match
-    // for what is there, then whoever has waited longest) and handed on to someone else if they leave - for the
-    // hints, the bubble showing what is still missing and Mochi. It does NOT end the burger: the player does, by
+    // A plate is making one customer's order (Orders): the next order up (Orders.NextUp - what the order card was
+    // showing) when the first layer goes on, kept to the end, and handed on to someone else only if they leave - for
+    // the hints, the order number badges (UIOrderTags), the bubble showing what is still missing and Mochi. It does NOT end the burger: the player does, by
     // tapping the plate with empty hands (Close), or it ends by itself at six layers. (For a while it closed itself
     // as soon as it held as many layers as the order, and the user lost the fun of it: no six-layer monster for a
     // cheeseburger customer, no making a bigger order first.)
@@ -96,7 +96,7 @@ public class Plate : PlaceableBase
     public bool Close()
     {
         if (doesHaveHamburger || ingredients.Count == 0) return false;
-        if (ForCustomer == null || !Orders.Waiting(ForCustomer)) Claim();
+        ClaimOnClose();
         GenerateHamburger(true);
         return doesHaveHamburger;
     }
@@ -125,7 +125,31 @@ public class Plate : PlaceableBase
 
     }
 
-    private void Claim() => ForCustomer = Orders.BestFor(LayerNames.ToList(), this);
+    // Whose order this plate is: picked once and kept (2026-10-27, user: "which recipe is being made, and for whom,
+    // is confusing - especially when the order card suddenly changes"). It used to be picked again with every layer
+    // - the best match for what was on it so far - so the card and the bubbles jumped from one customer to another
+    // mid-burger. Now the first layer is for the order the card was showing (Orders.NextUp) and the plate keeps it;
+    // a burger made for nobody yet (its customer left) goes to the best match for what is on it.
+    private void Claim()
+    {
+        var layers = LayerNames.ToList();
+        ForCustomer = (layers.Count <= 1 ? Orders.NextUp(this) : null) ?? Orders.BestFor(layers, this);
+    }
+
+    // Closing: it stays with its customer - unless it is exactly somebody else's order and not its own, then it is
+    // theirs (a Classic made on a cheeseburger plate goes to the Classic customer, and its badge says so).
+    private void ClaimOnClose()
+    {
+        var layers = LayerNames.ToList();
+        if (ForCustomer != null && Orders.Fit(layers, ForCustomer.Ordered) >= 2000f) return;
+        NpcFsm exact = null;
+        foreach (var npc in NpcFsm.Active)
+            if (npc != ForCustomer && Orders.Waiting(npc) && !Orders.Claimed(npc, this, burgersOnly: true)
+                && Orders.Fit(layers, npc.Ordered) >= 2000f && (exact == null || npc.WaitedSeconds > exact.WaitedSeconds))
+                exact = npc;
+        if (exact != null) ForCustomer = exact;
+        else if (ForCustomer == null) Claim();
+    }
     #endregion
 
     public bool HasHamburger => doesHaveHamburger;
@@ -180,7 +204,7 @@ public class Plate : PlaceableBase
                 Restack(bottom);
             }
 
-            if (ForCustomer == null || !Orders.Waiting(ForCustomer)) Claim();
+            if (ForCustomer == null) Claim();   // the first layer decides whose order it is; then it is kept
             GenerateHamburger();
         }
     }
@@ -255,6 +279,7 @@ public class Plate : PlaceableBase
             _hamburger.ForCustomer = ForCustomer;
             ForCustomer = null;
             GameSfx.Play(GameSfx.Cue.BurgerDone);
+            KitchenFx.BurgerDone(obj.transform.position + Vector3.up * 0.8f);
 
             ingredients.Clear();
             refTransform.position = transform.position;

@@ -215,7 +215,7 @@ public static partial class CafeGrowthBuilder
     public static void PreviewHints()
     {
         var highlight = Object.FindFirstObjectByType<HighlightController>();
-        var template = (Material)new SerializedObject(highlight).FindProperty("hintTemplate").objectReferenceValue;
+        var template = (Material)new SerializedObject(highlight).FindProperty("hintTemplate")?.objectReferenceValue;   // (gone since 2026-10-27: hints are a solid pink swap now)
         // What gets hinted with empty hands and nothing ready: the ingredient crates.
         var targets = Object.FindObjectsByType<IngredientsSource>(FindObjectsSortMode.None)
             .SelectMany(s => s.GetComponentsInChildren<MeshRenderer>(true)).ToArray();
@@ -400,6 +400,9 @@ public static partial class CafeGrowthBuilder
         renderer.sharedMaterial = CafeGrowthBuilder.FlatMaterial("PlayerMarker", ChefOutfit);
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
+        // Off since 2026-10-27 (user: "I don't like the ring under the player - change it or remove it"): the
+        // follow camera keeps him near the middle of the screen, which says "this one is you" well enough.
+        go.SetActive(false);
     }
 
     // The apron hangs on the hips bone, right against the body, and the adventurer's belt buckle came

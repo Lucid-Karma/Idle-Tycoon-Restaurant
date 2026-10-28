@@ -39,7 +39,10 @@ public static partial class CafeGrowthBuilder
 
     static void BuildBonusButton()
     {
-        var card = GameObject.Find("<<<UI>>>/StaticCanvas/ScorePanel/BackgroundIMG/ResultCard").transform;
+        var cardGo = GameObject.Find("<<<UI>>>/StaticCanvas/ScorePanel/BackgroundIMG/ResultCard");
+        // The result card (ScorePanel) was removed from the scene on 2026-10-17: nothing to build into any more.
+        if (cardGo == null) { Debug.LogWarning("[CafePlatform] no result card: bonus button not built"); return; }
+        var card = cardGo.transform;
         var row = card.Find("InteractionArea/Row");
         var old = row.Find("BonusBTN");
         if (old != null) Object.DestroyImmediate(old.gameObject);

@@ -75,6 +75,12 @@ public static class UITokens
         _ => Colors.Tomato,
     };
 
+    // An order's number badge (UIOrderTags: the customer's bubble, the plate, the burger and the order card all wear
+    // it): one hue per number so a match is seen before it is read. Never teal, yellow or tomato - those are the
+    // patience ring's "how long have they waited".
+    private static readonly Color[] TicketColors = { Hex(0x4A7FD8), Hex(0x9A62CF), Hex(0x45A85A), Colors.Raspberry };
+    public static Color TicketColor(int ticket) => TicketColors[Mathf.Max(0, ticket - 1) % TicketColors.Length];
+
     // Simple damped spring step (unscaled time friendly).
     public static void Spring(ref float value, ref float velocity, float target, float dt)
     {

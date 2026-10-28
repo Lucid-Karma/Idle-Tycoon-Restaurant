@@ -21,6 +21,17 @@ public class UIShopTile : MonoBehaviour
     private Upgrade upgrade;
     private float punch = 1f, punchVelocity;
 
+    // The pictures arrive after the shop may have been built (ShopIcons).
+    private void OnEnable() { ShopIcons.Loaded += ShowIcon; ShowIcon(); }
+    private void OnDisable() => ShopIcons.Loaded -= ShowIcon;
+
+    private void ShowIcon()
+    {
+        if (upgrade == null || icon == null) return;
+        icon.sprite = upgrade.icon;
+        icon.enabled = upgrade.icon != null;
+    }
+
     public void Bind(Upgrade shopUpgrade)
     {
         upgrade = shopUpgrade;

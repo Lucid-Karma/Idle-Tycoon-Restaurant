@@ -134,6 +134,9 @@ Shader "Chibi/HintLit"
                 InitializeBakedGIData(input, inputData);
 
                 half4 color = UniversalFragmentPBR(inputData, surfaceData);
+                // A little of the pink as light of its own, so the pulse never goes darker than the thing itself
+                // where it is in shade (or under the night grade).
+                color.rgb += _HintColor.rgb * _HintAmount * 0.22;
                 color.rgb = MixFog(color.rgb, inputData.fogCoord);
                 color.a = OutputAlpha(color.a, IsSurfaceTypeTransparent(_Surface));
                 outColor = color;

@@ -113,6 +113,27 @@ public static partial class CafeGrowthBuilder
         ("Hat_Bear", "Barbarian", new[] { "Barbarian_BearHat" }, "Barbarian_Head", 1f, Vector3.zero),
     };
 
+    // The shop's hats are the customers' own (a Mage wears the wizard hat, a Knight the helmet, a Barbarian the bear
+    // hat), so on the chef they are recoloured into his uniform (user, 2026-10-17: "make them feel the chef's own"):
+    // painted with his palette sheet - the material he already wears, so nothing is added to the download - by
+    // moving each UV from a cell of their character's 8x4 sheet to a cell of his (row * 8 + column, row 0 at the
+    // top), keeping its place inside the cell (the cells are shaded top to bottom). Chef cells: 1 white (apron),
+    // 2 black, 3 cream, 9 scarlet (shirt), 10 light steel, 25 gold.
+    static readonly System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<int, int>> ChefColours = new()
+    {
+        ["Hat_Wizard"] = new() { [9] = 9, [3] = 1, [5] = 25 },                  // scarlet, white band, gold buckle
+        ["Hat_Knight"] = new() { [3] = 9, [7] = 25 },                           // scarlet helmet, gold trim
+        ["Hat_Bear"] = new() { [7] = 1, [10] = 10, [2] = 2, [8] = 9, [25] = 3 }, // a polar bear: white fur, scarlet ears
+    };
+
+    static Vector2 MoveToCell(Vector2 uv, System.Collections.Generic.Dictionary<int, int> map)
+    {
+        float x = Mathf.Repeat(uv.x, 1f) * 8f, y = (1f - Mathf.Repeat(uv.y, 1f)) * 4f;
+        int col = Mathf.Clamp((int)x, 0, 7), row = Mathf.Clamp((int)y, 0, 3);
+        if (!map.TryGetValue(row * 8 + col, out int to)) return uv;
+        return new Vector2((to % 8 + (x - col)) / 8f, 1f - (to / 8 + (y - row)) / 4f);
+    }
+
     // A skeleton's skull is smaller than an adventurer's head, so their hats had to be shrunk onto it and
     // re-centred. Now that the chef is an adventurer himself (ChefModel), every hat is baked exactly where
     // its own character wears it: same rig, same head, nothing to fit.
@@ -153,6 +174,11 @@ public static partial class CafeGrowthBuilder
                 normals.AddRange(piece.sharedMesh.normals.Select(n => bind.MultiplyVector(n).normalized));
                 uvs.AddRange(piece.sharedMesh.uv);
                 tris.AddRange(piece.sharedMesh.triangles.Select(t => t + start));
+            }
+            if (ChefColours.TryGetValue(name, out var colours))
+            {
+                for (int i = 0; i < uvs.Count; i++) uvs[i] = MoveToCell(uvs[i], colours);
+                material = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "Character chef.mat");
             }
             mesh.SetVertices(verts);
             mesh.SetNormals(normals);
@@ -603,6 +629,7 @@ public static partial class CafeGrowthBuilder
 
     #region 4. Shop icons
     const string IconDir = Game + "Graphics/Sprites/Shop/";
+    const string ShopStreamingDir = "Assets/StreamingAssets/shop/";
     static readonly Vector3 IconStage = new Vector3(-400f, -300f, 400f);
 
     // One picture per upgrade, rendered from the very objects it puts in the kitchen, seen from the game's
@@ -638,7 +665,11 @@ public static partial class CafeGrowthBuilder
             imp.mipmapEnabled = false;
             imp.maxTextureSize = 512;
             imp.SaveAndReimport();
-            list.GetArrayElementAtIndex(i).FindPropertyRelative("icon").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            // The game fetches the pictures after it has started (ShopIcons, 2026-10-17): a copy goes to
+            // StreamingAssets/shop and the catalogue holds no reference, so they stay out of the first download.
+            Directory.CreateDirectory(ShopStreamingDir);
+            File.Copy(path, ShopStreamingDir + "shop_" + upgrade.id + ".png", true);
+            list.GetArrayElementAtIndex(i).FindPropertyRelative("icon").objectReferenceValue = null;
         }
         so.ApplyModifiedPropertiesWithoutUndo();
         EditorSceneManager.MarkSceneDirty(shop.gameObject.scene);

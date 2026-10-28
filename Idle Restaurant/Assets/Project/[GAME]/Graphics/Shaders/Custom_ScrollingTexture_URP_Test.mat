@@ -24,11 +24,23 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BaseMap:
-        m_Texture: {fileID: 2800000, guid: d0de5b4667c041f4597d624eecb7af14, type: 3}
+        m_Texture: {fileID: 2800000, guid: 179165b5076bb3d408614f3aa5628b94, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 2800000, guid: d0de5b4667c041f4597d624eecb7af14, type: 3}
+        m_Texture: {fileID: 2800000, guid: 179165b5076bb3d408614f3aa5628b94, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Halloween:
+        m_Texture: {fileID: 2800000, guid: 6130d4b27240a6044b501ef674a4b1fc, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Winter:
+        m_Texture: {fileID: 2800000, guid: c6085e4ca9b9db047964074433f10ba0, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Valentine:
+        m_Texture: {fileID: 2800000, guid: 64c2292eafac78041b8044bcc84bdc55, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
@@ -37,3 +49,4 @@ Material:
     m_Colors:
     - _ScrollDirection: {r: 1, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

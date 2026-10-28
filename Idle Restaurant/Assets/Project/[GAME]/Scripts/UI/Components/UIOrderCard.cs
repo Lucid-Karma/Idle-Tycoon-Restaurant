@@ -17,8 +17,8 @@ using UnityEngine.UI;
 // It mirrors the "Last order" card in the bottom-left corner: what you just served on the left, what you are
 // making on the right. That corner is empty floor - no station, plate, table or customer (measured, with every
 // shop upgrade); a recipe column on the right edge lay over the onion crate, one on the left over the big tomato.
-// Which order: the burger in the chef's hands, else the plate being stacked (most layers), else the customer who
-// has waited longest. Its background is frosted (UIFrostedCard) so the cafe shows through; solid while the pointer
+// Which order: the burger in the chef's hands, else the plate being stacked (most layers), else the next order to
+// start (Orders.NextUp: the one a first layer will be for); the portrait wears the order's number (UIOrderTags). Its background is frosted (UIFrostedCard) so the cafe shows through; solid while the pointer
 // is over it and for a moment whenever something changes (a layer goes on, the order changes). Hidden during the first lesson (Mochi's card does the talking) and the break cards. Built by step 15.
 [RequireComponent(typeof(CanvasGroup))]
 public class UIOrderCard : MonoBehaviour
@@ -37,6 +37,10 @@ public class UIOrderCard : MonoBehaviour
     private UIFrostedCard frosted;   // its background steps back when nothing happens; the words stay sharp
     private string shownKey;
     private readonly List<GameObject> made = new();
+    // The order's number on the portrait's corner: the same badge the customer's bubble, the plate and the burger
+    // wear (UIOrderTags), so "this card is for customer 2" is read without reading.
+    private UIOrderTags.Badge badge;
+    private NpcFsm shownWho;
 
     private void Awake()
     {
@@ -45,7 +49,15 @@ public class UIOrderCard : MonoBehaviour
         group.interactable = false;
         frosted = GetComponent<UIFrostedCard>();
         tileTemplate.SetActive(false);
+        UIOrderTags.Create(title.font);
+        float size = BadgeSize;
+        badge = UIOrderTags.MakeBadge(portrait.transform, title.font, size);
+        badge.Rect.anchorMin = badge.Rect.anchorMax = new Vector2(1f, 1f);
+        badge.Rect.anchoredPosition = new Vector2(-size * 0.05f, -size * 0.05f);
+        badge.Hide();
     }
+
+    private float BadgeSize => ((RectTransform)portrait.transform).rect.height * 0.55f;
 
     private void LateUpdate()
     {
@@ -56,8 +68,9 @@ public class UIOrderCard : MonoBehaviour
         group.alpha = Mathf.MoveTowards(group.alpha, visible ? 1f : 0f, dt / UITokens.Motion.Normal);
         group.blocksRaycasts = visible;   // for the pointer-over; it lies on empty floor, nothing to tap under it
         if (!visible) { shownKey = null; return; }
+        badge.Size(BadgeSize);   // (runs its pop)
 
-        string key = order.Name + "|" + (who != null ? who.GetInstanceID() : 0) + "|" + string.Join(",", layers.Select(l => l.name + (int)l.prep));
+        string key = order.Name + "|" + (who != null ? who.GetInstanceID() + "#" + who.Ticket : "0") + "|" + string.Join(",", layers.Select(l => l.name + (int)l.prep));
         if (key == shownKey) return;
         if (shownKey != null && frosted != null) frosted.Flash();
         shownKey = key;
@@ -78,11 +91,14 @@ public class UIOrderCard : MonoBehaviour
                 best = plate;
         if (best != null) return (best.Order, best.ForCustomer, best.LayerPreps.ToList());
 
-        NpcFsm longest = null;
-        foreach (var npc in NpcFsm.Active)
-            if (Orders.Waiting(npc) && (longest == null || npc.WaitedSeconds / npc.Patience > longest.WaitedSeconds / longest.Patience))
-                longest = npc;
-        return longest != null ? (longest.Ordered, longest, new List<(string, Prep)>()) : (null, null, null);
+        // Nothing on a plate: the next order to start - the one the first layer will be for (Orders.NextUp). Only if
+        // every waiting order is already being made, the one closest to giving up.
+        var next = Orders.NextUp();
+        if (next == null)
+            foreach (var npc in NpcFsm.Active)
+                if (Orders.Waiting(npc) && (next == null || npc.WaitedSeconds / npc.Patience > next.WaitedSeconds / next.Patience))
+                    next = npc;
+        return next != null ? (next.Ordered, next, new List<(string, Prep)>()) : (null, null, null);
     }
 
     private static PlayerFSM chef;
@@ -134,6 +150,13 @@ public class UIOrderCard : MonoBehaviour
         portrait.sprite = face != null ? face : personIcon;
         portrait.color = face != null ? Color.white : UITokens.Colors.InkMuted;
         title.text = order.Name;
+        if (who != null && who.Ticket > 0)
+        {
+            if (who != shownWho || badge.Ticket != who.Ticket) badge.Pop();
+            badge.Set(who.Ticket);
+        }
+        else badge.Hide();
+        shownWho = who;
 
         // Match what is on the plate to the order, layer by layer (bottom up, as it is stacked); the rest are extras.
         var unused = new List<(string name, Prep prep)>(layers);

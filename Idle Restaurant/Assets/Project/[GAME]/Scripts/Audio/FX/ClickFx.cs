@@ -1,5 +1,7 @@
 using UnityEngine;
 
+// The UI's click. Silent while the sound is off (the speaker button, Audio.IsMusicOn), like everything else: it
+// used to click on regardless (user, 2026-10-21).
 public class ClickFx : MonoBehaviour
 {
     private AudioSource clickFx;
@@ -21,6 +23,6 @@ public class ClickFx : MonoBehaviour
 
     private void PlayClick()
     {
-        clickFx.Play();
+        if (Audio.IsMusicOn) clickFx.Play();
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Linq;
 using UnityEngine;
 
@@ -26,6 +27,18 @@ using UnityEngine;
 // confetti, no watching. Gone again: Mochi walking about as a guide, the card sliding from side to side (it covered
 // customers), the tomato joke at the end (a punishment right after the first success) and throwing food at
 // customers during the lesson (a new player "giving the tomato to the customer" got a tomato in the face).
+// Fourth version (2026-10-20; CrazyGames: 66% of players leave inside the first minute, and the bot that plays the
+// lesson like a careful new player needed 13 taps and 37 s to its first coins): the first order is just a bun and a
+// patty, and the kitchen has them ready when the game opens - a baked bun in the oven, a fried patty on the pan - so
+// the first burger is six taps and the first coins come in about 15 s. A short cheer, and the second customer's
+// Cheeseburger is the one made from scratch (oven, pan, board) with the same arrow. Since 2026-10-21 that one is a
+// plain Hamburger too, made from scratch (oven and pan): a new player who served it without the cheese - or gave the
+// first one to the wrong customer - was told "Where's my cheese?!" right in the lesson (user: "better if they don't
+// want cheese"). The board is shown by the hints in the first real orders.
+// While it runs everything dims - the kitchen and the HUD, all but Mochi's card - except the thing to tap
+// (UISpotlight), and a tap anywhere else only makes the light pulse (AcceptsTap): the one thing to do is the only
+// thing to do. No arrow any more (user: "too chaotic"). A new player's first lesson opens with short "stylized action"
+// titles (LessonIntro: camera close-ups, speed lines, slammed captions), then the first step.
 public class Tutorial : MonoBehaviour
 {
     public static Tutorial Instance { get; private set; }
@@ -37,14 +50,24 @@ public class Tutorial : MonoBehaviour
     public static Component Focus { get; private set; }
 
     [SerializeField] private UICoachCard card;
+    [SerializeField] private TMPro.TMP_FontAsset titleFont;   // the opening titles' face (Bangers SDF, TitleFontBuilder)
     [SerializeField] private Transform arrow;
     [SerializeField] private float arrowBob = 0.22f;
     [SerializeField] private float arrowGap = 0.12f;      // clear air between the arrow's TIP and the top of the thing
     [SerializeField] private float aboveCustomer = 1.05f; // a customer's order bubble floats over their head: clear it
 
     private PlayerFSM chef;
+    private UISpotlight spot;
+    private Rect focusRect;      // the thing to tap, on screen, this frame
+    private bool focusOnScreen;
     private int step = -1;
-    private bool rated, snacked, tip;
+    private bool snacked, tip;
+    private int ratedCount;            // orders paid during the lesson
+    private NpcFsm firstServed;        // the first customer, who may still be eating when the second order starts
+    private bool intro;                // the opening titles are playing: the first step waits
+    private static bool introShown;    // once a session
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetIntro() => introShown = false;   // (domain reload is off in the editor)
     private float stepStarted;
     private bool skipOffered;
     private string shownLine;
@@ -68,33 +91,56 @@ public class Tutorial : MonoBehaviour
     // Mochi's face on the card says hello; the first line is already the first thing to do.
     private static readonly Beat[] Beats =
     {
-        // The burger, one tap at a time: the arrow always points at the single next tap (WorkOutStack), whatever
-        // order the player does things in, and the line says what it is and how far the burger has got.
+        // The first burger: bun and patty are ready on the oven and the pan (ReadyKitchen); the arrow always points
+        // at the single next tap (WorkOutStack), whatever order the player does things in.
+        Make("make"),
+        Serve("serve", t => t.ratedCount >= 1 || Served(null) != null),
+        // The first coins: a cheer, and straight on to the next one.
         new()
         {
-            Name = "make", Line = "Grab a <b>bun</b>!",
-            LineNow = t => t.StackStep().Line,
-            Point = t => t.StackStep().Target,
-            Done = t => t.chef.HeldFood is Hamburger || Any<Plate>(p => p.FinishedBurger != null || p.CoversAnOrder),
+            Name = "first", Line = "Your first <b>burger</b>!\nNow one from <b>scratch</b>!",
+            Enter = t =>
+            {
+                t.Celebrate();
+                t.firstServed = Served(null);
+            },
+            Done = t => Time.time - t.stepStarted > 1.8f,
         },
-        // Picking the burger up comes first: the customer is only the target once it is in his hands. Done as soon
-        // as it is on their table - no waiting for them to finish eating.
-        new()
-        {
-            Name = "serve", Line = "Grab the <b>burger</b>!",
-            LineNow = t => t.ServeStep().Line,
-            Point = t => t.ServeStep().Target,
-            Done = t => t.rated || NpcFsm.Active.Any(n => n.executingNpcState == ExecutingNpcState.EAT),
-            // The burger went in the bin (or anywhere it is no longer a burger to serve): make another.
-            Lost = t => t.chef.HeldFood is not Hamburger && !Any<Plate>(p => p.FinishedBurger != null || p.CoversAnOrder)
-                        && !t.rated && !NpcFsm.Active.Any(n => n.executingNpcState == ExecutingNpcState.EAT),
-        },
+        // The second customer's Hamburger, from the crates: oven and pan.
+        Make("make2"),
+        Serve("serve2", t => t.ratedCount >= 2 || Served(t.firstServed) != null),
         // A short cheer, and the shift is the player's.
         new()
         {
-            Name = "done", Line = "Your first <b>burger</b>!\nKeep them coming!",
+            Name = "done", Line = "<b>Great</b>!\nKeep them coming!",
             Enter = t => t.Celebrate(), Done = t => Time.time - t.stepStarted > 2.2f,
         },
+    };
+
+    // A customer (other than `except`) who has their burger: eating it, or it is on their table while they are still
+    // walking to it (they can be served on their way in, and only start eating once they sit).
+    private static NpcFsm Served(NpcFsm except) => NpcFsm.Active.FirstOrDefault(n => n != null && n != except
+        && (n.executingNpcState == ExecutingNpcState.EAT
+            || n.chair != null && n.chair.GetTableService() is ServiceBase table && table.IsHaveFood()));
+
+    private static Beat Make(string name) => new()
+    {
+        Name = name, Line = "Grab a <b>bun</b>!",
+        LineNow = t => t.StackStep().Line,
+        Point = t => t.StackStep().Target,
+        Done = t => t.chef.HeldFood is Hamburger || Any<Plate>(p => p.FinishedBurger != null || p.CoversAnOrder),
+    };
+
+    // Picking the burger up comes first: the customer is only the target once it is in his hands. Done as soon as
+    // it is on their table - no waiting for them to finish eating.
+    private static Beat Serve(string name, Func<Tutorial, bool> served) => new()
+    {
+        Name = name, Line = "Grab the <b>burger</b>!",
+        LineNow = t => t.ServeStep().Line,
+        Point = t => t.ServeStep().Target,
+        Done = served,
+        // The burger went in the bin (or anywhere it is no longer a burger to serve): make another.
+        Lost = t => t.chef.HeldFood is not Hamburger && !Any<Plate>(p => p.FinishedBurger != null || p.CoversAnOrder) && !served(t),
     };
 
     // Shown once, after the lesson, the first time a waiting customer is over half way through their patience:
@@ -103,7 +149,10 @@ public class Tutorial : MonoBehaviour
     {
         Name = "snack_tip", Line = "Toss a <b>snack</b>!",
         LineNow = t => t.SnackStep().Line,
-        Point = t => t.SnackStep().Target, Done = t => t.snacked || Time.time - t.stepStarted > SnackTipSeconds,
+        Point = t => t.SnackStep().Target,
+        // Over when it is thrown; given up after a while - but not while the snack is in his hands and there is
+        // someone to throw it to (fetching it could take most of the time).
+        Done = t => t.snacked || Time.time - t.stepStarted > SnackTipSeconds && !(t.HoldingSnack && t.WaitingToSnack() != null),
     };
     private const float SnackTipSeconds = 20f;
 
@@ -112,6 +161,9 @@ public class Tutorial : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        // The whole-cafe picture, before the opening titles or the follow camera move anything (InClearView).
+        var cam = Camera.main;
+        if (cam != null) (homePos, homeRot, homeSize) = (cam.transform.position, cam.transform.rotation, cam.orthographicSize);
         chef = FindFirstObjectByType<PlayerFSM>();
         if (arrow != null)
         {
@@ -144,7 +196,7 @@ public class Tutorial : MonoBehaviour
         Stop();
     }
 
-    private void OnRated() => rated = true;
+    private void OnRated() => ratedCount++;
     private void OnSnack() => snacked = true;
     private void OnShiftStart()
     {
@@ -153,19 +205,105 @@ public class Tutorial : MonoBehaviour
 
     public void Begin()
     {
-        rated = snacked = tip = false;
+        snacked = tip = false;
+        ratedCount = 0;
+        firstServed = null;
         step = 0;
+        StartCoroutine(ReadyKitchen());
         GoogleAnalytics.Event("tutorial_begin", "replay", CafeProgress.Taught);
+        if (!introShown)
+        {
+            introShown = true;
+            intro = true;
+            card.Hide();
+            LessonIntro.Play(titleFont, () => { intro = false; if (step >= 0) Show(); });
+            return;
+        }
         Show();
+    }
+
+    // What a customer sitting down during the lesson orders: a Hamburger (bun and patty), the first from what the
+    // kitchen has ready, the second from scratch.
+    public static Recipe LessonOrder() => Orders.FirstRecipe;
+
+    // A baked bun in the oven and a fried patty on the pan, waiting (nothing burns while the lesson runs): the first
+    // burger needs no cooking. Only onto empty stations (the Help screen can start the lesson again mid-shift).
+    private IEnumerator ReadyKitchen()
+    {
+        var oven = FindFirstObjectByType<Oven>();
+        var pan = FindObjectsByType<Pan>(FindObjectsSortMode.InstanceID).FirstOrDefault(x => x.isActiveAndEnabled && !x.IsHaveFood());
+        EdibleBase bun = null, patty = null;
+        if (oven != null && !oven.IsHaveFood() && Source("bun") is IngredientsSource buns) bun = buns.SpawnInto(oven);
+        if (pan != null && Source("burger") is IngredientsSource patties) patty = patties.SpawnInto(pan);
+        yield return null;   // their Start sets up their looks first
+        yield return null;
+        if (bun is Bun b && b.Preparation == Prep.Raw) b.SetCookedBun();
+        if (patty is Burger f && f.Preparation == Prep.Raw) f.SetCooked();
+    }
+
+    // While the lesson runs (titles included) the HUD's buttons - help, sound, shop, bonus - take no taps (user: "help
+    // and the shop can still be clicked during onboarding"); a tap there falls through to the kitchen and only makes
+    // the spotlight pulse. Only buttons on the HUD's own canvas: Mochi's card and the break card have canvases of their
+    // own. Each gets a CanvasGroup so its look is untouched (a non-interactable Button would grey out).
+    private CanvasGroup[] hudButtons;
+    private bool hudLocked;
+
+    private void LockHud(bool locked)
+    {
+        if (locked == hudLocked) return;
+        hudLocked = locked;
+        if (hudButtons == null)
+        {
+            var panel = GameObject.Find("<<<UI>>>/StaticCanvas/InGamePanel");
+            hudButtons = panel == null ? new CanvasGroup[0] : panel.GetComponentsInChildren<UnityEngine.UI.Selectable>(true)
+                .Where(b => b.GetComponentInParent<Canvas>(true) is Canvas c && c.isRootCanvas)
+                .Select(b => b.TryGetComponent<CanvasGroup>(out var g) ? g : b.gameObject.AddComponent<CanvasGroup>())
+                .ToArray();
+        }
+        foreach (var group in hudButtons)
+            if (group != null) group.blocksRaycasts = !locked;
+    }
+
+    // What to tap swells and settles once a beat (TapPulse; user: "a player who doesn't read should still see the
+    // burger has to be tapped to finish it"). Always for the last tap of a burger - the plate to close ("Done!") and
+    // the finished burger to take; anything else only once the player has not found it for a while (IdleNudge), so
+    // the kitchen isn't bouncing all the time. Never a customer (their order bubble already says who).
+    private const float IdleNudge = 5f;
+    private TapPulse pulse;
+    private Component pulsing, focusSeen;
+    private float focusSince;
+
+    private void Nudge(Beat beat)
+    {
+        if (Focus != focusSeen) { focusSeen = Focus; focusSince = Time.time; }
+        Component target = null;
+        bool finish = false, patty = false;
+        if (Running && Focus != null && focusOnScreen && Focus is not NpcFsm)
+        {
+            string line = beat.LineNow != null ? beat.LineNow(this) : beat.Line;
+            finish = Focus is Hamburger || (line != null && line.StartsWith("Done!"));
+            // A fried patty is brown on a dark pan, hard to pick out (user, 2026-10-28): it swells at once, and more.
+            patty = Focus is Burger;
+            if (finish || patty || Time.time - focusSince > IdleNudge) target = Focus;
+        }
+        if (target == pulsing && (target == null || pulse != null)) return;
+        if (pulse != null) pulse.Stop();
+        pulse = target != null ? TapPulse.On(target.transform, finish ? 0.16f : patty ? 0.22f : 0.09f, finish || patty ? 0.9f : 1.5f) : null;
+        pulsing = target;
     }
 
     public void Stop()
     {
+        if (pulse != null) pulse.Stop();
+        pulse = null;
+        pulsing = null;
         step = -1;
         tip = false;
         Focus = null;
         if (card != null) card.Hide();
         if (arrow != null) arrow.gameObject.SetActive(false);
+        if (spot != null) spot.Hide();
+        focusOnScreen = false;
         sayUntil = -1f;
     }
 
@@ -228,15 +366,27 @@ public class Tutorial : MonoBehaviour
 
     private void Update()
     {
+        LockHud(Running);
         if (step < 0)
         {
             if (SnackTipDue()) BeginSnackTip();
+            return;
+        }
+        if (intro) return;
+        // (Not while he holds the snack: the tip is then half done, and its customer is the one to show - user,
+        // 2026-10-28: with the close camera the tip vanished once the lettuce was picked up.)
+        if (tip && !snacked && SnackableInView() == null && !(chef.HeldFood is Hamburger) && !HoldingSnack)
+        {
+            CafeProgress.SnackTipShown = false;   // not taught after all: again, when someone in view is hungry
+            Stop();
             return;
         }
         var beat = Current;
         // The thing to point at can appear late (a customer still walking in) or move on by itself.
         Focus = beat.Point?.Invoke(this);
         PointArrow();
+        Spotlight();
+        Nudge(beat);
 
         if (!tip && beat.Lost != null && step > 0 && beat.Lost(this))
         {
@@ -259,8 +409,113 @@ public class Tutorial : MonoBehaviour
         }
     }
 
+    // The spotlight on what to tap: the lesson's steps and the snack tip (user: "no dimming in the lettuce lesson");
+    // the cheers between steps dim nothing. Only the lesson blocks other taps (AcceptsTap): the tip is optional.
+    private void Spotlight()
+    {
+        if (spot == null)
+        {
+            spot = UISpotlight.Create();
+            // Mochi's card stays above the dim (it is what to read); every other screen stays under it.
+            // (Its own nested canvas: raising the root one lifted the whole HUD over the dim.)
+            var cardCanvas = card != null ? card.GetComponent<Canvas>() : null;
+            if (cardCanvas != null) { cardCanvas.overrideSorting = true; cardCanvas.sortingOrder = 10; }
+        }
+        focusOnScreen = (Running || tip) && Focus != null && TryScreenRect(Focus, out focusRect);
+        if (focusOnScreen) spot.Show(focusRect); else spot.Hide();
+        spot.ShowHand(focusOnScreen);
+    }
+
+    // During the lesson a tap only counts on (or near) the thing the arrow points at; it is then aimed at that thing,
+    // so a fingertip that lands on its edge still works. Anywhere else: nothing happens but the spotlight's punch.
+    // The snack tip is on screen (the follow camera shows the whole cafe meanwhile).
+    public static bool TipShowing => Instance != null && Instance.step >= 0 && Instance.tip;
+
+    // A tap on what the lesson or the tip is pointing at counts even where a HUD card lies over it (the snack tip's
+    // lettuce could be under the order card and could not be tapped - user, 2026-10-27); a button there keeps it.
+    public static bool TapsThrough(Vector2 screen)
+    {
+        var t = Instance;
+        if (t == null || Focus == null || !t.focusOnScreen || t.step < 0) return false;
+        var r = t.focusRect;
+        float slop = Screen.height * 0.04f;
+        if (screen.x < r.xMin - slop || screen.x > r.xMax + slop || screen.y < r.yMin - slop || screen.y > r.yMax + slop) return false;
+        var events = UnityEngine.EventSystems.EventSystem.current;
+        if (events == null) return true;
+        var hits = new System.Collections.Generic.List<UnityEngine.EventSystems.RaycastResult>();
+        events.RaycastAll(new UnityEngine.EventSystems.PointerEventData(events) { position = screen }, hits);
+        foreach (var hit in hits)
+            if (hit.gameObject.GetComponentInParent<UnityEngine.UI.Selectable>() != null) return false;
+        return true;
+    }
+
+    public static bool AcceptsTap(Vector3 screen, out Vector3 aim)
+    {
+        aim = screen;
+        if (LessonIntro.Playing) { LessonIntro.Skip(); return false; }   // a tap during the titles skips them
+        var t = Instance;
+        if (t == null || !Running || Focus == null || !t.focusOnScreen) return true;
+        var r = t.focusRect;
+        float slop = Screen.height * 0.06f;
+        float dx = Mathf.Max(r.xMin - screen.x, 0f, screen.x - r.xMax), dy = Mathf.Max(r.yMin - screen.y, 0f, screen.y - r.yMax);
+        if (dx * dx + dy * dy > slop * slop)
+        {
+            if (t.spot != null) t.spot.Punch();
+            return false;
+        }
+        aim = AimAt(Focus);
+        return true;
+    }
+
+    // Where a tap on it lands: a customer's head (that is how serving taps work), the food inside a station whose
+    // own collider is off, otherwise the middle of its collider.
+    private static Vector3 AimAt(Component c)
+    {
+        var cam = Camera.main;
+        if (c is NpcFsm npc) return cam.WorldToScreenPoint(npc.transform.position + Vector3.up);
+        if (c is NonStackBase station && station.Food != null && station.GetComponent<Collider>() is Collider own && !own.enabled) c = station.Food;
+        var col = c.GetComponentsInChildren<Collider>().FirstOrDefault(x => x.enabled) ?? c.GetComponentsInChildren<Collider>().FirstOrDefault();
+        return cam.WorldToScreenPoint(col != null ? col.bounds.center : c.transform.position);
+    }
+
+    // The thing on screen: its renderers (and the furniture tapped for it, and a customer's bubble) plus the arrow.
+    private bool TryScreenRect(Component target, out Rect rect)
+    {
+        rect = default;
+        var cam = Camera.main;
+        if (cam == null) return false;
+        var renderers = target.GetComponentsInChildren<Renderer>()
+            .Where(x => x.enabled && x.gameObject.activeInHierarchy && x is not ParticleSystemRenderer).ToList();
+        foreach (var proxy in TapProxy.All)
+            if (proxy != null && proxy.Target == target)
+                renderers.AddRange(proxy.GetComponentsInChildren<Renderer>().Where(x => x.enabled && x is not ParticleSystemRenderer));
+        Bounds b;
+        if (renderers.Count == 0) b = new Bounds(target.transform.position + Vector3.up * 0.5f, Vector3.one);
+        else
+        {
+            b = renderers[0].bounds;
+            foreach (var x in renderers) b.Encapsulate(x.bounds);
+            if (b.size.magnitude > 6f) b = new Bounds(target.transform.position + Vector3.up * 0.5f, Vector3.one);
+        }
+        if (target is NpcFsm) b.Encapsulate(b.max + Vector3.up * aboveCustomer);
+        if (arrow != null && arrow.gameObject.activeSelf) b.Encapsulate(arrow.position);
+        float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+        for (int i = 0; i < 8; i++)
+        {
+            var p = cam.WorldToScreenPoint(new Vector3(i % 2 == 0 ? b.min.x : b.max.x, (i / 2) % 2 == 0 ? b.min.y : b.max.y, i < 4 ? b.min.z : b.max.z));
+            if (p.z < 0f) return false;
+            minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x); minY = Mathf.Min(minY, p.y); maxY = Mathf.Max(maxY, p.y);
+        }
+        rect = Rect.MinMaxRect(minX, minY, maxX, maxY);
+        return true;
+    }
+
     private void PointArrow()
     {
+        // The arrow is gone: the spotlight shows what to tap (user, 2026-10-20: "remove the yellow arrow").
+        if (arrow != null && arrow.gameObject.activeSelf) arrow.gameObject.SetActive(false);
+        return;
+#pragma warning disable CS0162
         if (arrow == null) return;
         bool on = Focus != null;
         if (arrow.gameObject.activeSelf != on) arrow.gameObject.SetActive(on);
@@ -275,6 +530,7 @@ public class Tutorial : MonoBehaviour
         // The tip - not the origin - is what has to clear the top of the thing, by `arrowGap` at the
         // bottom of every bounce. (Placing the origin there buried the tip 30 cm inside everything.)
         arrow.position = above + Vector3.up * (tipDepth + arrowGap + bob);
+#pragma warning restore CS0162
     }
 
     // Every object's own origin is somewhere different - an oven's is on the floor, a plate's is up on the
@@ -429,7 +685,8 @@ public class Tutorial : MonoBehaviour
             ?? plates.OrderBy(p => Vector3.Distance(p.transform.position, chef.transform.position)).FirstOrDefault();
         // What it is for: the order that plate is making, or the first customer's (the lesson's is a Classic).
         var order = plate != null && plate.Order != null ? plate.Order
-            : NpcFsm.Active.Where(Orders.Waiting).Select(n => n.Ordered).FirstOrDefault() ?? Orders.LessonRecipe;
+            : NpcFsm.Active.Where(Orders.Waiting).Select(n => n.Ordered).FirstOrDefault()
+              ?? Orders.FirstRecipe;   // before anyone has ordered: the lesson's
 
         // What is already on the plate, cooking or being chopped.
         var have = new System.Collections.Generic.List<string>();
@@ -464,6 +721,10 @@ public class Tutorial : MonoBehaviour
         }
 
         // 3. Everything is under way: whatever has finished is ready to take, and a burnt thing has to go.
+        // Everything the order needs is on the plate: close it, even if its customer is still walking to their seat
+        // (a customer on their way can be served; waiting for them to sit cost the first burger six seconds).
+        if (plate != null && plate.LayerCount > 0 && Orders.Missing(order, plate.LayerNames).Count == 0)
+            return new Step { Target = plate, Line = "Done! <b>Tap</b> the plate!" };
         var ready = Ready();
         if (ready != null) return new Step { Target = ready, Line = $"Ready! <b>Take</b> it! {Layers(plate, order)}" };
         var burnt = BurntOnTheStove();
@@ -517,8 +778,9 @@ public class Tutorial : MonoBehaviour
         if (held != null)
         {
             if (held.Preparation == Prep.Burnt) return new Step { Target = Nearest<Bin>(), Line = "Burnt! <b>Bin</b> it." };
-            // Not ready yet (a raw patty is no snack): it goes where it gets ready, and lettuce is the snack.
-            if (held is Bun || held is Burger || held is CuttableBase) return StationStep(held, "Then toss <b>lettuce</b>!");
+            // Not ready yet (a raw patty is no snack): it goes where it gets ready, and then it is the snack - named,
+            // since "Chop it! Then toss lettuce!" with a cheese in his hands left players unsure which to throw.
+            if (held is Bun || held is Burger || held is CuttableBase) return StationStep(held, $"Then toss the <b>{Label(held.Name)}</b>!");
             return new Step { Target = Nearest<Bin>(), Line = "Not that - <b>bin</b> it." };
         }
 
@@ -536,16 +798,21 @@ public class Tutorial : MonoBehaviour
     // Never one the player cannot see (sitting under the chef card at the bottom of the screen: user report).
     private Component Waiting()
     {
-        if (chef.HeldFood is Hamburger burger && Orders.Waiting(burger.ForCustomer) && CustomerInClearView(burger.ForCustomer)) return burger.ForCustomer;
-        NpcFsm hidden = null;
+        // Always the customer whose number the burger wears, seen or not (a burger numbered 1 was sent to number 3,
+        // who sat where 1 could not be seen - user, 2026-10-27). The others only for a burger made for nobody.
+        if (chef.HeldFood is Hamburger burger && Orders.Waiting(burger.ForCustomer)) return burger.ForCustomer;
+        // Someone seated and waiting first; a customer still walking in only if nobody is (the first burger can be
+        // ready before its customer sits - but a second customer walking in must not get the first one's burger).
+        NpcFsm hidden = null, walking = null;
         foreach (var npc in NpcFsm.Active)
         {
             var state = npc.executingNpcState;
+            if (state == ExecutingNpcState.COME) { walking ??= npc; continue; }
             if (state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT) continue;
             if (CustomerInClearView(npc)) return npc;
             hidden ??= npc;
         }
-        return hidden;
+        return hidden ?? walking;
     }
 
     #region In clear view
@@ -555,11 +822,27 @@ public class Tutorial : MonoBehaviour
     private static readonly string[] HudCovers = { "CustomersCard", "GoalCard", "AudioControls", "HelpBTN", "Wallet", "BonusBTN", "ChefCard", "Coach" };
     private static RectTransform[] covers;
 
+    // Judged against the whole-cafe picture, wherever the camera is right now: the lesson's first customer arrives
+    // while the opening titles have the camera on a close-up, and a seat was taken for one in plain view that sat
+    // under the customers card (user, 2026-10-27).
+    private static Vector3 homePos;
+    private static Quaternion homeRot;
+    private static float homeSize;
+
+    private static Vector3 HomeScreenPoint(Camera cam, Vector3 world)
+    {
+        if (homeSize <= 0f) return cam.WorldToScreenPoint(world);
+        var local = Quaternion.Inverse(homeRot) * (world - homePos);
+        float aspect = cam.pixelWidth / (float)Mathf.Max(1, cam.pixelHeight);
+        return new Vector3((local.x / (homeSize * aspect) * 0.5f + 0.5f) * cam.pixelWidth,
+                           (local.y / homeSize * 0.5f + 0.5f) * cam.pixelHeight, local.z);
+    }
+
     public static bool InClearView(Vector3 world)
     {
         var cam = Camera.main;
         if (cam == null) return true;
-        var screen = cam.WorldToScreenPoint(world);
+        var screen = HomeScreenPoint(cam, world);
         if (screen.z < 0f) return false;
         float margin = 0.04f * Screen.height;
         if (screen.x < margin || screen.x > Screen.width - margin || screen.y < margin || screen.y > Screen.height - margin) return false;
@@ -580,6 +863,10 @@ public class Tutorial : MonoBehaviour
     {
         var cam = Camera.main;
         if (cam == null) return true;
+        // While the lesson runs, never in the bottom band of the screen, where Mochi's card, the chef card and the
+        // order card are (the card is not up yet when the first customer picks a seat, so it was not counted, and
+        // the lesson's first customer sat under it - user, twice, 2026-10-27).
+        if (Running && HomeScreenPoint(cam, seat).y < Screen.height * 0.4f) return false;
         var side = cam.transform.right * 0.45f;
         foreach (var up in new[] { 0.7f, 2.4f })
         {
@@ -602,7 +889,12 @@ public class Tutorial : MonoBehaviour
         .OrderByDescending(npc => npc.WaitedSeconds / Mathf.Max(1f, npc.Patience))
         .FirstOrDefault();
 
-    private Component WaitingToSnack() => SnackableInView();
+    // The hungry customer in clear view; else, with the snack already in his hands, any who would take one (the
+    // camera shows the whole cafe for the tip).
+    private Component WaitingToSnack() => (Component)SnackableInView() ?? (HoldingSnack ? NpcFsm.Active
+        .Where(npc => npc != null && npc.CanTakeSnack)
+        .OrderByDescending(npc => npc.WaitedSeconds / Mathf.Max(1f, npc.Patience))
+        .FirstOrDefault() : null);
 
     private static bool Any<T>(Func<T, bool> test) where T : Component =>
         FindObjectsByType<T>(FindObjectsSortMode.None).Any(test);

@@ -38,8 +38,13 @@ public static class Orders
     // Ingredient names as EdibleBase.Name has them: bun, burger (the patty), cheese, lettuce, tomato, onion.
     public static readonly Recipe Classic = new("Classic", 1, "bun", "burger", "lettuce", "tomato");
 
-    // The first lesson's order: the shortest real burger that still uses all three stations (oven, pan, board).
+    // The shortest burger that uses all three stations (oven, pan, board). Was the lesson's second order until
+    // 2026-10-21 (Tutorial.LessonOrder): now only on the menu.
     public static readonly Recipe LessonRecipe = new("Cheeseburger", 1, "bun", "burger", "cheese");
+
+    // The very first order (2026-10-20): just a bun and a patty, which the lesson has ready - baked and fried - when
+    // the game opens (Tutorial.ReadyKitchen), so the first coins come in seconds. Not on the menu.
+    public static readonly Recipe FirstRecipe = new("Hamburger", 1, "bun", "burger");
 
     public static readonly Recipe[] Menu =
     {
@@ -59,10 +64,10 @@ public static class Orders
     public static IEnumerable<Recipe> NewAt(int level) => Menu.Where(r => r.Level == level);
 
     // What a customer sitting down asks for. The newest recipes come up more often, so a new one is seen soon;
-    // the first lesson always asks for its own short order (LessonRecipe, what the lesson walks through).
+    // the first lesson always asks for its own short order (Tutorial.LessonOrder: a bun and a patty).
     public static Recipe Pick()
     {
-        if (Tutorial.Running) return LessonRecipe;
+        if (Tutorial.Running) return Tutorial.LessonOrder();
         var open = Unlocked.ToList();
         int newest = open.Max(r => r.Level);
         float total = 0f;
@@ -86,31 +91,61 @@ public static class Orders
         npc != null && npc.isActiveAndEnabled && npc.Ordered != null && npc.executingNpcState == ExecutingNpcState.WAIT
         && npc.chair != null && !npc.chair.GetTableService().IsHaveFood();
 
-    // Someone is already making (or carrying) this customer's burger.
-    public static bool Claimed(NpcFsm npc, Plate except)
+    // Someone is already making (or carrying) this customer's burger. With burgersOnly, a plate still being
+    // stacked doesn't count: a finished burger that is exactly someone's order may take them from it.
+    public static bool Claimed(NpcFsm npc, Plate except, bool burgersOnly = false)
     {
-        foreach (var plate in Plates)
-            if (plate != except && plate.ForCustomer == npc) return true;
+        if (!burgersOnly)
+            foreach (var plate in Plates)
+                if (plate != except && plate.ForCustomer == npc) return true;
         foreach (var burger in Burgers)
             if (burger.ForCustomer == npc) return true;
         return false;
     }
 
-    // The order a plate with these layers should be making: one nobody is making yet, the closest match first
-    // (layers the order does not want count against it, but never rule it out: a six-layer burger can still be
-    // for a cheeseburger customer), then whoever has waited longest.
-    public static NpcFsm BestFor(IReadOnlyCollection<string> onPlate, Plate plate)
+    // How well these layers make this recipe: exactly it first, then all of it with extras, then the most layers
+    // it wants with the fewest it doesn't (extras count against an order but never rule it out: a six-layer burger
+    // can still be for a cheeseburger customer).
+    public static float Fit(IReadOnlyCollection<string> layers, Recipe recipe)
+    {
+        int matching = Matching(layers, recipe);
+        int extras = layers.Count - matching;
+        bool complete = matching == recipe.Layers.Length;
+        return (complete ? (extras == 0 ? 2000f : 1000f) : 0f) + matching * 100f - extras * 30f;
+    }
+
+    // The order a plate with these layers should be making: one nobody is making yet, the best Fit first, then
+    // whoever has waited longest (half a point a second: never worth a layer), and the customer it is already
+    // for keeps it on a tie. Asked again with every layer and when the burger is closed (user, 2026-10-17: "even
+    // a perfect burger, Mochi can take it to the wrong customer" - the plate kept the customer it picked for its
+    // first layer, a bun everybody orders, whatever was stacked on it afterwards).
+    public static NpcFsm BestFor(IReadOnlyCollection<string> onPlate, Plate plate, NpcFsm current = null, bool closing = false)
     {
         NpcFsm best = null;
         float bestScore = float.NegativeInfinity;
         foreach (var npc in NpcFsm.Active)
         {
-            if (!Waiting(npc) || Claimed(npc, plate)) continue;
-            int matching = Matching(onPlate, npc.Ordered);
-            float score = matching * 100f - (onPlate.Count - matching) * 30f + npc.WaitedSeconds;
+            if (!Waiting(npc)) continue;
+            float fit = Fit(onPlate, npc.Ordered);
+            // Closing an exact order may take that customer from a plate still being stacked.
+            if (Claimed(npc, plate, burgersOnly: closing && fit >= 2000f)) continue;
+            float score = fit + npc.WaitedSeconds * 0.5f + (npc == current ? 60f : 0f);
             if (score > bestScore) { bestScore = score; best = npc; }
         }
         return best;
+    }
+
+    // The next order to make: the waiting customer nobody is making a burger for yet who is closest to giving up.
+    // The order card shows it before anything is on a plate, and the first layer on a plate is for it - so the card
+    // the player reads is the burger they start (2026-10-27).
+    public static NpcFsm NextUp(Plate except = null)
+    {
+        NpcFsm next = null;
+        foreach (var npc in NpcFsm.Active)
+            if (Waiting(npc) && !Claimed(npc, except)
+                && (next == null || npc.WaitedSeconds / npc.Patience > next.WaitedSeconds / next.Patience))
+                next = npc;
+        return next;
     }
 
     // How many layers already there are ones the recipe wants.

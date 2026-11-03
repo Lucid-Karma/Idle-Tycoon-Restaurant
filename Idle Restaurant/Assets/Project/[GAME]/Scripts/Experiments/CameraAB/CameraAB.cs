@@ -10,7 +10,9 @@ using UnityEngine.SceneManagement;
 //      shows anything outside A's picture. It only moves once he walks out of a box round the middle of the screen
 //      (user: "if he only moves a little, don't follow, or very slowly"), then glides after him. It widens to keep
 //      two things in the picture: his burger's customer while he carries one, a customer throwing something at him
-//      (FoodFight.Thrower - so it is seen coming), and the customer whose badge was tapped (Look); it opens out to the
+//      (FoodFight.Thrower - so it is seen coming), the customer he has just thrown something to until they have
+//      reacted (FoodFight.Catcher), the fries' customer while he carries them, and the customer whose badge was tapped
+//      (Look); it opens out to the
 //      whole cafe at the start of a shift, between shifts, on a level-up and while the snack tip shows; and it shakes
 //      a little on a burger finished, a tomato or an arrow landing, a slip, a level-up. Customers it cannot see are
 //      shown at the screen's edge by their order badges (UIOrderTags, which does that in both variants).
@@ -40,7 +42,15 @@ public class CameraAB : MonoBehaviour
 
     private static void OnLoaded(Scene scene, LoadSceneMode mode) => Attach();
 
-    private static string Assign() => (Application.absoluteURL ?? "").ToLowerInvariant().Contains("cam=a") ? "A" : "B";
+    // Phones only (user, 2026-10-30: "zoom on the player only when played on a mobile device; otherwise the whole
+    // scene is seen at all times, as it was"): on a computer, A. ?cam=a / ?cam=b in the address force one.
+    private static string Assign()
+    {
+        var url = (Application.absoluteURL ?? "").ToLowerInvariant();
+        if (url.Contains("cam=a")) return "A";
+        if (url.Contains("cam=b")) return "B";
+        return Application.isMobilePlatform ? "B" : "A";
+    }
 
     private static void Attach()
     {
@@ -173,6 +183,20 @@ public class CameraAB : MonoBehaviour
 
     private void Kick(float amount) => shake = Mathf.Max(shake, amount);
 
+    // The nearest customer waiting for fries.
+    private static NpcFsm FriesCustomer(Vector3 from)
+    {
+        NpcFsm best = null;
+        float nearest = float.PositiveInfinity;
+        foreach (var npc in NpcFsm.Active)
+        {
+            if (npc == null || !npc.FriesDue) continue;
+            float d = (npc.transform.position - from).sqrMagnitude;
+            if (d < nearest) { nearest = d; best = npc; }
+        }
+        return best;
+    }
+
     private void LateUpdate()
     {
         if (overviewButton != null && overviewButton.activeSelf == (Tutorial.Running || LessonIntro.Playing))
@@ -199,8 +223,10 @@ public class CameraAB : MonoBehaviour
             // Someone else who has to be in the picture with him: a customer throwing something at him, the one whose
             // badge was tapped, his burger's customer.
             NpcFsm other = FoodFight.Thrower;
+            if (other == null) other = FoodFight.Catcher;
             if (other == null && lookAt != null && Time.time < lookUntil && lookAt.isActiveAndEnabled) other = lookAt;
             if (other == null && chef.HeldFood is Hamburger burger && Orders.Waiting(burger.ForCustomer)) other = burger.ForCustomer;
+            if (other == null && chef.Carries(f => f is Fries && f.Preparation == Prep.Good)) other = FriesCustomer(chef.transform.position);
             float hx = Vector3.Dot(him - homeFocus, right), hy = Vector3.Dot(him - homeFocus, up);
             if (other != null)
             {

@@ -33,6 +33,18 @@ public static class PoolingManager
     public static List<GameObject> bunPureList = new List<GameObject>();
     public static List<GameObject> bunBottomList = new List<GameObject>();
     #endregion
+    #region Bacon
+    public static DynamicFoodPool baconPool = new DynamicFoodPool();
+    public static List<GameObject> baconRawList = new List<GameObject>();
+    public static List<GameObject> baconCookedList = new List<GameObject>();
+    public static List<GameObject> baconBurntList = new List<GameObject>();
+    #endregion
+    #region Fries
+    public static DynamicFoodPool friesPool = new DynamicFoodPool();
+    public static List<GameObject> potatoList = new List<GameObject>();
+    public static List<GameObject> friesList = new List<GameObject>();
+    public static List<GameObject> friesBurntList = new List<GameObject>();
+    #endregion
     #region Hamburger
     public static DynamicFoodPool HamburgerPool = new DynamicFoodPool();
     public static List<GameObject> HamburgerList = new List<GameObject>();

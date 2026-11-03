@@ -23,10 +23,12 @@ public class ChoppingBoard : NonStackBase
         foodToCut = ingredient.gameObject.GetComponent<CuttableBase>();
         if(!IsSuitable(ingredient)) return;
         base.UseFood(ingredient);
-        
+
+        // (Its collider stays on while it is chopped: a tap on it then means "take it when it's done" - the chef waits
+        // by the board, PlayerFSM.WaitForReady. Switched off, a queued tap on it was taken for bare floor.)
         if(!foodToCut.isSliced)
         {
-            foodToCut.gameObject.GetComponent<Collider>().enabled = false;
+            Animator.ResetTrigger("Idle");
             Animator.SetTrigger("Chop");
             if (chopping != null) StopCoroutine(chopping);
             chopping = StartCoroutine(ChopSounds());
@@ -48,6 +50,11 @@ public class ChoppingBoard : NonStackBase
             GameSfx.Play(GameSfx.Cue.Chop);
             KitchenFx.Chop(foodToCut);
         }
+        // The clip's own event slices it (ChopFood). Two in a row (the chef chops everything he carries, PlayerFSM),
+        // the second "Chop" could land while the animator was still going back to idle and never play: the tomato
+        // stayed whole on the board and the burger went out without it. So it is sliced here if the event never came.
+        yield return new WaitForSeconds(0.45f);
+        if (foodToCut != null && !foodToCut.isSliced && (Object)Food == foodToCut) ChopFood();
         chopping = null;
     }
 
@@ -55,12 +62,10 @@ public class ChoppingBoard : NonStackBase
     {
         Animator.SetTrigger("Idle");
 
-        if(foodToCut != null)
+        if(foodToCut != null && !foodToCut.isSliced)   // (once: the fallback in ChopSounds may have done it)
         {
             foodToCut.SetSliced();
         }
-
-        foodToCut.gameObject.GetComponent<Collider>().enabled = true;
     }
 
     public override bool IsSuitable(EdibleBase ingredient)

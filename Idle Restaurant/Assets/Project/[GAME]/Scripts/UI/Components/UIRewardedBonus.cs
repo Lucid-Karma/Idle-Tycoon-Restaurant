@@ -34,6 +34,7 @@ public class UIRewardedBonus : MonoBehaviour
 
     private Button button;
     private int bonus;
+    private bool shiftMoney;   // the shift's earnings (paid as a tip of the shift) or another sum (straight to the wallet)
     private string idleText;
 
     private void Awake()
@@ -52,9 +53,22 @@ public class UIRewardedBonus : MonoBehaviour
         EventManager.OnLevelFinish.RemoveListener(Offer);
     }
 
+    // Another sum to double on a card (the money made while away, the daily treat): the same button and rules.
+    public void OfferAmount(int amount)
+    {
+        Offer();
+        shiftMoney = false;
+        bonus = amount;
+        bool rested = Time.realtimeSinceStartup - watchedAt >= RestAfterWatching;
+        bool show = GamePlatform.AdsSupported && !adsOff && bonus > 0 && rested;
+        gameObject.SetActive(show);
+        if (show && label != null) label.text = $"Double +${bonus}";
+    }
+
     private void Offer()
     {
         WatchedThisCard = false;
+        shiftMoney = true;
         bonus = ScoreManager.Instance != null ? ScoreManager.Instance.ShiftEarned : 0;
         bool rested = Time.realtimeSinceStartup - watchedAt >= RestAfterWatching;
         bool show = GamePlatform.AdsSupported && !adsOff && bonus > 0 && rested;
@@ -88,7 +102,8 @@ public class UIRewardedBonus : MonoBehaviour
             case GamePlatform.AdOutcome.Watched:
                 WatchedThisCard = true;
                 watchedAt = Time.realtimeSinceStartup;
-                ScoreManager.Instance.AddTip(bonus);
+                if (shiftMoney) ScoreManager.Instance.AddTip(bonus);
+                else CafeProgress.AddCoins(bonus);
                 EventManager.OnScoreUpdate.Invoke();
                 GameSfx.Play(GameSfx.Cue.Coin);
                 if (label != null) label.text = "Doubled!";   // the day card counts the money up (Doubled)

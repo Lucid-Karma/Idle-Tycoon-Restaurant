@@ -2098,6 +2098,8 @@ MonoBehaviour:
   lettuce: {fileID: 21300000, guid: 845d4405a82497249aadfa87c2b55ee6, type: 3}
   tomato: {fileID: 21300000, guid: 00eab64d66a0f3c4fa52eeebc3f0ba00, type: 3}
   onion: {fileID: 21300000, guid: 13be02de44cae8e48b4e5cf7b2551c82, type: 3}
+  bacon: {fileID: 21300000, guid: 3c2a07b36e94ded41a96d527f442f619, type: 3}
+  fries: {fileID: 21300000, guid: d75fda2612b9b384f9fa5fcdd812a9ac, type: 3}
   box: {x: 66, y: 62}
   overlap: 0.4
   doneAlpha: 0.35

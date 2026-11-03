@@ -10,7 +10,9 @@ using UnityEngine.UI;
 public class UIOrderTicket : MonoBehaviour
 {
     [SerializeField] private Image genericIcon;
-    [SerializeField] private Sprite bunTop, bunBottom, patty, cheese, lettuce, tomato, onion;
+    [SerializeField] private Sprite bunTop, bunBottom, patty, cheese, lettuce, tomato, onion, bacon;
+    // Fries on the side (NpcFsm.WantsFries): a little carton on the bubble's corner, fading back once they are tossed.
+    [SerializeField] private Sprite fries;
     [SerializeField] private Vector2 box = new(66f, 62f);   // the space inside the patience ring
     [SerializeField, Range(0f, 0.6f)] private float overlap = 0.4f;
     [SerializeField, Range(0f, 1f)] private float doneAlpha = 0.35f;
@@ -20,6 +22,11 @@ public class UIOrderTicket : MonoBehaviour
     private readonly List<Image> layers = new();
     private readonly List<string> names = new();
     private int lastDone = -1;
+    private Image friesBadge;
+    private bool friesGot;
+    private float friesPop = 1f;
+
+    public Sprite Fries => fries;
 
     private void Awake() => npc = GetComponentInParent<NpcFsm>();
 
@@ -32,6 +39,42 @@ public class UIOrderTicket : MonoBehaviour
             Build(order);
         }
         if (order != null) ShowProgress();
+        ShowFries(order != null && npc.WantsFries);
+    }
+
+    // The fries carton: bottom right of the bubble, over its ring; a pop as they arrive, then faded like a layer done.
+    private void ShowFries(bool wanted)
+    {
+        if (!wanted || fries == null)
+        {
+            if (friesBadge != null) friesBadge.enabled = false;
+            return;
+        }
+        if (friesBadge == null)
+        {
+            var go = new GameObject("Fries", typeof(RectTransform), typeof(Image));
+            go.layer = gameObject.layer;
+            go.transform.SetParent(transform, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(fries.rect.width, fries.rect.height) * (box.y * 0.62f / fries.rect.height);
+            rt.anchoredPosition = new Vector2(box.x * 0.56f, -box.y * 0.36f);
+            friesBadge = go.GetComponent<Image>();
+            friesBadge.sprite = fries;
+            friesBadge.raycastTarget = false;
+            friesGot = false;
+        }
+        friesBadge.enabled = true;
+        if (npc.GotFries != friesGot)
+        {
+            friesGot = npc.GotFries;
+            if (friesGot) friesPop = 1.45f;
+        }
+        friesPop = Mathf.MoveTowards(friesPop, 1f, Time.deltaTime * 2.5f);
+        friesBadge.rectTransform.localScale = Vector3.one * friesPop;
+        var c = friesBadge.color;
+        c.a = friesGot && friesPop <= 1.01f ? doneAlpha : 1f;
+        friesBadge.color = c;
     }
 
     public Sprite SpriteOf(string layer) => layer switch
@@ -41,6 +84,8 @@ public class UIOrderTicket : MonoBehaviour
         "lettuce" => lettuce,
         "tomato" => tomato,
         "onion" => onion,
+        "bacon" => bacon,
+        "fries" => fries,
         "bun_bottom" => bunBottom,
         "bun_top" => bunTop,
         _ => null,

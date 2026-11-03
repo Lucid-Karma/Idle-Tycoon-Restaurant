@@ -190,7 +190,8 @@ at the start (7 seats); each bought table adds one to both (`ScoreManager.Custom
   Chef Hats" / "L1c Preview Everyone" pose things in the editor and render contact sheets to `Temp/`;
   "Play As Phone" runs play mode with the phone settings; "Mute Editor Audio" flips the Game view's mute
   (play testing should never make noise); "Reset Cafe Progress" clears the save. Rerun 2 and 4 after 8.
-- **NavMeshes are the original bake — never rebake them with upgrades in place.** That was tried: unbought
+- **NavMeshes are the original bake — never rebake them with upgrades in place.** New furniture carves its own hole
+  (the 2026-10-28 kitchen line too). That was tried: unbought
   tables became invisible obstacles and the rugs raised walkable platforms, so the chef hovered 27 cm over
   the floor next to customers and jittered before he could serve. Bought furniture carves its own hole.
 - Sounds (`Scripts/Audio/FX/GameSfx.cs` on `<<<Controllers>>>/Sfx`): coin when an order pays, a smaller coin
@@ -1204,6 +1205,216 @@ opaque, fully visible with the pointer over it (user's choice) and for 2 s after
 lesson and during the break cards. Placement history: right-edge column covered the onion crate and took its taps;
 left column covered the big tomato statue the user likes; the bottom-right corner is empty floor with every
 upgrade (measured tappable screen rects). Fredoka has no star glyph - write "Perfect", not a star.
+
+### Levels, the tap queue, and coming back (2026-10-28, from the market report)
+
+A report (Claude Docs "Chibi Burger Cafe — Pazar Analizi ve Başarı Raporu") compared the game with Good Pizza Great
+Pizza, Papa's, Burger Please!, Eatventure, PlateUp!, Overcooked and found the core slow, content thin and no reason to
+return. The user then asked to start with short star levels and a tap queue and to do everything on Claude's list.
+
+- **Levels.** A shift is a LEVEL: level N = the N-th shift (`CafeProgress.LevelNumber` = ShiftsPlayed + 1). Short:
+  3, 4, 4, 5, 5, then 6 customers (`ScoreManager.CustomersForShift`; tables still add one each). The HUD goal card
+  says "LEVEL 7" with three small stars filling live (`UIDayGoal`, `DayGoals.StarsNow`): 1 = finishing, 2 = the goal,
+  3 = goal + average >= 4. All three pay `DayGoals.StarBonus` (half the goal bonus, min $5) on top. Stars are kept per
+  level (`CafeProgress.RecordLevelStars`, key `Cafe.LevelStars`, one digit per level).
+- **Tiers follow levels, not stars.** `CafeProgress.Level` (the tier that opens recipes, customers, shop items) =
+  `TierAt(level)` with `TierLevels` {1, 2, 4, 6, 9, 12}; a save from before keeps the tier its stars had reached
+  (`Cafe.LegacyTier`, set once). `LeveledUp` fires at a level's end (`CountShift`), so the break cards show it ("NEW
+  FROM LEVEL 4"). Order stars still add up (`Stars`) but gate nothing. The mid-shift "Cafe level 3!" toast is gone.
+- **Break cards:** "LEVEL 4 COMPLETE" (goal, all-three-stars bonus, average, earned this level, tomorrow's treat,
+  footer = the next level that opens something), the tier's "New in the cafe!" card, the treat, the Grill House cards,
+  and last the **road** (`UIBreakCard.BuildRoad`): seven stops (three played with their stars, the next one big and
+  yellow and breathing, three ahead with the picture of what opens there), footer = next level's goal, button
+  "Play level 8" (`UIBreakCard.LastButton`). Cards can offer "Double" each (`Card.Double`: -1 the level's money,
+  >0 a sum - the daily treat and the welcome-back money).
+- **Tap queue** (`PlayerFSM` region "Tap queue", `UITapQueue`): a tap while he is on his way to something (not
+  steering, not in the lesson) waits its turn, up to 3 (16 since 2026-10-30, see "A whole burger in one session"), shown as teal numbered dots over the targets. Each queued tap
+  is kept as the thing / customer / point under the finger and worked out when its turn comes with what he holds
+  then (tap the plate to close the burger, then the customer: he serves them). A tap on bare floor or steering clears
+  it. Tested: bun crate -> oven -> patty crate -> pan in one go; plate -> customer serves.
+- **Coming back:** `OfflineEarnings` (12 + 6 x tier + 5 x extra tables per hour away, from 15 min, up to 3 h; the
+  clock `Cafe.LastSeen` ticks every 30 s and on focus loss) paid by a "WELCOME BACK" card as the first level of a
+  session starts, with "Double". `WeeklyTasks`: three tasks a week from 8 kinds (serve, perfect, 3-star levels, chaos,
+  snacks, rush x3, earn, levels), the same for everyone (seeded by ISO week), paid when done (toast).
+  `BurgerBook`: every nameable burger (12 recipes + 12 mistake names + Chaos Burger), +$3 the first time each is
+  served (toast "New in your burger book!"). Both on the HUD's notebook button (`UIBookButton`, under the eye).
+- **Menu:** three more recipes from the same ingredients: Cheese Lover (tier 2), Veggie Deluxe (4), Onion Double (5).
+- **Analytics** (`PlatformSession`): `game_ready` + days_since_first / levels_played, `first_serve` (seconds, lesson),
+  `session_pause` (where the page lost the player), `book_entry`, `weekly_task_done`.
+- **Sounds:** recorded CC0 china clinks (Kenney "Impact Sounds", `Resources/Sounds/Plate`, credits in
+  `Graphics/Audio/CREDITS.txt`) when food goes on a plate or a burger on a table (`GameSfx.Cue.Dish`). The user's rule
+  from now on: new music and sounds come from CC0 sources found online, used or edited - not synthesised.
+
+### The bacon griddle and the fryer (2026-10-28)
+
+The user: "go on with the bacon and potato stations - the models are up to you (make them yourself if needed);
+fix the onboarding where needed; make sure it represents the new mechanics well; keep performance, download size
+and load time optimal".
+
+- **Stations open by level, for free** (`Stations`): the bacon griddle at level 3, the fryer at level 5 - the levels
+  between the tiers' news, so each of the first six levels brings something. A save from before levels whose tier was
+  already past that level has them from the start.
+- **The kitchen line** (third placement; rejected before: replacing the sink and the dish rack - never take the
+  kitchen's own props away - and a 4 x 4 m corner that sat in a dining table's lap. User: "move it or the table, or go
+  off the map; potato crate on the floor like the bun crate; ask whether better games would do it so"): a diner's pass.
+  Along the inside of the kitchen's own front-right edge, on its own floor tiles (x 10.26-12.26, z 17.63-23.63; a
+  strip of new floor out into the dining room was tried and dropped - "why a new strip instead of the edge you
+  have?"), parallel to the plate island: the potato crate on the floor (identical to the bun crate: same KayKit crate
+  body 2 x 0.8 x 2, scale 1, the bun crate's material - "harmony, not chaos"), then two steel kitchen tables like the
+  plate island (fryer; bacon plate + griddle), fronts turned to thekitchen. The chef works it from inside; it keeps 4 m from the nearest table. Dining tables are static with baked
+  shadows, so they are never moved; a kitchen apart from the kitchen would send the chef through the customers. A
+  fridge for bacon was left out: a tall box on the edge nearest the camera would hide the kitchen. **No navmesh bake**:
+  a carving NavMeshObstacle on the line (active only while shown) cuts it out of the chef's navmesh; the original
+  bake is in use. All 19 seats stay reachable with every upgrade (`Tools/Chibi Cafe/16c Check Seats`, play mode).
+  `KitchenStations`: line + griddle pop in at level 3, crate + fryer at level 5 (the fryer's table stands bare until
+  then: a ribboned pink sheet over it was removed, user: "what is this ugly model?").
+- **Models made in code** from the palette textures already in the build (food: the KayKit palette; furniture:
+  `Rest.1`'s pink one): wavy two-strip bacon (raw pink / cooked rust / burnt charcoal), a red fries carton with
+  golden (or burnt) fries, a steel griddle with pink knobs, a steel fryer with golden oil, a wire basket and a red
+  handle. The plate under the raw bacon and the potato crate are KayKit's. Meshes in
+  `Graphics/Meshes/Stations` (a few KB), no new textures. KayKit's ham legs and potato chunk were judged unusable.
+- **Bacon** (`Bacon : CookedBase`): a layer like any other, cooked on the griddle (`Griddle : HeatStation`) - 7 s to
+  crispy, burnt 10 s later (a patty is 10 + 10). Only the griddle cooks bacon and only the pan cooks patties: one
+  place per ingredient. Recipes: Bacon Burger and BLT come with the station (`Recipe.Level` 0, announced on its
+  card), Bacon Deluxe (tier 4) and Bacon Double (tier 5) later; bacon recipes are only ordered once it is open
+  (`Stations.Serves`) and come up twice as often for two levels (`Stations.Fresh`). Mistakes: raw bacon =
+  "Oink Burger" ("It's still oinking!", shocked like a raw patty), burnt = "Bacon Jerky" ("Bacon... or coal?!").
+- **Fries** (`Fries : CookedBase`, name "fries", a potato until fried): potato crate -> fryer (`Fryer`) -> a carton
+  of golden fries (8 s, burnt 10 s later). No board on the way: a side should not cost a burger's work. **A side,
+  not a layer**: from level 5 about 2 orders in 5 want fries (`NpcFsm.WantsFries`, `Orders.FriesShare`); a little
+  carton sits on their bubble's corner (`UIOrderTicket`) and a "Fries / toss it" tile on the order card
+  (`UIOrderCard`). Fries are **tossed** to that customer like a snack (no walk; while they wait or eat):
+  +$3 on the spot (x the Ranger's snack scale), wait -25 s, "My fries! Yum!", `NpcFsm.FriesServed`. Raw potato
+  thrown = a bonk ("OW! A potato?!"), burnt = "Burnt fries?!". Fries to someone who did not order them are a
+  normal snack. Fries can still be tapped onto a plate (an extra layer; a raw potato in a bun = "Spud Surprise"),
+  but steering past a plate never drops them there.
+- **Onboarding, spread into the game** (the report: the genre's best teach inside the first orders):
+  1. the break card before the level: "NEW STATION · LEVEL 3 / Bacon Griddle!" with what it makes and the recipes
+     it brings (fries: the +$3 per toss), and the station's picture on the road (`UIBreakCard.UnlockStation`);
+  2. the station pops into the kitchen as that level starts;
+  3. the level's goal is about it: level 3 = special "Serve 2 Bacon Burgers" (`DayGoals.SpecialFor`), level 5 =
+     new goal kind "Toss 2 fries" (`GoalKind.Fries`; while a fries goal is short the next customer wants fries);
+  4. its first order comes in at once (`Orders.Pick` / `Orders.WantsFries` while `Stations.TipPending`);
+  5. a guided first go with Mochi's card and the pointing hand (`Tutorial.BeginStationTip`, beats `BaconTip` /
+     `FriesTip`, nothing frozen): grab -> onto the griddle / into the fryer -> (while it cooks nothing is lit:
+     "make the rest meanwhile") -> take it -> onto the plate / tap the customer with the carton. Done = crisp bacon
+     on a plate / fries tossed (a cheer); walked away from, it comes back next time (`Cafe.StationTip.Bacon/Fries`).
+  6. Hints pulse the griddle/fryer for raw food in hand, ready food on them, and the fries' customer.
+  Also: **tapping ahead** (the tap queue) is said when he sets off on a long walk and nothing is tapped after it - up
+  to three times, a minute apart, until the player taps ahead by themselves (`Tutorial.QueueTip`, key `Cafe.QueueTip`
+  = times shown, 9 = learnt): "Don't wait - tap the next steps now: he does them all in order!".
+- **Sounds (CC0, BigSoundBank):** the fryer has its own oil crackle (`Resources/Sounds/Fryer/fryer_loop`, `GameSfx.Fry`), the griddle uses the pan's
+  sizzle. Cut and looped in the editor from the downloads (credits in `Graphics/Audio/CREDITS.txt`). Per-customer
+  voices are not done: Mochi's synthesised voice was rejected - only real CC0 recordings, after the user listens.
+  A restaurant murmur that grew with the seated customers (the report's "no human sound") was built, heard in build
+  1028d and **removed at the user's request** - don't bring a room murmur back.
+- New save keys to delete when restoring the user's save: `Cafe.StationTip.Bacon`, `Cafe.StationTip.Fries`,
+  `Cafe.QueueTip` (also in `CafeProgress.ResetAll`).
+
+### A whole burger in one session of taps: the carry stack (2026-10-30)
+
+The user: "tapping ahead is not taught at all - the player must be able to make the burger they want in ONE session of
+taps, and understand it very well". A first answer (a longer tap queue, the lesson's burger planned with numbers) was
+rejected: "nothing changed - we still wait for him to walk to one ingredient at a time. I thought you'd add a STACK:
+while we tap one thing after another he runs round collecting the ingredients; tap the oven and the bun in his stack
+goes in; tap the board and he chops the veg he carries". So:
+
+- **He carries a stack** (`PlayerFSM` region "Carrying a stack", `MaxCarry` 6; `Carried` bottom first, `HeldFood` =
+  the top; a finished burger is carried alone). Crate = one more on the stack. Oven / pan / griddle / fryer
+  (`UseStation`, one visit): what is ready on it is taken (he waits by it if it is still cooking), then the first raw
+  thing it cooks goes in from anywhere in the stack. Board: everything whole he carries is chopped there one after
+  another and goes back on the stack. Plate: the whole stack goes on (bun first); with empty hands it is "done!" as
+  before. Bin: burnt things if any, else the top. Customer: burger served; otherwise the top thing thrown (their fries
+  if he has some). A tapped oven with full hands is the oven all the same (`TapProxy.Resolve`).
+- **Taps queue up to 16** (`MaxQueued`): every tap counts, the same thing twice too (two buns, plate + plate) - only a
+  duplicate within 0.06 s is dropped. Queued taps keep their target (`Enqueue` wakes every placeable's collider for its
+  raycast; `OnIt` resolves station/plate to what is on it), a tap between two uses queues (`TapWaits`), a stalled queue
+  restarts from `Update`. `Idle` = in the idle STATE (he stops one frame and uses the thing the next).
+- A Cheeseburger the stack way is 11 taps - bun, patty, cheese crates; oven, pan, board; oven, pan; plate, plate;
+  customer - tapped in 3.5 s by the bot, served ~22 s later (the bun's 10 s bake is the wait).
+- **The lesson is taught that way** (`Tutorial` beats `ComboFirst`, `Combo`): both burgers are planned in one go, tapped
+  thing ringed (UITapQueue), the light jumps to the next thing the moment one is tapped. First (kitchen ready): baked bun, fried patty,
+  plate, plate, customer. Second (from scratch): buns, patties, oven, pan, oven, pan, plate, plate, customer. Two or
+  three words on the card (user: "less text"): "Tap - don't wait!", "Keep tapping!", "Watch him go!", "First
+  burger!", "Now from scratch!", "One go, one burger!".
+- **No numbers for the queue** (user: "the queue's numbers and the customers' numbers look almost the same - numbers
+  scattered all over the scene; make a professional design"): what a tap waits for gets a thin teal ring round it,
+  flat like a selection mark (a customer: at their feet), with a small "x2" chip when it waits twice (UITapQueue,
+  UIShapes.Ring). The customers' badges are the only numbers; the lesson shows only the next thing (light + hand).
+  Bot run: the whole lesson in 27 s. Steps are read off the kitchen; if his stack stops
+  fitting the plan it falls back to one tap at a time (`WorkOutStack`).
+- **The stack moves like the arcade games' stacks** (`CarryStack`, user: "use the kind of animation those games have"):
+  what he takes flies to the top in a little arc (0.26 s) and lands with a squash, the layers under it give; the stack
+  trails behind him as he runs (more the higher) and springs back; what he puts down pops where it lands. Scale is
+  changed by a factor that is divided back out (things change parent while it runs). Seen from behind, his hair hides
+  the lowest layer or two; a taller stack shows over his shoulder.
+- **Everything else is taught when it first matters** (user: "chopping isn't shown in the onboarding - teach everything
+  the player needs, slowly, each when its time comes; not all at once"). The lesson only teaches tapping in a row, the
+  oven, the pan, the plate and serving. Then, each with two or three words, the light and the hand, nothing frozen:
+  the board on the first order with veg or cheese (`ChopTip`: "Grab the tomato!" -> "Chop it!" -> "Onto the plate!",
+  key `Cafe.ChopTip`), the bin the first time something burns (`BinTip`, `Cafe.BinTip`), a snack the first time a
+  customer is impatient (`SnackTip`), the shop the first time something can be bought - from level 2, at a calm moment,
+  pointing at the HUD button (`ShopTip`, `Cafe.ShopTip`, once), bacon and fries at their stations' first orders,
+  tapping ahead on a long walk (`QueueTip`). A tip left half done comes back next time. New keys are in
+  `CafeProgress.ResetAll` and the scratchpad restore/fresh/level scripts.
+- **Every tap answers** (user: "I want feedback for every interaction - the ingredient you tap grows and shrinks or
+  hops; someone who ignores the rules and just pokes at random things should still enjoy it"): `TapFeedback.On`, first
+  thing in `PlayerFSM.HandleScreenTap`, whatever the tap then does: a soft ring where the finger lands
+  (`UITapRipple`); a customer near the finger hops (their `Model`), the chef hops; the thing under it hops and
+  squashes (`TapJuice.Hop` + `Boing`: crates, stations, plates, food, the bin, chairs, tables); decoration without a
+  collider (the giant burger and tomato, carrots, the season's pumpkins and ghost) wobbles with a "boing" (Seated
+  cue). The chef's own uses bounce too: the crate he takes from, the plate or station he puts on, the bin.
+  `TapJuice` only moves the picture (put back first thing every frame, applied in LateUpdate, like `TapPulse`).
+  **Static batching** freezes a renderer's transform, so step 17 (`CafeJuiceBuilder`, Tools/Chibi Cafe/17) takes the
+  tappable things out of it (44 renderers; lightmaps untouched, nothing rebaked). Re-run it after adding props.
+- **The lesson takes only what is lit** (user: "I tapped something else and he went to the oven anyway; the lesson
+  doesn't care about my input"): a tap on another usable thing is that thing - it bounces, the light nudges, the chef
+  stays (`Tutorial.TappedSomethingElse`); the slop round the lit thing is 3.5% of the screen (was 6%).
+- **Toss camera**: `FoodFight.Catcher` = who the chef just threw to, until 3 s after it lands; the follow camera keeps
+  them in the picture, and the fries' customer while he carries fries.
+- Bridge helpers: `_OnboardBot.TapFast` (lesson), `PlanBurger <npc%20name> 0.35` (a whole order the stack way),
+  `FastLog`; scratchpad `lesson_stack.sh`, `plan_test.sh <level>`.
+
+### The burger is made in his hands - no plate, no layer limit (2026-10-30)
+
+The user: "drop the 6-layer limit; and drop the plate too: more than one thing in his hands counts as a burger and more
+can go on as you like; one thing is thrown as before; a bun goes to the bottom and its top on top, as on a plate; the
+plates' place can hold other ingredients".
+
+- **Two things or more in his hands are a burger** (`PlayerFSM.CarriesBurger`, fries aside: they are a side). Tap its
+  customer: he walks to their table and the stack becomes a burger there (`AssembleAt`: a hidden "Burger Assembler"
+  plate puts it together - bottom bun, layers, top bun, review - and hands it to the table; `ForCustomer` = whoever sits
+  there). One thing is thrown, as before (their fries are always tossed to them). No "done!" tap any more.
+- **In his hands** the first bun goes to the bottom, cut like a plate's bottom bun (`Bun.LookSliced`), and a top bun
+  rides on top (`CarryStack` lid, `Plate.TopBunPrefab`); a bun going into the oven goes in whole again.
+- **Limits:** `MaxCarry` 12, `Plate.MaxLayers` 12 (both were 6).
+- **What is put on a plate is a burger at once** (user: "everything we leave on a plate with full hands should be a
+  burger, and Mochi keeps carrying them; teach it when its time comes"): his whole stack goes on and the plate closes
+  (`plate.Close()` in `DropObject`). Mochi (bought at level 4) runs it out; without him it waits there for the chef. Taught
+  by `MochiTip` ("Plate it - Mochi serves!", key `Cafe.MochiTip`) the first time he carries a burger while Mochi is free.
+- **The stack in his hands bobs, it doesn't trail** (user: "the top one comes nearly a man's height behind"): each layer
+  leans back 1.2 cm more than the one below (5 cm at most) and hops 2 cm with his steps, in world metres (the hand's own
+  space is scaled - offsets measured there were far too big). Heights are the colliders' (as a plate stacks them): the
+  shapes' boxes came out too tall after a plate had changed a thing's look (a gap opened under the onion).
+- The lesson needs no plate: first burger = baked bun, fried patty, customer (3 taps); second = buns, patties, oven,
+  pan, oven, pan, customer (7). Bot: whole lesson 24 s. Hints point at the customer whose order the stack covers;
+  the order card shows the stack against the closest waiting order. Fallback steps (`WorkOutStack`) end in "Serve it!".
+- The board chops everything whole he carries one after another: a second "Chop" could fail to play (the animator
+  still going back to idle) - `ChoppingBoard` now slices it from its own timer if the clip's event never came, and
+  `DropObject` keeps the item `UseStation` chose (it used to pick another one from the stack, leaving it on the board).
+- Step 17 no longer takes the "Decorations" props out of static batching: the season's candy under the pumpkin is sized
+  from the giant tomato's renderer, and unbatched its bounds grew to ~6 m - the candy spread far past the map.
+  `CafeJuiceBuilder.RebatchDecorations` put them back.
+
+### Loading on phones (2026-10-30)
+
+Measured (desktop, 20 Mbit): files 3.5 s, engine 1.2 s, SDK + scene stream 0.9 s, scene start 1.3 s. Phones are CPU-bound
+on the last three, and they cannot read DXT textures: Unity unpacked every texture on the CPU at each load.
+`CrazyGamesBuild` now makes the CrazySDK release set: an ASTC build's data copied in as `astc_<name>` (both builds), for
+CrazyGames also `max_512mb_`/`max_1024mb_` wasm builds and `crazygames_build_report.json` (their site picks per
+device); the beyzosh page (template `astcDataFile`, filled in after the build) loads ASTC data where the GPU reads ASTC
+and not DXT (`?astc=1` forces it). Customers are made when first needed, not all 18 at the scene's start
+(`NpcSpawnController.GetPooledNpc`, same random pick). Builds take ~3 builds' time now.
 
 ### Next ideas (not built yet)
 

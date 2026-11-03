@@ -39,6 +39,13 @@ public class CookingProgressBar : MonoBehaviour, IProgress01
             mask.color = color;
         }
     }
+    // Food with times of its own (CookedBase: bacon, fries): done at `done`, burnt at `burnt` seconds.
+    public void SetTimes(float done, float burnt)
+    {
+        minumum = done;
+        maximum = burnt;
+    }
+
     public void ResetProgressBar()
     {
         current = 0;

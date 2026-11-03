@@ -11,6 +11,7 @@ public class SeasonalGhost : MonoBehaviour
     public Transform face;   // the eyes and mouth (turned to the camera)
     public float bob = 0.08f, speed = 2.2f;
     public bool flutter;     // the sheet's hem moves (customers)
+    public Transform shadow; // the soft blob on the floor under a customer
     private Renderer[] hidden;
     private float phase;
     private float? baseY;
@@ -18,6 +19,14 @@ public class SeasonalGhost : MonoBehaviour
     private Vector3[] rest, moved;
     private Vector3 lastPosition;
     private Vector3 trail;   // smoothed, in the sheet's own space: where the hem is pulled to
+
+    // Its face and floor shadow keep their own look when a hint turns the customer pink (HighlightController): pink
+    // eyes floating off a pink sheet read as loose, odd eyes (user, 2026-10-28).
+    public static bool KeepsOwnLook(Transform node)
+    {
+        var g = node.GetComponentInParent<SeasonalGhost>();
+        return g != null && (node == g.face || node == g.shadow);
+    }
 
     // Hides the customer's own renderers (put back by Undress).
     public void Hide(Renderer[] own)

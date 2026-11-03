@@ -24,8 +24,57 @@ public class ShiftFlow : MonoBehaviour
 
     private bool flowing;
 
-    private void OnEnable() => EventManager.OnLevelFinish.AddListener(OnShiftFinished);
-    private void OnDisable() => EventManager.OnLevelFinish.RemoveListener(OnShiftFinished);
+    private void OnEnable()
+    {
+        EventManager.OnLevelFinish.AddListener(OnShiftFinished);
+        EventManager.OnLevelStart.AddListener(OnLevelStart);
+    }
+
+    private void OnDisable()
+    {
+        EventManager.OnLevelFinish.RemoveListener(OnShiftFinished);
+        EventManager.OnLevelStart.RemoveListener(OnLevelStart);
+    }
+
+    // Once a session, as the first level starts: what the cafe made while the player was away (OfflineEarnings).
+    private static bool welcomed;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetWelcome() => welcomed = false;
+
+    private void OnLevelStart()
+    {
+        if (welcomed) return;
+        welcomed = true;
+        if (!CafeProgress.Taught || OfflineEarnings.Pending.amount <= 0) { OfflineEarnings.Touch(); return; }
+        StartCoroutine(Welcome());
+    }
+
+    // "WELCOME BACK / +$40 / Away 2 h 10 min / Earned while away +$40", with "Double" and "Collect".
+    private IEnumerator Welcome()
+    {
+        yield return new WaitForSeconds(1.2f);
+        while (LessonIntro.Playing || Time.timeScale == 0f) yield return null;
+        var ui = UIBreakCard.Instance;
+        int minutes = OfflineEarnings.Pending.minutes;
+        int paid = OfflineEarnings.Claim();
+        if (ui == null || paid <= 0) yield break;
+        var card = new UIBreakCard.Card
+        {
+            Kicker = "WELCOME BACK", Title = $"+${paid}", Double = paid,
+            Footer = "Your regulars kept dropping by for snacks",
+        };
+        card.Rows.Add(new UIBreakCard.Row { Icon = ui.checkIcon, Tint = UITokens.Colors.Teal, Label = "Away", Value = Away(minutes) });
+        card.Rows.Add(new UIBreakCard.Row
+        {
+            Icon = ui.moneyIcon, Tint = UITokens.Colors.DarkTeal, Label = "Earned while away", Value = $"+${paid}", Earned = true,
+        });
+        ui.LastButton = "Collect";
+        GameSfx.Play(GameSfx.Cue.Coin);
+        ui.Play(new List<UIBreakCard.Card> { card }, null, tapOutsideCloses: true);
+    }
+
+    private static string Away(int minutes) =>
+        minutes >= 180 ? "3 h or more" : minutes >= 60 ? $"{minutes / 60} h {minutes % 60} min" : $"{minutes} min";
 
     private void OnShiftFinished()
     {
@@ -78,21 +127,39 @@ public class ShiftFlow : MonoBehaviour
         var (added, _) = DailyTreat.Save();
         var cards = new List<UIBreakCard.Card> { DayCard(day, ui, added) };
         foreach (int level in day.LevelsGained) cards.Add(NewCard(level, ui));
+        if (Stations.OpensOn(CafeProgress.LevelNumber, out var station)) cards.Add(StationCard(station, ui));
         if (treat != null) cards.Add(treat);
         // The long goal: introduced after the second shift, celebrated once when the wallet holds enough.
         if (GrandGoal.TeaseDue) { cards.Add(GrillTeaser(ui)); GrandGoal.MarkTeased(); }
         else if (GrandGoal.Teased && GrandGoal.Ready && !GrandGoal.Announced) { cards.Add(GrillReady(ui)); GrandGoal.MarkAnnounced(); }
+        // Last, the road: the levels played with their stars, the next one, and what waits further on.
+        cards.Add(RoadCard());
+        ui.LastButton = $"Play level {CafeProgress.LevelNumber}";
         return cards;
     }
 
-    // "SHIFT 2 DONE · DAY 4 / Great shift! / 2 of 3 stars / goal, rating, money / 12 more stars to level 3: Garden & Deluxe"
+    // "YOUR ROAD / Level 8 / Goal: Serve 2 perfect burgers" over the road itself (UIBreakCard draws it).
+    private static UIBreakCard.Card RoadCard()
+    {
+        int next = CafeProgress.LevelNumber;
+        return new UIBreakCard.Card
+        {
+            Kicker = "YOUR ROAD",
+            Title = $"Level {next}",
+            Footer = $"Goal: {DayGoals.ForDay(next).Text}",
+            Road = true,
+        };
+    }
+
+    // "LEVEL 4 COMPLETE / Great shift! / 2 of 3 stars / goal, rating, money / Level 6: Mages · Double"
     private static UIBreakCard.Card DayCard(DayResult day, UIBreakCard ui, int savedForTomorrow)
     {
         var card = new UIBreakCard.Card
         {
-            Kicker = $"SHIFT {day.Shift} DONE  ·  DAY {day.CafeDay}",
+            Kicker = $"LEVEL {day.Day} COMPLETE",
             Title = UIShiftHighlights.TitleFor(day.Average, day.Walkouts),
             Stars = day.DayStars,
+            Double = -1,
         };
         card.Rows.Add(new UIBreakCard.Row
         {
@@ -101,6 +168,11 @@ public class ShiftFlow : MonoBehaviour
             Label = day.Goal.Text,
             Value = day.Met ? $"+${day.Bonus}" : "<alpha=#8C>missed",
         });
+        if (day.StarBonus > 0)
+            card.Rows.Add(new UIBreakCard.Row
+            {
+                Icon = ui.starIcon, Tint = UITokens.Colors.DeepYellow, Label = "All three stars", Value = $"+${day.StarBonus}",
+            });
         card.Rows.Add(new UIBreakCard.Row
         {
             Icon = ui.starIcon, Tint = UITokens.Colors.DeepYellow, Label = "Average rating",
@@ -108,7 +180,7 @@ public class ShiftFlow : MonoBehaviour
         });
         card.Rows.Add(new UIBreakCard.Row
         {
-            Icon = ui.moneyIcon, Tint = UITokens.Colors.DarkTeal, Label = "Earned this shift", Value = $"+${day.Earned + day.Bonus}",
+            Icon = ui.moneyIcon, Tint = UITokens.Colors.DarkTeal, Label = "Earned this level", Value = $"+${day.Earned + day.Bonus + day.StarBonus}",
             Earned = true,
         });
         // What coming back tomorrow is worth - and that this day just made it bigger.
@@ -125,28 +197,38 @@ public class ShiftFlow : MonoBehaviour
                 Icon = ui.grillDishes != null && ui.grillDishes.Length > 0 ? ui.grillDishes[0] : ui.moneyIcon, Tint = Color.white,
                 Label = GrandGoal.Name, Value = GrandGoal.Ready ? "Ready!" : GrandGoal.Amount,
             });
-        var (into, span) = CafeProgress.LevelProgress;
-        if (span > 0)
-        {
-            int next = CafeProgress.Level + 1;
-            card.Footer = $"{span - into} more stars to level {next}: {NewsAt(next)}";
-        }
+        card.Footer = NextUnlockLine();
         return card;
     }
 
-    // What a cafe level brings, in a few words ("Garden & Deluxe", "Knights", "new shop items").
-    public static string NewsAt(int level)
+    // "Level 6: Mages · Double" - the next level that opens something new (after the one about to start, whose news
+    // has its own card), or nothing once everything is open.
+    public static string NextUnlockLine()
     {
-        var recipes = Orders.NewAt(level).Select(r => r.Name).ToList();
-        if (recipes.Count > 0) return string.Join(" & ", recipes);
-        if (Customers.ArrivesAt(level, out var kind)) return Customers.Of(kind).Plural;
-        return "new shop items";
+        int from = CafeProgress.LevelNumber + 1;
+        for (int level = from; level < from + 30; level++)
+        {
+            int tier = CafeProgress.TierOpensAt(level);
+            if (tier > 0) return $"Level {level}: {NewsAt(tier)}";
+            if (Stations.OpensOn(level, out var station)) return $"Level {level}: {Stations.Title(station)}";
+        }
+        return null;
     }
 
-    // "CAFE LEVEL 3 / New in the cafe!" and a tile for each new recipe, customer and shop item.
+    // What a cafe tier brings, in a few words ("Barbarians · Garden & Deluxe", "new shop items").
+    public static string NewsAt(int tier)
+    {
+        var parts = new List<string>();
+        if (Customers.ArrivesAt(tier, out var kind)) parts.Add(Customers.Of(kind).Plural);
+        var recipes = Orders.NewAt(tier).Select(r => r.Name).ToList();
+        if (recipes.Count > 0) parts.Add(string.Join(" & ", recipes));
+        return parts.Count > 0 ? string.Join("  ·  ", parts) : "new shop items";
+    }
+
+    // "NEW FROM LEVEL 4 / New in the cafe!" and a tile for each new recipe, customer and shop item of the tier.
     private static UIBreakCard.Card NewCard(int level, UIBreakCard ui)
     {
-        var card = new UIBreakCard.Card { Kicker = $"CAFE LEVEL {level}", Title = "New in the cafe!" };
+        var card = new UIBreakCard.Card { Kicker = $"NEW FROM LEVEL {CafeProgress.LevelNumber}", Title = "New in the cafe!" };
         foreach (var recipe in Orders.NewAt(level))
             card.Tiles.Add(new UIBreakCard.Tile { Recipe = recipe, Name = recipe.Name, Sub = "New recipe" });
         if (Customers.ArrivesAt(level, out var kind))
@@ -166,6 +248,33 @@ public class ShiftFlow : MonoBehaviour
         foreach (var upgrade in shop.Take(room))
             card.Tiles.Add(new UIBreakCard.Tile { Icon = upgrade.icon, Tint = Color.white, Name = upgrade.title, Sub = $"In the shop  ${upgrade.price}" });
         if (shop.Count > room) card.Footer = $"+{shop.Count - room} more in the shop";
+        return card;
+    }
+
+    // "NEW STATION / Bacon Griddle!" with what it makes and the recipes it brings, before the level it opens at: the
+    // station pops into the kitchen as that level starts (KitchenStations), and its first order comes in with a guided
+    // first go (Tutorial.BeginStationTip).
+    private static UIBreakCard.Card StationCard(Stations.Kind station, UIBreakCard ui)
+    {
+        var card = new UIBreakCard.Card
+        {
+            Kicker = $"NEW STATION  ·  LEVEL {CafeProgress.LevelNumber}",
+            Title = Stations.Title(station) + "!",
+            Footer = station == Stations.Kind.Bacon ? "The kitchen grows a new corner: grab bacon, crisp it, stack it."
+                                                    : "Potato into the fryer, then toss the fries to whoever ordered them.",
+        };
+        card.Tiles.Add(new UIBreakCard.Tile
+        {
+            Icon = ui.StationPicture(station), Tint = Color.white, Name = Stations.Word(station), Sub = Stations.Blurb(station),
+            Highlight = true,
+        });
+        foreach (var recipe in Orders.WithStation(station).Take(MaxTiles - 1))
+            card.Tiles.Add(new UIBreakCard.Tile { Recipe = recipe, Name = recipe.Name, Sub = "New recipe" });
+        if (station == Stations.Kind.Fries)
+            card.Tiles.Add(new UIBreakCard.Tile
+            {
+                Icon = ui.moneyIcon, Tint = UITokens.Colors.DarkTeal, Name = $"+${NpcFsm.FriesPay}", Sub = "for each fries tossed",
+            });
         return card;
     }
 
@@ -217,8 +326,9 @@ public class ShiftFlow : MonoBehaviour
         {
             Kicker = streak > 1 ? $"DAILY TREAT  ·  {streak} DAYS IN A ROW" : "DAILY TREAT",
             Title = $"+${amount}",
+            Double = amount,
             Footer = saved > 0 ? $"Includes +${saved} you saved by playing yesterday"
-                               : $"Every shift you play today adds +${DailyTreat.PerDayPlayed} to tomorrow's",
+                               : $"Every level you play today adds +${DailyTreat.PerDayPlayed} to tomorrow's",
             TileWidth = 76f,
         };
         for (int d = 1; d <= week; d++)

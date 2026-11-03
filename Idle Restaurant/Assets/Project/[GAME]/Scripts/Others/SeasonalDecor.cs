@@ -247,6 +247,7 @@ public static class SeasonalDecor
         {
             shadow.transform.SetParent(model, false);
             shadow.transform.localPosition = Vector3.up * 0.02f;
+            g.shadow = shadow.transform;
         }
     }
 
@@ -734,7 +735,10 @@ public static class SeasonalDecor
             if (glow != null)
             {
                 var mf = body.GetComponent<MeshFilter>();
-                mf.sharedMesh = Mesher.Shaded(mf.sharedMesh, new Color(0.96f, 0.95f, 1f), 0.72f);
+                // Ghostly mint, nearly solid: it floats in front of the white "CHIBI" letters, and white (then a faint,
+                // see-through mint that the night grade turned grey) did not part from them seen from afar (user,
+                // 2026-10-28). It stays where it is (user: don't move it), so its colour does the parting.
+                mf.sharedMesh = Mesher.Shaded(mf.sharedMesh, new Color(0.3f, 1f, 0.62f), 0.95f);
                 body.GetComponent<MeshRenderer>().sharedMaterial = glow;
             }
             body.SetParent(go.transform, false);

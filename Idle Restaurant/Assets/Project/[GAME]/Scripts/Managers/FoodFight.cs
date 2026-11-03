@@ -64,8 +64,18 @@ public class FoodFight : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
+    // Who the chef has just thrown something to, until they have reacted: the follow camera keeps them in the picture
+    // (user, 2026-10-30: "after tossing the fries the camera comes straight back to the chef - we can't see the
+    // customer's reaction").
+    public static NpcFsm Catcher => catcher != null && catcher.isActiveAndEnabled && Time.time < catcherUntil ? catcher : null;
+    private static NpcFsm catcher;
+    private static float catcherUntil;
+    private const float ReactionSeconds = 3f;
+
     public void ChefThrows(EdibleBase food, NpcFsm npc)
     {
+        catcher = npc;
+        catcherUntil = Time.time + chefThrowSeconds + ReactionSeconds;
         var item = new BurgerLayer(food.Name, food.Preparation); // read before the pooled object resets
         var body = food.transform;
         body.SetParent(null, true);
@@ -357,6 +367,8 @@ public class FoodFight : MonoBehaviour
         "lettuce" => new Color(0.55f, 0.75f, 0.3f),
         "onion" => UITokens.Colors.Cream,
         "burger" => new Color(0.45f, 0.25f, 0.2f),
+        "bacon" => new Color(0.78f, 0.32f, 0.28f),
+        "fries" => new Color(0.98f, 0.8f, 0.33f),
         _ => new Color(0.9f, 0.7f, 0.45f),
     };
 

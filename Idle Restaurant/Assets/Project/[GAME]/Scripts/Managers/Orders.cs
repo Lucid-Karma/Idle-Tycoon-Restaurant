@@ -24,6 +24,9 @@ public sealed class Recipe
 
     public int Count => Layers.Length;
 
+    // Bacon is cooked on the griddle, which opens at level 3 (Stations): until then nobody orders it.
+    public bool NeedsBacon => System.Array.IndexOf(Layers, "bacon") >= 0;
+
     // How many of each ingredient it takes.
     public Dictionary<string, int> Needs()
     {
@@ -35,7 +38,8 @@ public sealed class Recipe
 
 public static class Orders
 {
-    // Ingredient names as EdibleBase.Name has them: bun, burger (the patty), cheese, lettuce, tomato, onion.
+    // Ingredient names as EdibleBase.Name has them: bun, burger (the patty), cheese, lettuce, tomato, onion, bacon
+    // (and fries, which are a side: NpcFsm.WantsFries).
     public static readonly Recipe Classic = new("Classic", 1, "bun", "burger", "lettuce", "tomato");
 
     // The shortest burger that uses all three stations (oven, pan, board). Was the lesson's second order until
@@ -46,19 +50,38 @@ public static class Orders
     // the game opens (Tutorial.ReadyKitchen), so the first coins come in seconds. Not on the menu.
     public static readonly Recipe FirstRecipe = new("Hamburger", 1, "bun", "burger");
 
+    // The griddle's first order (Stations: the guided first go waits for it) and its first level's special (DayGoals).
+    // (Before Menu: static fields are set in the order they are written.)
+    public static readonly Recipe BaconBurger = new("Bacon Burger", 0, "bun", "burger", "bacon", "cheese");
+
     public static readonly Recipe[] Menu =
     {
         Classic,
         LessonRecipe,
         new("Onion Burger", 2, "bun", "burger", "onion", "cheese"),
+        new("Cheese Lover", 2, "bun", "burger", "cheese", "cheese"),
         new("Garden", 3, "bun", "lettuce", "tomato", "onion"),
         new("Deluxe", 3, "bun", "burger", "cheese", "lettuce", "tomato"),
         new("Double", 4, "bun", "burger", "burger", "cheese"),
+        new("Veggie Deluxe", 4, "bun", "lettuce", "tomato", "onion", "cheese"),
         new("Big Stack", 5, "bun", "burger", "cheese", "burger", "cheese"),
+        new("Onion Double", 5, "bun", "burger", "onion", "burger", "onion"),
         new("The Tower", 6, "bun", "burger", "cheese", "lettuce", "tomato", "onion"),
+        // (2026-10-28: three more, from the ingredients there are, so each new tier brings two recipes - more
+        // variety for the same kitchen; new ingredients and stations need new models first.)
+        // Bacon (the griddle, level 3): level 0 = they come with the station and are announced with it; the later
+        // ones arrive with their tier like any recipe.
+        BaconBurger,
+        new("BLT", 0, "bun", "bacon", "lettuce", "tomato"),
+        new("Bacon Deluxe", 4, "bun", "burger", "bacon", "cheese", "lettuce", "tomato"),
+        new("Bacon Double", 5, "bun", "burger", "bacon", "burger", "bacon"),
     };
 
-    public static IEnumerable<Recipe> Unlocked => Menu.Where(r => r.Level <= CafeProgress.Level);
+    // What the bacon griddle brings when it opens (the station's card between levels).
+    public static IEnumerable<Recipe> WithStation(Stations.Kind kind) =>
+        kind == Stations.Kind.Bacon ? Menu.Where(r => r.Level == 0) : Enumerable.Empty<Recipe>();
+
+    public static IEnumerable<Recipe> Unlocked => Menu.Where(r => r.Level <= CafeProgress.Level && Stations.Serves(r));
 
     // The recipes a cafe level adds, for the level-up message.
     public static IEnumerable<Recipe> NewAt(int level) => Menu.Where(r => r.Level == level);
@@ -68,6 +91,10 @@ public static class Orders
     public static Recipe Pick()
     {
         if (Tutorial.Running) return Tutorial.LessonOrder();
+        // The griddle has just opened and its first go is still to come: the next order is a bacon one, unless somebody
+        // in the cafe already ordered one (the guided first go is made with it).
+        if (Stations.TipPending(Stations.Kind.Bacon) && !NpcFsm.Active.Any(n => n.Ordered != null && n.Ordered.NeedsBacon))
+            return BaconBurger;
         var open = Unlocked.ToList();
         int newest = open.Max(r => r.Level);
         float total = 0f;
@@ -84,7 +111,20 @@ public static class Orders
     // The day's special (DayGoals: "Serve 2 Cheeseburgers") is ordered about half the time, so the goal can be met.
     public static Recipe Special;
 
-    private static float Weight(Recipe r, int newest) => r == Special ? 4f : r.Level == newest ? 2f : 1f;
+    private static float Weight(Recipe r, int newest) =>
+        r == Special ? 4f : r.Level == newest || r.NeedsBacon && Stations.Fresh(Stations.Kind.Bacon) ? 2f : 1f;
+
+    // Fries on the side (Stations: the fryer, level 5): about two orders in five once it is open - and the very next one
+    // while its guided first go is still to come and nobody in the cafe is waiting for fries yet.
+    public const float FriesShare = 0.4f;
+
+    public static bool WantsFries()
+    {
+        if (Tutorial.Running || !Stations.Open(Stations.Kind.Fries)) return false;
+        if (Stations.TipPending(Stations.Kind.Fries) && !NpcFsm.Active.Any(n => n.WantsFries && !n.GotFries)) return true;
+        if (DayGoals.FriesShort) return true;
+        return Random.value < FriesShare;
+    }
 
     // A customer whose order is still to be made: seated and waiting, nothing on their table yet.
     public static bool Waiting(NpcFsm npc) =>
@@ -183,4 +223,7 @@ public static class Orders
     #endregion
 
     public static string Label(string ingredient) => ingredient == "burger" ? "patty" : ingredient;
+
+    // As a line names one in hand ("Grab a potato!"): fries are a potato until they have been fried.
+    public static string Label(EdibleBase food) => food is Fries ? Fries.Label(food.Preparation) : Label(food.Name);
 }

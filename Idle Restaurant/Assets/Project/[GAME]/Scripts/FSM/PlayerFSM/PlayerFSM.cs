@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.Events;
@@ -36,10 +37,10 @@ public class PlayerFSM : MonoBehaviour
     #region Components
     private NavMeshAgent agent;
     public NavMeshAgent Agent{ get { return (agent == null) ? agent = GetComponent<UnityEngine.AI.NavMeshAgent>() : agent; } }
-    
+
     private ParticleSystem _particleSystem;
     public ParticleSystem ParticleSystem{ get { return (_particleSystem == null)? _particleSystem = GetComponentInChildren<ParticleSystem>(): _particleSystem;}}
-    
+
     #endregion
 
     ISpawnable spawnable;
@@ -57,7 +58,8 @@ public class PlayerFSM : MonoBehaviour
     private ServiceBase[] services;
     private Vector3 destination;
 
-    // Read by HighlightController (tap feedback and "where can this go" hints) and CarryWobble.
+    // Read by HighlightController (tap feedback and "where can this go" hints) and CarryWobble. The top of what he
+    // carries (Carried: everything, bottom first).
     public EdibleBase HeldFood => isHolded ? currentFood : null;
     public Transform Hand => holdParent.transform;
     public Component LastTapped { get; private set; }       // selectable the chef was last sent to
@@ -93,6 +95,10 @@ public class PlayerFSM : MonoBehaviour
         Agent.acceleration = Mathf.Max(Agent.acceleration, runAcceleration);
         ApplyPerks();
         LooseDust();
+        UITapQueue.Create(this);
+        stack = gameObject.AddComponent<CarryStack>();
+        var anyPlate = FindFirstObjectByType<Plate>();
+        stack.Init(this, holdParent.transform, anyPlate != null ? anyPlate.TopBunPrefab : null);
 
         executingState = ExecutingState.IDLE;
         currentState = playerIdleState;
@@ -144,8 +150,20 @@ public class PlayerFSM : MonoBehaviour
         fade.color = g;
     }
 
-    private void OnEnable() => CafeShop.Changed += OnCafeChanged;
-    private void OnDisable() => CafeShop.Changed -= OnCafeChanged;
+    private void OnEnable()
+    {
+        CafeShop.Changed += OnCafeChanged;
+        KitchenStations.Changed += OnStationsChanged;
+    }
+
+    private void OnDisable()
+    {
+        CafeShop.Changed -= OnCafeChanged;
+        KitchenStations.Changed -= OnStationsChanged;
+    }
+
+    // A station opened: the crates and cookers he can walk up to are looked for again.
+    private void OnStationsChanged() => OnCafeChanged(null);
 
     // A new table brings service points of its own; the coffee makes the chef quicker.
     private void OnCafeChanged(Upgrade upgrade)
@@ -154,6 +172,7 @@ public class PlayerFSM : MonoBehaviour
         reachSources = null;
         reachOvens = null;
         reachPans = null;
+        reachHeat = null;
         reachBoards = null;
         reachPlates = null;
         reachBins = null;
@@ -174,6 +193,9 @@ public class PlayerFSM : MonoBehaviour
         Steer();
         UseWhatHeWalksUpTo();
         currentState.UpdateState(this);
+        // Taps waiting while he stands idle with nothing under way (the last one came to nothing): on with the next.
+        if (queue.Count > 0 && !runningQueue && !Busy && executingState == ExecutingState.IDLE && currentState == playerIdleState && !IsStunned && !Steering)
+            StartCoroutine(RunNextQueued());
     }
 
     public void MovePlayer()
@@ -231,6 +253,8 @@ public class PlayerFSM : MonoBehaviour
 
     private void ForgetTarget()
     {
+        queue.Clear();
+        busyAt = null;
         spawnable = null;
         placeable = null;
         edible = null;
@@ -270,6 +294,7 @@ public class PlayerFSM : MonoBehaviour
     private IngredientsSource[] reachSources;
     private Oven[] reachOvens;
     private Pan[] reachPans;
+    private HeatStation[] reachHeat;
     private ChoppingBoard[] reachBoards;
     private Plate[] reachPlates;
     private Bin[] reachBins;
@@ -284,6 +309,7 @@ public class PlayerFSM : MonoBehaviour
         reachSources ??= FindObjectsByType<IngredientsSource>(FindObjectsSortMode.None);
         reachOvens ??= FindObjectsByType<Oven>(FindObjectsSortMode.None);
         reachPans ??= FindObjectsByType<Pan>(FindObjectsSortMode.None);
+        reachHeat ??= FindObjectsByType<HeatStation>(FindObjectsSortMode.None);
         reachBoards ??= FindObjectsByType<ChoppingBoard>(FindObjectsSortMode.None);
         reachPlates ??= FindObjectsByType<Plate>(FindObjectsSortMode.None);
         reachBins ??= FindObjectsByType<Bin>(FindObjectsSortMode.None);
@@ -325,6 +351,8 @@ public class PlayerFSM : MonoBehaviour
                 if (oven.Food is Bun bun && bun.Preparation != Prep.Raw) Consider(OvenBody(oven), bun.collider, ReachNear);
             foreach (var pan in reachPans)
                 if (pan.Food is Burger patty && patty.Preparation != Prep.Raw) Consider(pan, patty.collider, ReachNear);
+            foreach (var station in reachHeat)
+                if (station.Food is CookedBase cooked && cooked.Preparation != Prep.Raw) Consider(station, cooked.collider, ReachNear);
             foreach (var board in reachBoards)
                 if (board.Food is CuttableBase sliced && sliced.isSliced) Consider(board, sliced.collider, ReachNear);
             foreach (var plate in reachPlates)
@@ -348,6 +376,8 @@ public class PlayerFSM : MonoBehaviour
                 foreach (var oven in reachOvens) if (!oven.IsHaveFood()) Consider(OvenBody(oven), oven.GetComponent<Collider>(), ReachNear);
             if (held is Burger && raw)
                 foreach (var pan in reachPans) if (!pan.IsHaveFood()) Consider(pan, pan.GetComponent<Collider>(), ReachNear);
+            foreach (var station in reachHeat)
+                if (station.Accepts(held)) Consider(station, station.GetComponent<Collider>(), ReachNear);
             if (held is CuttableBase cut && !cut.isSliced)
                 foreach (var board in reachBoards) if (!board.IsHaveFood()) Consider(board, board.GetComponent<Collider>(), ReachNear);
             foreach (var plate in reachPlates) if (plate.Accepts(held)) Consider(plate, plate.GetComponent<Collider>(), ReachNear);
@@ -442,10 +472,25 @@ public class PlayerFSM : MonoBehaviour
 
     public void HandleScreenTap(Vector3 screenPosition)
     {
+        TapFeedback.On(screenPosition, this);   // whatever the tap does next, what it landed on answers
         if (IsStunned) return;
         // The first lesson only takes taps on what its arrow points at (and aims them at it).
         if (!Tutorial.AcceptsTap(screenPosition, out var aim)) return;
         screenPosition = aim;
+        // The lesson's planned burger says exactly which thing the tap was for (Tutorial.Planning).
+        if (Tutorial.TakePlannedTap(out var planned))
+        {
+            if (TapWaits) { Add(planned); return; }
+            queue.Clear();
+            busyAt = null;
+            EventManager.OnClick.Invoke();   // (Run itself is quiet: a waiting tap clicked when it was made)
+            Run(planned);
+            return;
+        }
+        // On his way to something already: the tap waits its turn (or, on bare floor, calls everything off).
+        if (TapWaits && Enqueue(screenPosition)) return;
+        queue.Clear();
+        busyAt = null;
 
         ray = _playerCam.ScreenPointToRay(screenPosition);
         bool hitSomething = Physics.Raycast(ray, out RaycastHit tapHit, 100);
@@ -519,7 +564,9 @@ public class PlayerFSM : MonoBehaviour
     private bool TryCustomerAt(Vector3 screenPosition)
     {
         if (!isHolded || currentFood == null) return false;
-        bool serving = currentFood is Hamburger;
+        // Two things or more in his hands are a burger (CarriesBurger): it is served. One is thrown - and so are the
+        // fries to whoever ordered them.
+        bool serving = CarriesBurger;
 
         NpcFsm picked = null;
         ServiceBase target = null;
@@ -529,13 +576,14 @@ public class PlayerFSM : MonoBehaviour
             var state = npc.executingNpcState;
             if (npc.chair == null) continue;
             ServiceBase service = null;
-            if (serving)
+            bool theirFries = npc.FriesDue && Carries(f => f is Fries && f.Preparation == Prep.Good);
+            if (serving && !theirFries)
             {
                 if (state != ExecutingNpcState.COME && state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT) continue;
                 service = npc.chair.GetTableService() as ServiceBase;
-                if (service == null || !service.IsSuitable(currentFood)) continue;
+                if (service == null || !CanServe(service)) continue;
             }
-            else if (state != ExecutingNpcState.WAIT) continue;
+            else if (state != ExecutingNpcState.WAIT && !(npc.FriesDue && Carries(f => f is Fries))) continue;
 
             Vector3 onScreen = _playerCam.WorldToScreenPoint(npc.transform.position + Vector3.up);
             float distanceOnScreen = Vector2.Distance(onScreen, screenPosition);
@@ -548,7 +596,7 @@ public class PlayerFSM : MonoBehaviour
         }
         if (picked == null) return false;
 
-        if (!serving)
+        if (target == null)
         {
             // Not in the first lesson: a new player "giving the tomato to the customer" got one back in the face.
             if (Tutorial.Running)
@@ -706,11 +754,12 @@ public class PlayerFSM : MonoBehaviour
     // Throw whatever is in hand to a seated customer; the chef doesn't walk there.
     private void ThrowAt(NpcFsm npc)
     {
+        // Their fries, if he has some in his stack; otherwise the top one.
+        if (npc.FriesDue && Carried.FirstOrDefault(f => f is Fries && f.Preparation == Prep.Good) is EdibleBase fries) BringToTop(fries);
         var food = currentFood;
-        currentFood = null;
-        isHolded = false;
         walkTarget = null;
         EventManager.OnFoodDropped.Invoke();
+        PopTop();
 
         var toward = npc.transform.position - transform.position;
         toward.y = 0f;
@@ -850,24 +899,477 @@ public class PlayerFSM : MonoBehaviour
     public void Interact()
     {
         walkTarget = null;
+        // An oven, a pan, the griddle, the fryer or the board: everything to do there in one visit (UseStation). Steering
+        // by hand keeps the old one-thing use, and never takes anything half done.
+        var station = StationTapped();
+        if (station != null)
+        {
+            if (!Steering)
+            {
+                StartCoroutine(UseStation(station));
+                return;
+            }
+            if (edible != null && StillPreparing(edible)) return;
+        }
         GetFoodFromSource();
         GetFood();
         PlaceFood();
         TrashEdible();
         RotateToSelectable();
+        if (queue.Count > 0 && !runningQueue) StartCoroutine(RunNextQueued());
     }
+
+    #region Tap queue
+    // Taps made while he is on his way to something wait their turn (user, 2026-10-28, from the report: the walk made
+    // every order slow; "Diner Dash"-style, the player taps the next two or three things and he does them in order).
+    // Each tap is kept as what was under the finger - a thing, a customer, a point - and worked out only when its turn
+    // comes, with what he holds THEN: tap the finished burger, then its customer, and he takes it to them. A tap on bare
+    // floor calls the rest off and walks there; steering by hand calls it off too. Small numbers over the waiting
+    // targets show the order (UITapQueue). Not in the first lesson, which takes one tap at a time - except the burger
+    // it plans in one go (Tutorial.Planning).
+    // A whole burger is one session of taps (user, 2026-10-30): crate, oven, crate, pan, ..., plate, customer - up to
+    // MaxQueued waiting at once (it was 3); "take it" on something still cooking waits by it until it is ready
+    // (WaitForReady); a station or plate tapped while his hands were empty still counts (Enqueue); and the same plate
+    // tapped twice in a row is two steps (the patty onto it, then "done!"), only a double tap is one.
+    public const int MaxQueued = 16;
+
+    public struct QueuedTap
+    {
+        public Collider Thing;     // as hit (a TapProxy is resolved when its turn comes)
+        public NpcFsm Customer;    // or a customer (to serve or throw to)
+        public Vector3 Point;
+    }
+
+    private readonly List<QueuedTap> queue = new();
+    private bool runningQueue;
+    private float lastQueuedAt;
+    public IReadOnlyList<QueuedTap> Queued => queue;
+
+    // Nothing under way and nothing waiting (the lesson's planned burger checks its taps against what he did). In the
+    // idle STATE, not just stopped: he stops one frame and uses the thing he walked to the next (PlayerIdleState).
+    public bool Idle => !Busy && queue.Count == 0 && !runningQueue && executingState == ExecutingState.IDLE && currentState == playerIdleState;
+
+    // On his way to something (the tapping-ahead tip, Tutorial) and how far he still has to go.
+    public bool OnItsWay => Busy;
+    public float WalkLeft => Agent.hasPath && !Agent.pathPending ? Agent.remainingDistance : 0f;
+
+    private static bool Queues => !Tutorial.Running || Tutorial.Planning;
+
+    // On the way to something to use or someone to serve (not just walking to a spot on the floor), or working at a
+    // station (UseStation).
+    private bool Busy => Queues && !Steering && (busyAt != null
+        || executingState == ExecutingState.RUN && (approachTarget != null || selectable != null));
+
+    // A new tap waits its turn: he is busy, or about to start the next waiting tap (in the frames between one use and
+    // the next a tap used to call the whole queue off).
+    private bool TapWaits => Busy || Queues && !Steering && (queue.Count > 0 || runningQueue);
+
+    // True when the tap was taken by the queue (queued, or ignored because it is full or the same as the last one).
+    private bool Enqueue(Vector3 screenPosition)
+    {
+        var tap = new QueuedTap();
+        // What the finger is on, as it will be when its turn comes. Stations and plates switch their colliders off
+        // while his hands are empty (taps go to the food on them then), so a plate tapped while he walked to a crate
+        // was missed - taken for bare floor, which called the whole queue off. Here they all count.
+        WakePlaceables(true);
+        try
+        {
+            ray = _playerCam.ScreenPointToRay(screenPosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 100) && Usable(hit.collider)) { tap.Thing = hit.collider; tap.Point = hit.point; }
+            else if ((tap.Customer = CustomerNear(screenPosition)) != null) tap.Point = tap.Customer.transform.position;
+            else
+            {
+                var near = NearestInteractive(screenPosition);
+                if (near == null) return false;   // bare floor: not queued (the caller walks there, dropping the queue)
+                tap.Thing = near;
+                tap.Point = near.bounds.center;
+            }
+        }
+        finally { WakePlaceables(false); }
+        Add(tap);
+        return true;
+    }
+
+    // Onto the end of the line - unless it is full. Every tap counts, the same thing twice too (two buns from the crate,
+    // the plate and the plate again for "done!"): only one that comes in the same instant as the last (a touch screen
+    // reporting one finger twice) is dropped.
+    private void Add(QueuedTap tap)
+    {
+        if (queue.Count >= MaxQueued) return;
+        if (queue.Count > 0 && Time.unscaledTime - lastQueuedAt < 0.06f)
+        {
+            var last = queue[queue.Count - 1];
+            if (last.Thing == tap.Thing && last.Customer == tap.Customer) return;
+        }
+        queue.Add(tap);
+        lastQueuedAt = Time.unscaledTime;
+        EventManager.OnClick.Invoke();
+    }
+
+    private static readonly List<Collider> woken = new();
+
+    private static void WakePlaceables(bool on)
+    {
+        if (!on)
+        {
+            foreach (var col in woken) if (col != null) col.enabled = false;
+            woken.Clear();
+            return;
+        }
+        foreach (var place in FindObjectsByType<PlaceableBase>(FindObjectsSortMode.None))
+        {
+            var col = place.GetComponent<Collider>();
+            if (col != null && !col.enabled && place.gameObject.activeInHierarchy) { col.enabled = true; woken.Add(col); }
+        }
+    }
+
+    // With empty hands, a station or a plate (tapped while it was empty, or for later) means what is on it now: the bun
+    // in the oven, the patty on the pan, the chopped cheese, the finished burger.
+    private Collider OnIt(Collider col)
+    {
+        if (col == null || isHolded) return col;
+        Component on = col.GetComponent<NonStackBase>() is NonStackBase station && station.Food != null ? station.Food
+                     : col.GetComponent<Plate>() is Plate plate && plate.FinishedBurger != null ? plate.FinishedBurger : null;
+        var its = on != null ? on.GetComponent<Collider>() : null;
+        return its != null ? its : col;
+    }
+
+    // Still baking, frying (raw on its cooker) or being chopped.
+    private static bool StillPreparing(EdibleBase food) =>
+        food.Placeable is CookingBase && food.Preparation == Prep.Raw
+        || food.Placeable is ChoppingBoard && food is CuttableBase { isSliced: false };
+    #endregion
+
+    #region Carrying a stack
+    // He carries a stack (user, 2026-10-30: "while we tap one thing after another he runs round collecting the
+    // ingredients; tap the oven and the bun in his stack goes in; tap the board and he chops the veg he carries" - the
+    // way the arcade cooking games do it; one thing at a time made every burger a walk back and forth). Up to MaxCarry
+    // things, the last one taken on top (HeldFood); a finished burger is carried alone.
+    //   crate      - one more on the stack;
+    //   a cooker   - what is ready on it is taken (he waits for it if it is still cooking), then the first raw thing it
+    //                cooks goes in (UseStation);
+    //   the board  - everything whole he carries is chopped there, one after another, and back on the stack;
+    //   a plate    - the whole stack goes on it, bun first; with empty hands it is "done!" as before;
+    //   the bin    - burnt things if he carries any, else the top one;
+    //   a customer - a burger is served; anything else thrown is the top one (their fries, if he has some).
+    public const int MaxCarry = 12;   // (was 6, like a plate's six layers; user, 2026-10-30: "drop the 6-layer limit")
+    private readonly List<EdibleBase> under = new();   // below the top, bottom first
+    private readonly List<EdibleBase> carried = new();
+    private NonStackBase busyAt;                       // working at a station (UseStation)
+    private CarryStack stack;                          // how it moves
+
+    public IReadOnlyList<EdibleBase> Carried
+    {
+        get
+        {
+            carried.Clear();
+            if (!isHolded || currentFood == null) return carried;
+            carried.AddRange(under);
+            carried.Add(currentFood);
+            return carried;
+        }
+    }
+
+    public bool Carries(System.Func<EdibleBase, bool> what) => Carried.Any(what);
+
+    // A burger in his hands: a finished one, or two or more things in his stack (fries aside, they are a side) - user,
+    // 2026-10-30: "no plate needed to make a burger: more than one thing in his hands is a burger, and more can go on
+    // as you like; one thing is thrown". Served by tapping its customer: it becomes a burger on their table
+    // (AssembleAt), the bun at the bottom, its top on top, exactly as a plate makes it.
+    public bool CarriesBurger => isHolded && (currentFood is Hamburger || BurgerParts() >= 2);
+
+    private int BurgerParts()
+    {
+        int n = 0;
+        foreach (var f in Carried) if (f != null && f is not Fries && f is not Hamburger) n++;
+        return n;
+    }
+
+    // A customer's table that can take his burger.
+    private bool CanServe(ServiceBase table) => !table.IsHaveFood() && CarriesBurger;
+
+    // Something in his stack to leave on this plate (a plate is a place to put things down now).
+    private bool CarriesSomethingFor(Plate plate) => Carried.Any(f => f != null && f is not Hamburger && plate.Accepts(f));
+
+    // Everything on a plate back into his hands, top first.
+    private void TakeFromPlate(Plate plate)
+    {
+        int guard = 0;
+        while (plate.Top is EdibleBase top && CanTakeMore && guard++ < 16)
+        {
+            top.isLastPiece = true;
+            PickUpObject(top);
+            if (plate.Top == top) break;
+        }
+    }
+
+    // The burger made from his stack on the customer's table (a hidden plate puts it together: the bun at the bottom,
+    // the top bun on top, the layers and their review exactly as a plate's burger).
+    private Plate assembler;
+
+    private bool AssembleAt(ServiceBase table)
+    {
+        var parts = Carried.Where(f => f != null && f is not Fries && f is not Hamburger).ToList();
+        if (parts.Count < 2 || table.IsHaveFood()) return false;
+        if (assembler == null)
+        {
+            var model = FindFirstObjectByType<Plate>();
+            if (model == null) return false;
+            var go = Instantiate(model.gameObject);
+            go.name = "Burger Assembler";
+            go.SetActive(false);
+            foreach (var r in go.GetComponents<Renderer>()) r.enabled = false;
+            foreach (var c in go.GetComponents<Collider>()) c.enabled = false;
+            assembler = go.GetComponent<Plate>();
+            assembler.Start();
+        }
+        assembler.transform.SetPositionAndRotation(table.Slot.position, Quaternion.identity);
+        assembler.gameObject.SetActive(true);
+        foreach (var food in parts)
+        {
+            BringToTop(food);
+            assembler.UseFood(food);
+            EventManager.OnFoodDropped.Invoke();
+            PopTop();
+        }
+        assembler.Close();
+        var burger = assembler.FinishedBurger;
+        if (burger != null)
+        {
+            NpcFsm theirs = null;
+            foreach (var npc in NpcFsm.Active)
+                if (npc.chair != null && (Object)npc.chair.GetTableService() == table) theirs = npc;
+            if (theirs != null) burger.ForCustomer = theirs;
+            burger.isLastPiece = true;
+            burger.untouchable = false;
+            burger.RemoveFromList();
+            table.UseFood(burger);
+            GameSfx.Play(GameSfx.Cue.Dish);
+            TapJuice.Boing(table.transform, 0.07f);
+        }
+        assembler.gameObject.SetActive(false);
+        return burger != null;
+    }
+
+    // Room for one more (nothing goes on a burger he carries, and a burger only into empty hands).
+    public bool CanTakeMore => !isHolded || currentFood is not Hamburger && under.Count + 1 < MaxCarry;
+
+    // `food` is the new top: what was on top goes under it. It flies there from `from` (a crate, a station).
+    private void Push(EdibleBase food, Vector3 from)
+    {
+        if (isHolded && currentFood != null && currentFood != food) under.Add(currentFood);
+        currentFood = food;
+        isHolded = true;
+        Restack();
+        if (stack != null) stack.Arrive(food, from);
+    }
+
+    // The top has just been put somewhere: the next one down is the top now.
+    private void PopTop()
+    {
+        if (under.Count > 0)
+        {
+            currentFood = under[under.Count - 1];
+            under.RemoveAt(under.Count - 1);
+            isHolded = true;
+            EventManager.OnFoodHolded.Invoke();   // (placeables switched their colliders off as it was put down)
+        }
+        else
+        {
+            currentFood = null;
+            isHolded = false;
+        }
+        Restack();
+    }
+
+    private void BringToTop(EdibleBase food)
+    {
+        if (food == null || food == currentFood || !under.Remove(food)) return;
+        under.Add(currentFood);
+        currentFood = food;
+    }
+
+    // One on another in his hands, bottom first (CarryStack moves them there). A burger in his hands (two things or
+    // more) has its bun at the bottom, cut like a plate's bottom bun, and its top on top - whenever the bun came.
+    private readonly List<EdibleBase> shown = new();
+
+    private void Restack()
+    {
+        var hand = holdParent.transform;
+        shown.Clear();
+        foreach (var food in Carried)
+        {
+            if (food == null) continue;
+            if (food.transform.parent != hand) food.transform.SetParent(hand, true);
+            shown.Add(food);
+        }
+        Bun bottom = null;
+        if (currentFood is not Hamburger && BurgerParts() >= 2)
+            foreach (var food in shown) if (food is Bun bun) { bottom = bun; break; }
+        foreach (var food in shown) if (food is Bun bun) bun.LookSliced(bun == bottom);
+        if (bottom != null)
+        {
+            shown.Remove(bottom);
+            shown.Insert(0, bottom);
+        }
+        if (stack != null) stack.Layout(shown, bottom != null);
+    }
+
+    // What a station takes from his stack: raw buns for the oven, raw patties for the pan, raw bacon / potatoes for the
+    // griddle and the fryer, whole veg and cheese for the board.
+    private static bool Goes(EdibleBase food, NonStackBase station) => station switch
+    {
+        Oven => food is Bun && food.Preparation == Prep.Raw,
+        Pan => food is Burger && food.Preparation == Prep.Raw,
+        HeatStation heat => heat.Takes(food) && food.Preparation == Prep.Raw,
+        ChoppingBoard => food is CuttableBase { isSliced: false },
+        _ => false,
+    };
+
+    private EdibleBase FirstFor(NonStackBase station) => Carried.FirstOrDefault(f => f != null && Goes(f, station));
+
+    // The station a tap was for: the utensil itself or the food on it.
+    private NonStackBase StationTapped()
+    {
+        var station = placeable as NonStackBase;
+        if (station == null && edible != null) station = edible.Placeable as NonStackBase;
+        return station is CookingBase || station is ChoppingBoard ? station : null;
+    }
+
+    // One visit to a station: take what is ready on it (waiting for it if it is still cooking and he came for it), put
+    // in the first raw thing it cooks; at the board, chop everything whole he carries and keep it.
+    private IEnumerator UseStation(NonStackBase station)
+    {
+        busyAt = station;
+        RotateToSelectable();
+        var on = station.Food;
+        if (on != null)
+        {
+            float giveUp = Time.time + 40f;
+            while (busyAt == station && station.Food == on && StillPreparing(on) && Time.time < giveUp)
+            {
+                RotateToSelectable();
+                yield return null;
+            }
+            if (busyAt != station) yield break;   // called off: another tap, steering
+            if (station.Food == on && !StillPreparing(on) && CanTakeMore && !on.untouchable)
+            {
+                on.isLastPiece = true;
+                PickUpObject(on);
+                yield return null;
+            }
+        }
+        while (busyAt == station && !station.IsHaveFood() && FirstFor(station) is EdibleBase raw)
+        {
+            if (raw is Bun whole) whole.LookSliced(false);   // (the bottom of a burger in his hands goes in whole)
+            BringToTop(raw);
+            DropObject(station);
+            if (station is not ChoppingBoard) break;
+            float giveUp = Time.time + 10f;
+            while (busyAt == station && station.Food == raw && StillPreparing(raw) && Time.time < giveUp) yield return null;
+            if (busyAt != station) yield break;
+            if (station.Food != raw || StillPreparing(raw)) break;
+            raw.isLastPiece = true;
+            PickUpObject(raw);
+            yield return null;
+        }
+        if (busyAt != station) yield break;
+        busyAt = null;
+        if (queue.Count > 0 && !runningQueue) StartCoroutine(RunNextQueued());
+    }
+
+    // Interactive with either empty or full hands (what it will be used with is only known when its turn comes).
+    private static bool Usable(Collider col)
+    {
+        var proxy = col.GetComponent<TapProxy>();
+        if (proxy == null) return IsInteractive(col);
+        var empty = proxy.Resolve(false);
+        var full = proxy.Resolve(true);
+        return empty != null && IsInteractive(empty) || full != null && IsInteractive(full);
+    }
+
+    private NpcFsm CustomerNear(Vector3 screenPosition)
+    {
+        NpcFsm picked = null;
+        float nearest = Screen.height * customerTapRadius;
+        foreach (var npc in NpcFsm.Active)
+        {
+            var state = npc.executingNpcState;
+            if (npc.chair == null || state != ExecutingNpcState.COME && state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT
+                && !npc.FriesDue) continue;
+            float d = Vector2.Distance(_playerCam.WorldToScreenPoint(npc.transform.position + Vector3.up), screenPosition);
+            if (d < nearest) { nearest = d; picked = npc; }
+        }
+        return picked;
+    }
+
+    private IEnumerator RunNextQueued()
+    {
+        runningQueue = true;
+        // Two frames: a burger closed by the last use is picked up a frame later (PickUpNextFrame).
+        yield return null;
+        yield return null;
+        runningQueue = false;
+        while (queue.Count > 0 && !Busy && !IsStunned && !Steering)
+        {
+            var tap = queue[0];
+            queue.RemoveAt(0);
+            if (Run(tap)) yield break;   // on his way (or done at once: Interact starts the next)
+        }
+    }
+
+    // Carries out a waiting tap with what he holds now; false if there is nothing to do with it any more.
+    private bool Run(QueuedTap tap)
+    {
+        if (tap.Customer != null)
+        {
+            if (!tap.Customer.isActiveAndEnabled || !isHolded || currentFood == null) return false;
+            var state = tap.Customer.executingNpcState;
+            bool theirFries = tap.Customer.FriesDue && Carries(f => f is Fries && f.Preparation == Prep.Good);
+            if (CarriesBurger && !theirFries)
+            {
+                if (state != ExecutingNpcState.COME && state != ExecutingNpcState.ORDER && state != ExecutingNpcState.WAIT) return false;
+                if (tap.Customer.chair?.GetTableService() is not ServiceBase service || !CanServe(service)) return false;
+                spawnable = null;
+                edible = null;
+                bin = null;
+                placeable = service;
+                selectable = service;
+                approachTarget = service;
+                destination = service.transform.position;
+                quietSelect = true;
+                try { GoToTarget(); } finally { quietSelect = false; }
+                return true;
+            }
+            if (state != ExecutingNpcState.WAIT && !(tap.Customer.FriesDue && Carries(f => f is Fries)) || Tutorial.Running) return false;
+            ThrowAt(tap.Customer);
+            return false;   // thrown from where he stands: on to the next
+        }
+        if (tap.Thing == null || !tap.Thing.gameObject.activeInHierarchy) return false;
+        var col = OnIt(ResolveTap(tap.Thing));
+        if (col == null || !IsInteractive(col)) return false;
+        GatherInteractableComponents(col, tap.Point);
+        SnapToNearbyService();
+        PreferWaitingCustomer();
+        quietSelect = true;
+        try { GoToTarget(); } finally { quietSelect = false; }
+        return true;
+    }
+    #endregion
 
     public void GetFoodFromSource()
     {
         if(spawnable != null)
         {
-            if (isHolded)   return;
+            if (!CanTakeMore) { GameSfx.Play(GameSfx.Cue.Bonk); return; }
 
             spawnable?.Spawn();
             EventManager.OnFoodHolded.Invoke();
-            currentFood = holdParent.transform.GetChild(holdParent.transform.childCount - 1) ? 
+            var spawned = holdParent.transform.GetChild(holdParent.transform.childCount - 1) ?
                 holdParent.transform.GetChild(holdParent.transform.childCount - 1).gameObject.GetComponent<EdibleBase>(): null;
-            isHolded = true;
+            var crate = spawnable as Component;
+            if (spawned != null) Push(spawned, crate != null ? crate.transform.position + Vector3.up * 0.3f : holdParent.transform.position);
+            if (crate != null) TapJuice.Boing(crate.transform, 0.1f);   // the crate gives one up
         }
     }
     public void GetFood()
@@ -881,7 +1383,11 @@ public class PlayerFSM : MonoBehaviour
     {
         if (placeable != null)
         {
-            if (!isHolded && placeable is Plate plate) { CloseBurger(plate); return; }
+            if (placeable is Plate plate && plate.Top != null && !(isHolded && currentFood is Hamburger) && (!isHolded || !CarriesSomethingFor(plate)))
+            {
+                TakeFromPlate(plate);
+                return;
+            }
             DropObject(placeable);
         }
     }
@@ -905,46 +1411,79 @@ public class PlayerFSM : MonoBehaviour
         PickUpObject(burger);
     }
 
-    void PickUpObject(EdibleBase ingredient) 
+    void PickUpObject(EdibleBase ingredient)
     {
-        if (isHolded)   return;
-        if(ingredient.untouchable)  return;
+        if (ingredient == null || ingredient.untouchable || !ingredient.isLastPiece) return;
+        // Onto his stack; a finished burger only into empty hands.
+        if (isHolded && (!CanTakeMore || ingredient is Hamburger)) return;
 
-        currentFood = ingredient;
-
-        if(currentFood == null || !ingredient.isLastPiece) return;
-
+        var from = ingredient.transform.position;
         ingredient.RemoveFromList();
         EventManager.OnFoodHolded.Invoke();
 
-        currentFood.transform.parent = holdParent.transform;
-        currentFood.transform.localRotation = Quaternion.identity;
-        currentFood.transform.position = holdParent.transform.position;
+        ingredient.transform.parent = holdParent.transform;
+        ingredient.transform.localRotation = Quaternion.identity;
+        ingredient.transform.position = holdParent.transform.position;
 
-        isHolded = true;
-
-        //Debug.Log("name: " + currentFood.gameObject.name);
+        Push(ingredient, from);
     }
     void DropObject(PlaceableBase place)
     {
-        if(isHolded)
+        if (!isHolded || currentFood == null || place == null) return;
+        // His stack onto a customer's table: a burger.
+        if (place is ServiceBase table && currentFood is not Hamburger)
         {
-            if(currentFood == null) return;
-
-            place?.UseFood(currentFood);
-            if(!place.IsSuitable(currentFood)) return;
-            EventManager.OnFoodDropped.Invoke();
-            GameSfx.Play(GameSfx.Cue.PutDown);
-
-            currentFood = null;
-
-            isHolded = false;
+            AssembleAt(table);
+            return;
         }
+        // A plate takes the whole stack, bottom first (the first bun goes to the bottom of the burger itself).
+        if (place is Plate plate && currentFood is not Hamburger)
+        {
+            bool any = false;
+            foreach (var food in Carried.ToList())
+            {
+                if (food == null || food is Hamburger || !plate.Accepts(food)) continue;
+                BringToTop(food);
+                plate.UseFood(food);
+                EventManager.OnFoodDropped.Invoke();
+                PopTop();
+                if (stack != null) stack.Landed(food);
+                any = true;
+            }
+            if (any)
+            {
+                GameSfx.Play(GameSfx.Cue.Dish);
+                TapJuice.Boing(plate.transform, 0.08f);
+                // What is put down on a plate is a burger at once (user, 2026-10-30): Mochi, if he is in the cafe,
+                // runs it out to its customer; otherwise it waits there for the chef.
+                plate.Close();
+            }
+            return;
+        }
+        // A station takes what it cooks from anywhere in the stack (UseStation picks it).
+        // (Unless the top is already one it takes: UseStation chose it.)
+        if (place is NonStackBase station && (station is CookingBase || station is ChoppingBoard) && !Goes(currentFood, station)
+            && FirstFor(station) is EdibleBase raw)
+            BringToTop(raw);
+
+        place.UseFood(currentFood);
+        if(!place.IsSuitable(currentFood)) return;
+        EventManager.OnFoodDropped.Invoke();
+        // a burger onto a customer's table: the china clinks
+        GameSfx.Play(place is Plate || place is TableService ? GameSfx.Cue.Dish : GameSfx.Cue.PutDown);
+        var put = currentFood;
+        PopTop();
+        if (stack != null) stack.Landed(put);
+        TapJuice.Boing(place.transform, 0.07f);
     }
-    
+
+    // The click of a tap - once: a waiting tap clicked when it was made (Add), not again when its turn comes (user,
+    // 2026-10-30: "extra click sounds in the onboarding").
+    private bool quietSelect;
+
     private void SelectObject()
     {
-        if(selectable != null)
+        if (selectable != null && !quietSelect)
         {
             EventManager.OnClick.Invoke();
         }
@@ -957,10 +1496,17 @@ public class PlayerFSM : MonoBehaviour
             if (isHolded)
             {
                 if (currentFood == null) return;
-                bin.Junk(currentFood);
+                // Burnt things if he carries any (all of them), otherwise the top one.
+                var burnt = Carried.Where(f => f != null && f.Preparation == Prep.Burnt).ToList();
+                if (burnt.Count == 0) burnt.Add(currentFood);
+                foreach (var food in burnt)
+                {
+                    BringToTop(food);
+                    bin.Junk(currentFood);
+                    PopTop();
+                }
                 GameSfx.Play(GameSfx.Cue.Trash);
-                currentFood = null;
-                isHolded = false;
+                TapJuice.Boing(bin.transform, 0.2f);
             }
         }
     }
@@ -979,7 +1525,7 @@ public class PlayerFSM : MonoBehaviour
         }
     }
 
-    private void UpdateStoppingDistance()  
+    private void UpdateStoppingDistance()
     {
         if (approachTarget != null)
             Agent.stoppingDistance = 0f;   // he walks to a spot beside it (FindApproach)
@@ -989,7 +1535,7 @@ public class PlayerFSM : MonoBehaviour
             {
                 Agent.stoppingDistance = 1.34f;
             }
-            else 
+            else
                 Agent.stoppingDistance = 0f;
         }
         else
@@ -1007,7 +1553,7 @@ public class PlayerFSM : MonoBehaviour
             lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0f, direction.z));
             Agent.transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * rotationSpeed);
         }
-        
+
     }
 
     public void SwitchState(PlayerStates nextState)

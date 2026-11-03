@@ -124,7 +124,7 @@ public static class GamePlatform
     #endregion
 
     #region Gameplay events
-    private static bool playing;
+    private static bool playing, reportedFirst;
 
     // A shift is running and nothing is covering it (called on start and on every resume).
     public static void GameplayStart()
@@ -132,6 +132,7 @@ public static class GamePlatform
         if (playing || !OnCrazyGames) return;
         playing = true;
         CrazySDK.Game.GameplayStart();
+        if (!reportedFirst) { reportedFirst = true; Boot.Mark("gameplayStart sent"); }
     }
 
     // A break: the result card, the shop, the help card.

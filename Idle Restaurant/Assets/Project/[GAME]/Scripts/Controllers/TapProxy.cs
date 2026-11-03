@@ -20,6 +20,8 @@ public class TapProxy : MonoBehaviour
     public Collider Resolve(bool handsFull)
     {
         if (!handsFull) return target.Food != null ? target.Food.GetComponent<Collider>() : null;
-        return target.IsHaveFood() ? null : target.GetComponent<Collider>();
+        // With things in his hands it is the station all the same: what is on it is taken, and what it cooks from his
+        // stack goes in (PlayerFSM.UseStation).
+        return target.Food != null ? target.Food.GetComponent<Collider>() : target.GetComponent<Collider>();
     }
 }

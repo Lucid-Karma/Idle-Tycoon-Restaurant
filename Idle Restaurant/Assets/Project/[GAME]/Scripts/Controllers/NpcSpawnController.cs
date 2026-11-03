@@ -48,25 +48,36 @@ public class NpcSpawnController : MonoBehaviour
 
     void Start()
     {
-        for (int i = 0; i < npcPrefabs.Length; i++)
-        {
-            for (int j = 0; j < amountToPool; j++)
-            {
-                GameObject obj = (GameObject)Instantiate(npcPrefabs[i]);
-                obj.SetActive(false);
-                _npcList.Add(obj);
-            }
-        }
-        
         // Every extra table bought fills one more seat at a time (and adds a customer to the shift).
         levelCustomerCount = 3 + CafeShop.ExtraCustomers;
     }
 
-    // A free customer of a kind the cafe is known to (adventurers start coming at higher cafe levels).
+    // A free customer of a kind the cafe is known to (adventurers start coming at higher cafe levels). The pool is
+    // filled as customers are needed - up to amountToPool of each - not all eighteen at the scene's start, which took
+    // a good part of the load (2026-10-30: the game must open fast on phones). Picked exactly as before: at random
+    // among the free ones, counting those not made yet.
+    private readonly Dictionary<GameObject, int> made = new();
+
     private GameObject GetPooledNpc()
     {
         var free = _npcList.Where(x => !x.activeInHierarchy && Customers.IsUnlocked(x.GetComponent<NpcFsm>().Kind)).ToList();
-        return free.Count > 0 ? free[Random.Range(0, free.Count)] : null;
+        var notYet = new List<GameObject>();
+        foreach (var prefab in npcPrefabs)
+        {
+            if (prefab == null || !Customers.IsUnlocked(prefab.GetComponent<NpcFsm>().Kind)) continue;
+            made.TryGetValue(prefab, out int count);
+            for (int j = count; j < amountToPool; j++) notYet.Add(prefab);
+        }
+        int pick = Random.Range(0, free.Count + notYet.Count);
+        if (free.Count + notYet.Count == 0) return null;
+        if (pick < free.Count) return free[pick];
+        var chosen = notYet[pick - free.Count];
+        made.TryGetValue(chosen, out int already);
+        made[chosen] = already + 1;
+        var npc = Instantiate(chosen);
+        npc.SetActive(false);
+        _npcList.Add(npc);
+        return npc;
     }
 
     // Chairs of tables not bought yet are in the list but inactive.
@@ -107,7 +118,7 @@ public class NpcSpawnController : MonoBehaviour
                 npc.SetActive(true);
                 spawnedCount++;
             }
-            
+
         }
     }
 

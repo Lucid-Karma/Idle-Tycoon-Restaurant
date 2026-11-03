@@ -231,7 +231,7 @@ public class UIOrderTags : MonoBehaviour
     private static float Along(Vector3 p, bool vertical) => vertical ? p.y : p.x;
 
     // The HUD's cards and buttons, on screen.
-    private static readonly string[] HudCovers = { "CustomersCard", "GoalCard", "AudioControls", "HelpBTN", "Wallet", "GrandGoal", "ChefCard", "OrderCard", "OverviewBTN" };
+    private static readonly string[] HudCovers = { "CustomersCard", "GoalCard", "AudioControls", "HelpBTN", "Wallet", "GrandGoal", "ChefCard", "OrderCard", "OverviewBTN", "BookBTN" };
     private RectTransform[] hudCovers;
     private float hudFound;
     private readonly List<Rect> hudRects = new();

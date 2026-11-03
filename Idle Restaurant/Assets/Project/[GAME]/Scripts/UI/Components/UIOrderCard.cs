@@ -30,7 +30,7 @@ public class UIOrderCard : MonoBehaviour
     [SerializeField] private GameObject tileTemplate;
     [SerializeField] private UIOrderTicket layerSprites;   // fallback pictures (the order bubble's layer strips)
     // Each ingredient as it looks ready, rendered from the game's own models at the game camera's angle.
-    [SerializeField] private Sprite bunIcon, pattyIcon, cheeseIcon, lettuceIcon, tomatoIcon, onionIcon;
+    [SerializeField] private Sprite bunIcon, pattyIcon, cheeseIcon, lettuceIcon, tomatoIcon, onionIcon, baconIcon, friesIcon;
     [SerializeField] private Sprite check, warn, chop, burnt;   // on it / raw / whole / burnt
 
     private CanvasGroup group;
@@ -70,7 +70,8 @@ public class UIOrderCard : MonoBehaviour
         if (!visible) { shownKey = null; return; }
         badge.Size(BadgeSize);   // (runs its pop)
 
-        string key = order.Name + "|" + (who != null ? who.GetInstanceID() + "#" + who.Ticket : "0") + "|" + string.Join(",", layers.Select(l => l.name + (int)l.prep));
+        string key = order.Name + "|" + (who != null ? who.GetInstanceID() + "#" + who.Ticket + (who.WantsFries ? who.GotFries ? "F+" : "F-" : "") : "0")
+                     + "|" + string.Join(",", layers.Select(l => l.name + (int)l.prep));
         if (key == shownKey) return;
         if (shownKey != null && frosted != null) frosted.Flash();
         shownKey = key;
@@ -83,6 +84,25 @@ public class UIOrderCard : MonoBehaviour
         var player = FindChef();
         if (player != null && player.HeldFood is Hamburger burger && burger.ForCustomer != null && burger.ForCustomer.Ordered != null)
             return (burger.ForCustomer.Ordered, burger.ForCustomer, burger.Layers.Select(l => (l.Name, l.Prep)).ToList());
+
+        // A burger in his hands (his stack - no plate any more): the waiting order it is closest to.
+        if (player != null && player.HeldFood != null && player.HeldFood is not Hamburger)
+        {
+            var parts = player.Carried.Where(f => f != null && f is not Fries && f is not Hamburger).ToList();
+            if (parts.Count > 0)
+            {
+                var names = parts.Select(f => f.Name).ToList();
+                NpcFsm closest = null;
+                int fewest = int.MaxValue;
+                foreach (var npc in NpcFsm.Active)
+                {
+                    if (!Orders.Waiting(npc) || npc.Ordered == null) continue;
+                    int missing = Orders.Missing(npc.Ordered, names).Count;
+                    if (missing < fewest) { fewest = missing; closest = npc; }
+                }
+                if (closest != null) return (closest.Ordered, closest, parts.Select(f => (f.Name, f.Preparation)).ToList());
+            }
+        }
 
         Plate best = null;
         foreach (var plate in Orders.AllPlates)
@@ -111,6 +131,8 @@ public class UIOrderCard : MonoBehaviour
     {
         "bun" => "baked",
         "burger" => "cooked",
+        "bacon" => "crispy",
+        "fries" => "toss it",
         "lettuce" => "fresh",
         _ => "sliced",
     };
@@ -134,6 +156,8 @@ public class UIOrderCard : MonoBehaviour
             "lettuce" => lettuceIcon,
             "tomato" => tomatoIcon,
             "onion" => onionIcon,
+            "bacon" => baconIcon,
+            "fries" => friesIcon,
             _ => null,
         };
         if (icon != null) return icon;
@@ -172,6 +196,10 @@ public class UIOrderCard : MonoBehaviour
             AddTile(layer, got.HasValue, !got.HasValue ? null : problem ?? check,
                     problem == null ? UITokens.Colors.Teal : UITokens.Colors.Tomato);
         }
+
+        // Fries on the side: a tile of their own after the burger's, ticked once they have been tossed to them.
+        if (who != null && who.WantsFries)
+            AddTile("fries", who.GotFries, who.GotFries ? check : null, UITokens.Colors.Teal);
 
         // Extras are allowed: named in grey, never in red.
         var names = unused.Select(l => NameOf(l.name)).Distinct().ToList();

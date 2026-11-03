@@ -35,6 +35,7 @@ public class HighlightController : MonoBehaviour
     private Camera _camera;
     private PlayerFSM player;
     private Pan[] pans;
+    private HeatStation[] heat;
     private Oven[] ovens;
     private ChoppingBoard[] boards;
     private Plate[] plates;
@@ -57,6 +58,7 @@ public class HighlightController : MonoBehaviour
     private void FindUtensils()
     {
         pans = FindObjectsByType<Pan>(FindObjectsSortMode.None);
+        heat = FindObjectsByType<HeatStation>(FindObjectsSortMode.None);
         ovens = FindObjectsByType<Oven>(FindObjectsSortMode.None);
         boards = FindObjectsByType<ChoppingBoard>(FindObjectsSortMode.None);
         plates = FindObjectsByType<Plate>(FindObjectsSortMode.None);
@@ -64,6 +66,7 @@ public class HighlightController : MonoBehaviour
     }
 
     private void OnCafeChanged(Upgrade upgrade) => FindUtensils();
+    private void OnStationsChanged() => FindUtensils();
 
     private void OnDestroy()
     {
@@ -78,6 +81,7 @@ public class HighlightController : MonoBehaviour
     {
         EventManager.OnLevelStart.AddListener(OnShiftStart);
         CafeShop.Changed += OnCafeChanged;
+        KitchenStations.Changed += OnStationsChanged;
     }
 
     private void OnShiftStart() => inShift = true;
@@ -86,6 +90,7 @@ public class HighlightController : MonoBehaviour
     {
         EventManager.OnLevelStart.RemoveListener(OnShiftStart);
         CafeShop.Changed -= OnCafeChanged;
+        KitchenStations.Changed -= OnStationsChanged;
         foreach (var pair in applied) Restore(pair.Key);
         applied.Clear();
         originals.Clear();
@@ -184,33 +189,70 @@ public class HighlightController : MonoBehaviour
             return;
         }
 
-        if (held != null)
+        // His stack (PlayerFSM.Carried): where each thing in it goes next - raw ones to their cooker, whole ones to the
+        // board, fried fries to whoever ordered them (tap them to toss), the rest to the plate; and while there is room,
+        // whatever is ready to take on top.
+        var carried = player.Carried;
+        if (carried.Count > 0)
         {
-            if (held is Burger)
-                foreach (var pan in pans) if (!pan.IsHaveFood()) into.Add(pan);
-            if (held is Bun)
-                foreach (var oven in ovens) if (!oven.IsHaveFood()) into.Add(oven);
-            if (held is CuttableBase cuttable && !cuttable.isSliced)
-                foreach (var board in boards) if (!board.IsHaveFood()) into.Add(board);
-
-            // Keep building the burger in progress; otherwise any free plate.
-            int before = into.Count;
-            foreach (var plate in plates) if (plate.LayerCount > 0 && plate.Accepts(held)) into.Add(plate);
-            if (into.Count == before)
-                foreach (var plate in plates) if (plate.Accepts(held)) into.Add(plate);
+            EdibleBase forPlate = null;
+            foreach (var food in carried)
+            {
+                if (food == null) continue;
+                if (food is Fries)
+                {
+                    if (food.Preparation == Prep.Raw)
+                        foreach (var station in heat) if (station.Accepts(food)) into.Add(station);
+                    if (food.Preparation == Prep.Good)
+                        foreach (var npc in NpcFsm.Active) if (npc.FriesDue) into.Add(npc);
+                    continue;
+                }
+                forPlate ??= food;
+                if (food.Preparation == Prep.Raw)
+                    foreach (var station in heat) if (station.Accepts(food)) into.Add(station);
+                if (food is Burger && food.Preparation == Prep.Raw)
+                    foreach (var pan in pans) if (!pan.IsHaveFood()) into.Add(pan);
+                if (food is Bun && food.Preparation == Prep.Raw)
+                    foreach (var oven in ovens) if (!oven.IsHaveFood()) into.Add(oven);
+                if (food is CuttableBase cuttable && !cuttable.isSliced)
+                    foreach (var board in boards) if (!board.IsHaveFood()) into.Add(board);
+            }
+            // A burger in his hands (two things or more) that has everything someone ordered: them and their table
+            // (no plate any more - user, 2026-10-30).
+            if (forPlate != null && player.CarriesBurger)
+            {
+                names.Clear();
+                foreach (var food in carried) if (food != null && food is not Fries && food is not Hamburger) names.Add(food.Name);
+                foreach (var npc in NpcFsm.Active)
+                {
+                    if (!Orders.Waiting(npc) || npc.Ordered == null || Orders.Missing(npc.Ordered, names).Count > 0) continue;
+                    into.Add(npc);
+                    if (npc.chair?.GetTableService() is ServiceBase table) into.Add(table);
+                }
+            }
+            if (player.CanTakeMore) AddReady(into);
             return;
         }
 
         // Empty hands: whatever is ready to take (burnt counts too: it's blocking the pan).
-        foreach (var pan in pans) if (pan.Food is Burger patty && patty.Preparation != Prep.Raw) into.Add(patty);
-        foreach (var oven in ovens) if (oven.Food is Bun bun && bun.Preparation != Prep.Raw) { into.Add(bun); into.Add(oven); }
-        foreach (var board in boards) if (board.Food is CuttableBase sliced && sliced.isSliced) into.Add(sliced);
+        AddReady(into);
         foreach (var plate in plates) if (plate.FinishedBurger != null) into.Add(plate.FinishedBurger);
         // Everything an order needs is on it: tap it to finish the burger (adding more is the player's choice).
         foreach (var plate in plates) if (plate.CoversAnOrder) into.Add(plate);
 
         if (into.Count == 0)
             foreach (var source in sources) into.Add(source);
+    }
+
+    private readonly List<string> names = new();
+
+    // Cooked, baked, chopped - or burnt (it's blocking the pan) - and waiting to be taken.
+    private void AddReady(List<Component> into)
+    {
+        foreach (var pan in pans) if (pan.Food is Burger patty && patty.Preparation != Prep.Raw) into.Add(patty);
+        foreach (var station in heat) if (station.Food is CookedBase cooked && cooked.Preparation != Prep.Raw) into.Add(cooked);
+        foreach (var oven in ovens) if (oven.Food is Bun bun && bun.Preparation != Prep.Raw) { into.Add(bun); into.Add(oven); }
+        foreach (var board in boards) if (board.Food is CuttableBase sliced && sliced.isSliced) into.Add(sliced);
     }
     #endregion
 
@@ -231,7 +273,7 @@ public class HighlightController : MonoBehaviour
         if (node != root && !includeNested && node.GetComponent<ISelectable>() != null) return;
 
         var renderer = node.GetComponent<Renderer>();
-        if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer)
+        if ((renderer is MeshRenderer || renderer is SkinnedMeshRenderer) && !SeasonalGhost.KeepsOwnLook(node))
         {
             if (!wanted.TryGetValue(renderer, out var current) || current < look) wanted[renderer] = look;
         }
@@ -265,11 +307,22 @@ public class HighlightController : MonoBehaviour
                 continue;
             }
             var solid = want == Look.Full ? highlightMaterial : pink;
-            var materials = new Material[original.Length];
-            for (int i = 0; i < materials.Length; i++) materials[i] = solid;
-            renderer.sharedMaterials = materials;
+            renderer.sharedMaterials = Filled(solid, original.Length);
             applied[renderer] = want;
         }
+    }
+
+    // One array per material and length, reused (Renderer.sharedMaterials copies it): the pulse used to make new ones
+    // twice a second for every hinted renderer - most of this script's garbage (measured 2026-10-30).
+    private readonly Dictionary<(Material, int), Material[]> filled = new();
+
+    private Material[] Filled(Material material, int count)
+    {
+        if (filled.TryGetValue((material, count), out var array)) return array;
+        array = new Material[count];
+        for (int i = 0; i < count; i++) array[i] = material;
+        filled[(material, count)] = array;
+        return array;
     }
 
     private void Restore(Renderer renderer)

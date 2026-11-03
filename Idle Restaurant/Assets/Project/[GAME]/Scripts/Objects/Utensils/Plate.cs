@@ -60,7 +60,7 @@ public class Plate : PlaceableBase
         {
             distanceBetweenObjects = (ingredients[_ingredientsCount-1].collider.size.y);
             ingredients.Last().isLastPiece = false;
-        } 
+        }
         else
             distanceBetweenObjects = 0;
     }
@@ -68,10 +68,10 @@ public class Plate : PlaceableBase
     {
         ingredient.gameObject.transform.parent = parentTransform;
         Vector3 desiredPos = refTransform.localPosition;
-        desiredPos.y += distanceBetweenObjects;    
-        
+        desiredPos.y += distanceBetweenObjects;
+
         ingredient.gameObject.transform.localRotation = Quaternion.identity;
-        ingredient.gameObject.transform.localPosition = desiredPos; 
+        ingredient.gameObject.transform.localPosition = desiredPos;
     }
 
     #region Orders
@@ -81,7 +81,7 @@ public class Plate : PlaceableBase
     // tapping the plate with empty hands (Close), or it ends by itself at six layers. (For a while it closed itself
     // as soon as it held as many layers as the order, and the user lost the fun of it: no six-layer monster for a
     // cheeseburger customer, no making a bigger order first.)
-    public const int MaxLayers = 6;
+    public const int MaxLayers = 12;   // (was 6; user, 2026-10-30: "drop the 6-layer limit")
     public NpcFsm ForCustomer { get; private set; }
     public Recipe Order => ForCustomer != null ? ForCustomer.Ordered : null;
     public int Target => MaxLayers;
@@ -153,6 +153,10 @@ public class Plate : PlaceableBase
     #endregion
 
     public bool HasHamburger => doesHaveHamburger;
+    // The layer on top (what a tap with empty hands takes back: a plate is a place to put things down).
+    public EdibleBase Top => !doesHaveHamburger && ingredients.Count > 0 ? ingredients[ingredients.Count - 1] : null;
+    // The top bun's model (the chef's stack shows one on top of a burger in his hands: CarryStack).
+    public GameObject TopBunPrefab => guestTopBunPrefab;
     public Hamburger FinishedBurger => doesHaveHamburger ? placedHamburger : null;
     public int LayerCount => ingredients.Count;
     // What is on the plate, by ingredient name ("bun", "burger", "tomato"...): the first-shift lesson walks
@@ -227,14 +231,14 @@ public class Plate : PlaceableBase
 
     public override void RemoveFood(EdibleBase ingredient)
     {
-        
+
         if(ingredients.Count > 1)
         {
             ingredients.Remove(ingredient);
             refTransform.position = ingredients.Last().gameObject.transform.position;
             ingredients.Last().isLastPiece = true;
             CompressCollider();
-        }   
+        }
         else if(ingredients.Count == 1)
         {
             ingredients.Remove(ingredient);
@@ -251,7 +255,7 @@ public class Plate : PlaceableBase
         if (ingredient is Bun)
             HideTopBun();
     }
-   
+
     private void GenerateHamburger(bool closing = false)
     {
         if (ingredients.Count > 0 && (closing || ingredients.Count >= MaxLayers))

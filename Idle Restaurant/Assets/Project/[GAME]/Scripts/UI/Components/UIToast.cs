@@ -53,9 +53,10 @@ public class UIToast : MonoBehaviour
         EventManager.OnScoreUpdate.AddListener(OnScoreUpdate);
         EventManager.OnOrderRated.AddListener(OnOrderRated);
         EventManager.OnCustomerProtest.AddListener(OnProtest);
-        CafeProgress.LeveledUp += OnCafeLevelUp;
         DayGoals.GoalMet += OnGoalMet;
         UIRewardedBonus.Doubled += OnDoubled;
+        BurgerBook.Discovered += OnBookEntry;
+        WeeklyTasks.Completed += OnTaskDone;
     }
 
     private void OnDisable()
@@ -64,10 +65,22 @@ public class UIToast : MonoBehaviour
         EventManager.OnScoreUpdate.RemoveListener(OnScoreUpdate);
         EventManager.OnOrderRated.RemoveListener(OnOrderRated);
         EventManager.OnCustomerProtest.RemoveListener(OnProtest);
-        CafeProgress.LeveledUp -= OnCafeLevelUp;
         DayGoals.GoalMet -= OnGoalMet;
         UIRewardedBonus.Doubled -= OnDoubled;
+        BurgerBook.Discovered -= OnBookEntry;
+        WeeklyTasks.Completed -= OnTaskDone;
     }
+
+    // "New in your burger book!  Moo Burger  7/22", queued behind the order's own toast.
+    private void OnBookEntry(string name, int count) =>
+        queued.Enqueue(new Message($"New in your burger book!   <color=#{Hex(UITokens.Colors.Berry)}>{name}</color>   "
+            + $"<color=#{Hex(UITokens.Colors.DarkTeal)}>{count}/{BurgerBook.All.Length}  +${BurgerBook.NewEntryTip}</color>",
+            starIcon, UITokens.Colors.DeepYellow, holdTime));
+
+    // "Weekly task done!  Serve 30 burgers  +$40"
+    private void OnTaskDone(WeeklyTasks.Task task) =>
+        queued.Enqueue(new Message($"Weekly task done!   {task.Text}   <color=#{Hex(UITokens.Colors.DarkTeal)}>+${task.Reward}</color>",
+            checkIcon, UITokens.Colors.Teal, 3f));
 
     private void Start() => lastEarning = ScoreManager.Instance.totalLevelEarning;
 
@@ -81,8 +94,8 @@ public class UIToast : MonoBehaviour
 
     public void ShowObjective()
     {
-        var (day, shift) = DayGoals.Now;
-        Show($"Day {day} · Shift {shift}   <color=#{Hex(UITokens.Colors.Berry)}>{DayGoals.ForDay(DayGoals.Today).Text}</color>",
+        int level = DayGoals.LevelNow;
+        Show($"Level {level}   <color=#{Hex(UITokens.Colors.Berry)}>{DayGoals.ForDay(level).Text}</color>",
             boltIcon ? boltIcon : personIcon, UITokens.Colors.Berry, 2.6f);
     }
 
@@ -107,15 +120,8 @@ public class UIToast : MonoBehaviour
     private void OnDoubled(int bonus) =>
         Show($"Doubled!   <color=#{Hex(UITokens.Colors.DarkTeal)}>+${bonus}</color> to your wallet", starIcon, UITokens.Colors.DeepYellow, 3f);
 
-    // "Cafe level 3!  Barbarians drop by", queued behind the order that earned the stars.
-    private void OnCafeLevelUp(int level)
-    {
-        var recipe = System.Linq.Enumerable.FirstOrDefault(Orders.NewAt(level));
-        string news = recipe != null ? "New recipe: " + recipe.Name
-            : Customers.ArrivesAt(level, out var kind) ? Customers.Of(kind).Plural + " drop by" : "New in the shop";
-        queued.Enqueue(new Message($"Cafe level {level}!   <color=#{Hex(UITokens.Colors.DarkTeal)}>{news}</color>",
-            starIcon, UITokens.Colors.DeepYellow, holdTime));
-    }
+    // (A new tier used to be toasted here, mid-shift; it now opens at a level's end and its "New in the cafe!" card
+    // says so - UIBreakCard.)
 
     // "Charcoal Special  +$7  RUSH x2"
     private void OnOrderRated()

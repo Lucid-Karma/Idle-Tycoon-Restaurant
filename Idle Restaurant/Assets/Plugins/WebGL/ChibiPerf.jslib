@@ -9,4 +9,12 @@ mergeInto(LibraryManager.library, {
   ChibiGameReady: function () {
     if (window.chibiGameReady) window.chibiGameReady();
   },
+  // Seconds since the page started loading (Boot.Mark): the same clock the portals measure load time with.
+  ChibiPageSeconds: function () {
+    return performance.now() / 1000;
+  },
+  // Straight to the browser console: the game's own Debug.Log lines are filtered out of release builds.
+  ChibiConsole: function (text) {
+    console.log(UTF8ToString(text));
+  },
 });

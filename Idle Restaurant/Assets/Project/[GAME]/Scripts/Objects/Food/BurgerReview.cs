@@ -50,21 +50,38 @@ public sealed class BurgerReview
     }
 
     // Listed from most to least noticeable: the first one found names the burger.
-    private enum Flaw { RawPatty, NoPatty, BurntPatty, Missing, Extra, WholeOnion, WholeTomato, WholeCheese, NoBun, BurntBun, RawBun, Duplicate }
+    // (Bacon and the fryer's potato, 2026-10-28: raw bacon is as bad as a raw patty, a raw potato in a bun is a joke.)
+    private enum Flaw
+    {
+        RawPatty, RawBacon, NoPatty, BurntPatty, BurntBacon, Missing, Extra, WholeOnion, WholeTomato, WholeCheese, NoBun,
+        BurntBun, RawBun, RawPotato, Duplicate
+    }
 
     private static readonly string[] Titles =
     {
-        "Moo Burger", "Veggie Surprise", "Charcoal Special", "Mix-up Burger", "Surprise Burger", "Onion Tears",
-        "Tomato Bomb", "Cheese Brick", "Naked Burger", "Toasty Tower", "Doughy Deluxe", "Double Trouble"
+        "Moo Burger", "Oink Burger", "Veggie Surprise", "Charcoal Special", "Bacon Jerky", "Mix-up Burger", "Surprise Burger",
+        "Onion Tears", "Tomato Bomb", "Cheese Brick", "Naked Burger", "Toasty Tower", "Doughy Deluxe", "Spud Surprise",
+        "Double Trouble"
     };
 
     // Short on purpose: said in a speech bubble over a seated customer, read in a glance. ({0}: the ingredient.)
     private static readonly string[] Reactions =
     {
-        "It's still mooing!", "Where's the patty?!", "Extra crispy!", "Where's my {0}?!", "I didn't order {0}!",
-        "A whole onion?!", "A WHOLE tomato?!", "A cheese brick?!", "Where's the bun?", "Too toasty!",
-        "Cold bun... eh.", "Two of those?!"
+        "It's still mooing!", "It's still oinking!", "Where's the patty?!", "Extra crispy!", "Bacon... or coal?!",
+        "Where's my {0}?!", "I didn't order {0}!", "A whole onion?!", "A WHOLE tomato?!", "A cheese brick?!",
+        "Where's the bun?", "Too toasty!", "Cold bun... eh.", "A raw potato?!", "Two of those?!"
     };
+
+    // What a customer says while the player is still learning (Customers.Gentle): what to do next time, same order of
+    // flaws as Reactions. ({0}: the ingredient.)
+    private static readonly string[] Coach =
+    {
+        "Fry the patty longer!", "Crisp the bacon more!", "Add a patty next time!", "Take it off sooner!", "Bacon off sooner!",
+        "Add {0} next time!", "Just my order, ok?", "Chop the onion first!", "Chop the tomato first!", "Slice the cheese first!",
+        "A bun next time!", "Bun out sooner!", "Bake the bun first!", "Fry the potato first!", "One of each, ok?"
+    };
+
+    private static bool Shocking(Flaw worst) => worst == Flaw.RawPatty || worst == Flaw.RawBacon;
 
     // Against an order. Every layer the recipe wants and gets scores by how it was made; a layer it did not ask
     // for scores 0.3 and is a flaw; a layer it wanted but did not get scores 0 and is a flaw.
@@ -109,15 +126,16 @@ public sealed class BurgerReview
         // Each wrong layer counts (capped: past a handful it is chaos either way).
         int count = Mathf.Min(6, flaws.Count + Mathf.Max(0, missing - 1) + Mathf.Max(0, extras - 1));
 
+        bool gentle = Customers.Gentle;
         if (flaws.Count == 0)
-            return Ordered(new BurgerReview(quality, 0, order.Name, "Just what I ordered!", Mood.Delighted), asOrdered);
+            return Ordered(new BurgerReview(quality, 0, order.Name, gentle ? "Perfect! You got it!" : "Just what I ordered!", Mood.Delighted), asOrdered);
 
         Flaw worst = flaws.Min;
-        bool shocked = worst == Flaw.RawPatty || count > ChaosFlaws;
+        bool shocked = !gentle && (Shocking(worst) || count > ChaosFlaws);
         var mood = shocked ? Mood.Shocked : Mood.Amused;
         if (count >= ChaosFlaws)
-            return Ordered(new BurgerReview(quality, count, "Chaos Burger", "What IS this?!", mood), asOrdered);
-        string reaction = string.Format(Reactions[(int)worst],
+            return Ordered(new BurgerReview(quality, count, "Chaos Burger", gentle ? "Check my order card!" : "What IS this?!", mood), asOrdered);
+        string reaction = string.Format((gentle ? Coach : Reactions)[(int)worst],
             Orders.Label(worst == Flaw.Missing ? missingName : extraName ?? ""));
         return Ordered(new BurgerReview(quality, count, Titles[(int)worst], reaction, mood), asOrdered);
     }
@@ -155,7 +173,7 @@ public sealed class BurgerReview
             return new BurgerReview(quality, 0, "Chef's Classic", "Chef's kiss!", Mood.Delighted);
 
         Flaw worst = flaws.Min;
-        bool shocked = worst == Flaw.RawPatty || flaws.Count > ChaosFlaws;
+        bool shocked = Shocking(worst) || flaws.Count > ChaosFlaws;
         var mood = shocked ? Mood.Shocked : Mood.Amused;
         if (flaws.Count >= ChaosFlaws)
             return new BurgerReview(quality, flaws.Count, "Chaos Burger", "What IS this?!", mood);
@@ -173,10 +191,13 @@ public sealed class BurgerReview
                 return 0.5f;
             case Prep.Raw:
                 if (layer.Name == "burger") { flaws.Add(Flaw.RawPatty); return 0.15f; }
+                if (layer.Name == "bacon") { flaws.Add(Flaw.RawBacon); return 0.15f; }
+                if (layer.Name == "fries") { flaws.Add(Flaw.RawPotato); return 0.3f; }
                 flaws.Add(Flaw.RawBun);
                 return 0.6f;
             case Prep.Burnt:
-                if (layer.Name == "burger") { flaws.Add(Flaw.BurntPatty); return 0.35f; }
+                if (layer.Name == "burger" || layer.Name == "fries") { flaws.Add(Flaw.BurntPatty); return 0.35f; }
+                if (layer.Name == "bacon") { flaws.Add(Flaw.BurntBacon); return 0.35f; }
                 flaws.Add(Flaw.BurntBun);
                 return 0.45f;
             default:
@@ -192,6 +213,8 @@ public sealed class BurgerReview
         "cheese" => "Cheese! Yes!",
         "lettuce" => "Salad? Fine.",
         "burger" => "Patty snack!",
+        "bacon" => "Bacon! My hero!",
+        "fries" => "Fries? Bonus!",
         "bun" => "Just bread? Eh.",
         _ => "Snack time!",
     };
@@ -203,6 +226,8 @@ public sealed class BurgerReview
         "onion" => "OW! My head!",
         "cheese" => "BONK! Cheese?!",
         "burger" => item.Prep == Prep.Raw ? "EWW, raw meat!" : "HOT! Charcoal!",
+        "bacon" => item.Prep == Prep.Raw ? "EWW, raw bacon!" : "HOT! Charcoal!",
+        "fries" => item.Prep == Prep.Raw ? "OW! A potato?!" : "Burnt fries?!",
         "bun" => item.Prep == Prep.Burnt ? "Charcoal?!" : "Hey! Cold bread!",
         _ => "HEY!",
     };

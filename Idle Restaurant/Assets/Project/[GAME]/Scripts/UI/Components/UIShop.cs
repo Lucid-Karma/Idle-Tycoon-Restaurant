@@ -1,11 +1,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 // The shop panel: one tile per CafeShop upgrade, in the order they open up (cafe level, then price).
 // Opened from the HUD during a shift (pauses the kitchen) and from the result card between shifts
 // (stays paused); on close, what was bought pops into the kitchen (CafeShop.RevealPending).
-public class UIShop : MonoBehaviour
+// A tap on the dimmed space around the card closes it, like its X.
+public class UIShop : MonoBehaviour, IPointerClickHandler
 {
     [SerializeField] private UIShopTile tileTemplate;
     [SerializeField] private RectTransform grid;
@@ -54,6 +56,12 @@ public class UIShop : MonoBehaviour
         resumeTimeScale = Time.timeScale;
         Time.timeScale = 0f;
         gameObject.SetActive(true);
+    }
+
+    // Taps on the card and its tiles stop there or bubble up from inside it; only the backdrop itself is this object.
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData.pointerCurrentRaycast.gameObject == gameObject) Close();
     }
 
     public void Close()

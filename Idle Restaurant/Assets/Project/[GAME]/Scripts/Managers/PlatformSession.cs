@@ -10,6 +10,11 @@ public class PlatformSession : MonoBehaviour
     private static PlatformSession instance;
     private bool shiftRunning;
     private bool reportedReady;
+    private float readyAt, shiftStartedAt, lastPauseReport = -100f;
+
+    // Measuring what the report asked for (2026-10-28): how long a new player takes to serve their first order, at
+    // which moment players put the game down, and how many days after their first visit they come back.
+    private const string FirstDayKey = "Cafe.FirstDay", FirstServeKey = "Cafe.FirstServe";
 
     public static void Ensure()
     {
@@ -26,6 +31,7 @@ public class PlatformSession : MonoBehaviour
         EventManager.OnLevelFinish.AddListener(OnShiftEnd);
         EventManager.OnLevelFinish.AddListener(OnShiftFinished);
         EventManager.OnRestart.AddListener(OnShiftEnd);
+        EventManager.OnOrderRated.AddListener(OnOrderRated);
         CafeProgress.LeveledUp += OnLevelUp;
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
@@ -36,6 +42,7 @@ public class PlatformSession : MonoBehaviour
         EventManager.OnLevelFinish.RemoveListener(OnShiftEnd);
         EventManager.OnLevelFinish.RemoveListener(OnShiftFinished);
         EventManager.OnRestart.RemoveListener(OnShiftEnd);
+        EventManager.OnOrderRated.RemoveListener(OnOrderRated);
         CafeProgress.LeveledUp -= OnLevelUp;
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
@@ -44,6 +51,7 @@ public class PlatformSession : MonoBehaviour
     {
         if (shiftRunning) return;   // OnLevelStart can be raised twice for one shift
         shiftRunning = true;
+        shiftStartedAt = Time.realtimeSinceStartup;
         GoogleAnalytics.Event("level_start", "shift_number", CafeProgress.ShiftsPlayed + 1, "cafe_level", CafeProgress.Level);
     }
 
@@ -70,12 +78,59 @@ public class PlatformSession : MonoBehaviour
     {
         if (reportedReady || ScoreManager.Instance == null) return;
         reportedReady = true;
+        readyAt = Time.realtimeSinceStartup;
         GoogleAnalytics.Event("game_ready", "load_seconds", Time.realtimeSinceStartup,
-            "returning_player", CafeProgress.ShiftsPlayed > 0, "cafe_level", CafeProgress.Level);
+            "returning_player", CafeProgress.ShiftsPlayed > 0, "cafe_level", CafeProgress.Level,
+            "days_since_first", DaysSinceFirst(), "levels_played", CafeProgress.ShiftsPlayed);
     }
+
+    // Days since the player's first visit (0 on the first day), by the calendar.
+    private static int DaysSinceFirst()
+    {
+        int today = (int)(System.DateTime.Now.Date - new System.DateTime(2000, 1, 1)).TotalDays;
+        int first = GamePlatform.GetInt(FirstDayKey, 0);
+        if (first == 0)
+        {
+            GamePlatform.SetInt(FirstDayKey, today);
+            GamePlatform.Flush();
+            return 0;
+        }
+        return Mathf.Max(0, today - first);
+    }
+
+    // The first order a player ever serves: how long after the cafe opened, and whether the lesson was running.
+    private void OnOrderRated()
+    {
+        if (GamePlatform.GetInt(FirstServeKey, 0) == 1) return;
+        GamePlatform.SetInt(FirstServeKey, 1);
+        GamePlatform.Flush();
+        GoogleAnalytics.Event("first_serve", "seconds", Time.realtimeSinceStartup - readyAt, "tutorial", Tutorial.Running);
+    }
+
+    // The page lost the player (another tab, the window, a phone's home button): where they were in the game.
+    private void OnApplicationFocus(bool focus)
+    {
+        if (!focus) OfflineEarnings.Touch();
+        if (focus || !reportedReady || Time.realtimeSinceStartup - lastPauseReport < 20f) return;
+        lastPauseReport = Time.realtimeSinceStartup;
+        var score = ScoreManager.Instance;
+        GoogleAnalytics.Event("session_pause", "level", DayGoals.LevelNow, "in_level", shiftRunning,
+            "served", score != null ? score.ServedCount : 0, "customers", score != null ? score.CustomersPerLevel : 0,
+            "seconds_in_level", shiftRunning ? Time.realtimeSinceStartup - shiftStartedAt : 0f,
+            "session_seconds", Time.realtimeSinceStartup - readyAt, "lesson", Tutorial.Running,
+            "break_cards", UIBreakCard.Instance != null && UIBreakCard.Instance.Showing);
+    }
+
+    private float touchedAt;
 
     private void Update()
     {
+        // The clock for money made while away (OfflineEarnings): "the player was here" every half minute.
+        if (reportedReady && Time.realtimeSinceStartup - touchedAt > 30f)
+        {
+            touchedAt = Time.realtimeSinceStartup;
+            OfflineEarnings.Touch();
+        }
         if (shiftRunning && Time.timeScale > 0f && !GamePlatform.AdShowing) GamePlatform.GameplayStart();
         else GamePlatform.GameplayStop();
     }

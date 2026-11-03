@@ -1,0 +1,9 @@
+Sounds and music from outside the project - all CC0 (public domain), free for commercial use, credit optional.
+
+- Resources/Sounds/Plate/plate_light_0..4.ogg
+  "Impact Sounds" by Kenney (www.kenney.nl), CC0 1.0 - files impactPlate_light_000..004.ogg
+  https://kenney.nl/assets/impact-sounds  (downloaded 2026-10-28)
+
+- Resources/Sounds/Fryer/fryer_loop.wav
+  "Frying bath #3" (s2507) by Joseph Sardin, BigSoundBank (bigsoundbank.com), CC0 - seconds 14-21, a seamless 6 s mono loop, 22 kHz.
+  https://www.bigsoundbank.com/frying-bath-3-s2507.html  (downloaded 2026-10-28)

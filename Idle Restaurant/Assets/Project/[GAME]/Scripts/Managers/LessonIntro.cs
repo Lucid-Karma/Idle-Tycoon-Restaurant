@@ -38,11 +38,9 @@ public class LessonIntro : MonoBehaviour
     private CanvasGroup labelGroup;
     private Material captionMaterial;  // its own copy: the shadow's colour changes per shot
     private TMP_FontAsset titleFont;
-    // Its own sounds, made here (user: "the bings and boings during the titles should go - speed sounds instead"):
-    // a whoosh for each whip pan, a soft thump on each hit, a long whoosh as it pulls back out. The game's own cues
-    // are silent while it plays (GameSfx).
-    private AudioSource sfx;
-    private AudioClip whoosh, whooshLong, thump;
+    // No sound effects of its own, only the music: the bings and boings went first (user, 2026-10-20), then the
+    // whooshes and thumps that replaced them (user, 2026-10-31: "remove the speed sounds"). The game's own cues are
+    // silent while it plays (GameSfx).
 
     public static void Play(TMP_FontAsset font, Action whenDone)
     {
@@ -74,69 +72,8 @@ public class LessonIntro : MonoBehaviour
         StartCoroutine(Run());
     }
 
-    private void Sound(AudioClip clip, float volume)
-    {
-        if (clip != null && sfx != null && Audio.IsMusicOn) sfx.PlayOneShot(clip, volume);
-    }
-
-    private const int Rate = 22050;
-
-    // Air rushing past: noise through a band that sweeps up and back down, swelling and fading.
-    private static AudioClip Whoosh(float seconds, int seed)
-    {
-        int n = Mathf.CeilToInt(seconds * Rate);
-        var d = new float[n];
-        var rng = new System.Random(seed);
-        float low = 0f, lower = 0f, peak = 0f;
-        for (int i = 0; i < n; i++)
-        {
-            float u = i / (float)n;
-            float sweep = Mathf.Sin(Mathf.PI * Mathf.Pow(u, 0.7f));            // 0 -> 1 -> 0
-            // A low, soft band riding up a little and back (a bright hiss grated - user, 2026-10-27).
-            float k1 = Mathf.Lerp(0.008f, 0.07f, sweep), k2 = k1 * 0.3f;
-            float white = (float)rng.NextDouble() * 2f - 1f;
-            low += (white - low) * k1;
-            lower += (low - lower) * k2;
-            float env = Mathf.Sin(Mathf.PI * Mathf.Pow(u, 0.55f));
-            d[i] = (low - lower) * env * env;
-            peak = Mathf.Max(peak, Mathf.Abs(d[i]));
-        }
-        for (int i = 0; i < n; i++) d[i] *= 0.7f / Mathf.Max(peak, 1e-4f);
-        var clip = AudioClip.Create("Whoosh", n, 1, Rate, false);
-        clip.SetData(d, 0);
-        return clip;
-    }
-
-    // A soft, low impact: a sine dropping in pitch with a puff of noise on top.
-    private static AudioClip Thump()
-    {
-        int n = Mathf.CeilToInt(0.22f * Rate);
-        var d = new float[n];
-        var rng = new System.Random(11);
-        float phase = 0f, low = 0f;
-        for (int i = 0; i < n; i++)
-        {
-            float t = i / (float)Rate;
-            phase += 2f * Mathf.PI * Mathf.Lerp(110f, 45f, t / 0.22f) / Rate;
-            low += (((float)rng.NextDouble() * 2f - 1f) - low) * 0.2f;
-            d[i] = (Mathf.Sin(phase) * 0.8f + low * 0.5f * Mathf.Exp(-t / 0.03f)) * Mathf.Exp(-t / 0.07f);
-        }
-        var clip = AudioClip.Create("Thump", n, 1, Rate, false);
-        clip.SetData(d, 0);
-        return clip;
-    }
-
     private void BuildOverlay()
     {
-        sfx = gameObject.AddComponent<AudioSource>();
-        sfx.playOnAwake = false;
-        sfx.spatialBlend = 0f;
-        var gameSfx = FindFirstObjectByType<GameSfx>();
-        var mixer = gameSfx != null ? gameSfx.GetComponent<AudioSource>() : null;
-        if (mixer != null) { sfx.outputAudioMixerGroup = mixer.outputAudioMixerGroup; sfx.volume = mixer.volume; }
-        whoosh = Whoosh(0.32f, 3);
-        whooshLong = Whoosh(0.6f, 5);
-        thump = Thump();
         var canvas = gameObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 50;
@@ -248,7 +185,6 @@ public class LessonIntro : MonoBehaviour
             lines.sweepDirection = i % 2 == 0 ? 1f : -1f;
             float wipe = i == 0 ? 0.28f : 0.16f;
             var start = from; float startSize = fromSize, startRoll = fromRoll;
-            Sound(i == 0 ? whooshLong : whoosh, 0.4f);
             yield return Over(wipe, t =>
             {
                 float e = t * t * (3f - 2f * t);
@@ -263,7 +199,6 @@ public class LessonIntro : MonoBehaviour
             SetLabel(shot.Line, shot.Face, shot.Shadow);
             label.localRotation = Quaternion.Euler(0f, 0f, 6f - shot.Roll * 0.4f);
             label.anchoredPosition = new Vector2(0f, -Screen.height * 0.24f);
-            Sound(thump, 0.5f);
             yield return Over(0.2f, t =>
             {
                 float overshoot = 1f + Mathf.Sin(t * Mathf.PI) * 0.12f;
@@ -288,7 +223,6 @@ public class LessonIntro : MonoBehaviour
         SetLabel("LET'S COOK!", UITokens.Colors.Yellow, UITokens.Colors.Raspberry);
         label.localRotation = Quaternion.Euler(0f, 0f, 5f);
         label.anchoredPosition = Vector2.zero;
-        if (!skip) Sound(whooshLong, 0.45f);
         var pullFrom = cam.transform.position; float pullSize = cam.orthographicSize, pullRoll = fromRoll;
         yield return Over(skip ? 0.2f : 0.45f, t =>
         {
@@ -328,9 +262,6 @@ public class LessonIntro : MonoBehaviour
     {
         // Left early (a scene reload): never leave the camera somewhere else.
         if (Playing && current == this) { Playing = false; current = null; if (cam != null) { cam.transform.SetPositionAndRotation(homePos, homeRot); cam.orthographicSize = homeSize; } }
-        if (whoosh != null) Destroy(whoosh);
-        if (whooshLong != null) Destroy(whooshLong);
-        if (thump != null) Destroy(thump);
     }
 
     // ---- helpers ----

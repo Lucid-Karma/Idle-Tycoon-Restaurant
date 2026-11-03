@@ -1,9 +1,10 @@
 """The burger layers a customer's order is drawn with (UIOrderTicket): flat, chunky shapes with the UI's ink
 outline, so a stack of them reads as "that burger" in a bubble a few dozen pixels wide - colour carries it:
 brown patty, yellow cheese, green lettuce, red tomato, lilac onion. Writes Assets/Project/[GAME]/Graphics/
-Sprites/Orders/layer_<name>.png (bun_top, bun_bottom, burger, cheese, lettuce, tomato, onion), 4x supersampled.
+Sprites/Orders/layer_<name>.png (bun_top, bun_bottom, burger, cheese, lettuce, tomato, onion, bacon) and side_fries.png
+(the carton by an order with fries on the side), 4x supersampled. Pass names to write only those ("bacon fries").
 Needs Pillow."""
-import math, os
+import math, os, sys
 from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,6 +26,12 @@ TOMATO = (233, 96, 86, 255)
 TOMATO_LIGHT = (246, 150, 136, 255)
 ONION = (230, 206, 240, 255)
 ONION_DARK = (186, 150, 210, 255)
+BACON = (196, 78, 70, 255)
+BACON_FAT = (250, 222, 200, 255)
+FRY = (252, 206, 84, 255)
+FRY_DARK = (232, 168, 56, 255)
+CARTON = (226, 62, 62, 255)
+CARTON_LIGHT = (255, 246, 236, 255)
 
 
 def canvas(h):
@@ -115,8 +122,67 @@ def onion():
     save(img, "onion")
 
 
+def bacon():
+    """A wavy rasher: red meat with a stripe of fat down the middle."""
+    h = 26
+    img, d = canvas(h)
+    def wave(k):
+        return 3.5 * math.sin(k / 11.0)
+    def band(inset, colour):
+        top = [(k, 5 + wave(k) + inset) for k in range(0, W + 1, 2)]
+        bottom = [(k, h - 5 + wave(k) - inset) for k in range(W, -1, -2)]
+        pts = [(max(inset, min(W - inset, x)), y) for x, y in top + bottom]
+        d.polygon([(x * S, y * S) for x, y in pts], fill=colour)
+    band(0, INK)
+    band(LINE - 1, BACON)
+    mid = h / 2
+    top = [(k, mid - 1.9 + wave(k)) for k in range(14, W - 13, 2)]
+    bottom = [(k, mid + 1.9 + wave(k)) for k in range(W - 14, 13, -2)]
+    d.polygon([(x * S, y * S) for x, y in top + bottom], fill=BACON_FAT)
+    save(img, "bacon")
+
+
+def fries():
+    """The carton of fries shown by an order that wants them on the side (UIOrderTicket)."""
+    w, h = 96, 112
+    img = Image.new("RGBA", (w * S, h * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    def stick(cx, top, tilt, colour, grow=0.0):
+        # a fry from the carton's mouth (y 62) up to `top`, leaning `tilt` degrees
+        a = math.radians(tilt)
+        length = 62 - top
+        half = 6.0 + grow
+        ux, uy = math.sin(a), -math.cos(a)          # along the fry, upwards
+        px, py = -uy, ux                            # across it
+        base = (cx, 62.0)
+        tip = (cx + ux * length, 62.0 + uy * length)
+        ext = grow
+        pts = [(base[0] + px * half, base[1] + py * half), (tip[0] + px * half - ux * -ext, tip[1] + py * half - uy * -ext),
+               (tip[0] - px * half - ux * -ext, tip[1] - py * half - uy * -ext), (base[0] - px * half, base[1] - py * half)]
+        d.polygon([(x * S, y * S) for x, y in pts], fill=colour)
+    sticks = [(32, 20, -12), (60, 18, 10), (44, 8, -4), (54, 12, 4), (38, 24, -7), (66, 26, 14), (50, 22, 0)]
+    for cx, top, tilt in sticks:
+        stick(cx, top, tilt, INK, grow=3.5)
+    for cx, top, tilt in sticks:
+        stick(cx, top, tilt, FRY)
+    for cx, top, tilt in sticks[2:4]:
+        stick(cx, top + 30, tilt, FRY_DARK, grow=-3.0)
+    # the carton: a red cup, wider at the top, with a light band under its lip
+    outer = [(10, 52), (86, 52), (74, 108), (22, 108)]
+    d.polygon([(x * S, y * S) for x, y in outer], fill=INK)
+    i = LINE
+    inner = [(10 + i + 1, 52 + i), (86 - i - 1, 52 + i), (74 - i + 1, 108 - i), (22 + i - 1, 108 - i)]
+    d.polygon([(x * S, y * S) for x, y in inner], fill=CARTON)
+    band = [(16 + i, 62), (80 - i, 62), (78 - i, 72), (18 + i, 72)]
+    d.polygon([(x * S, y * S) for x, y in band], fill=CARTON_LIGHT)
+    img = img.resize((w, h), Image.LANCZOS)
+    img.save(os.path.join(OUT, "side_fries.png"))
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
-    for f in (bun_top, bun_bottom, patty, cheese, lettuce, tomato, onion):
-        f()
+    every = {"bun_top": bun_top, "bun_bottom": bun_bottom, "burger": patty, "cheese": cheese, "lettuce": lettuce,
+             "tomato": tomato, "onion": onion, "bacon": bacon, "fries": fries}
+    for name in (sys.argv[1:] or every):
+        every[name]()
     print("wrote layers to", os.path.abspath(OUT))

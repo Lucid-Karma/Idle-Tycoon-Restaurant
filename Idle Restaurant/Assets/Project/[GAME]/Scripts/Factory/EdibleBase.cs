@@ -49,6 +49,9 @@ public abstract class EdibleBase : MonoBehaviour, IEdible, ISelectable
         currentVersion = pool.currentObject;
     }
 
+    // Where it lies: a station, a plate, a table (null while carried or in a crate).
+    public PlaceableBase Placeable => placeable;
+
     public void SetPlaceable(PlaceableBase _placable)
     {
         placeable = _placable;

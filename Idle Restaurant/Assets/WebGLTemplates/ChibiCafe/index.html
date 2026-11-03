@@ -144,6 +144,21 @@
         // },
       };
 
+      // Phones get the game's data with ASTC textures when the build has it (CrazyGamesBuild fills astcDataFile in): their
+      // GPUs read ASTC as it is, while the desktop's DXT textures had to be unpacked by the CPU one by one on every load
+      // - a slow start on phones (2026-10-30). A GPU that reads DXT (computers) keeps the DXT data. ?astc=1 forces it.
+      var astcDataFile = "";
+      if (astcDataFile) {
+        try {
+          var probe = document.createElement("canvas").getContext("webgl2") || document.createElement("canvas").getContext("webgl");
+          var astc = probe && probe.getExtension("WEBGL_compressed_texture_astc");
+          var dxt = probe && probe.getExtension("WEBGL_compressed_texture_s3tc");
+          if (astc && !dxt || /[?&]astc=1/.test(location.search)) config.dataUrl = buildUrl + "/" + astcDataFile;
+          var lose = probe && probe.getExtension("WEBGL_lose_context");
+          if (lose) lose.loseContext();
+        } catch (e) {}
+      }
+
       // By default, Unity keeps WebGL canvas render target size matched with
       // the DOM size of the canvas element (scaled by window.devicePixelRatio)
       // Set this to false if you want to decouple this synchronization from

@@ -10,10 +10,13 @@ using UnityEngine;
 // The first days are fixed so a new player meets every kind of goal early; after that a day's goal is drawn from
 // the shift's number (the same shift always has the same goal), never the same kind twice in a row.
 // The shifts used to be called days ("DAY 2 GOAL" on the second shift of the same afternoon - user: it must not look
-// like the next day); the day is now the real one (CafeDay) and the HUD says "DAY 1 · SHIFT 2". `Day` below is still
-// the shift's number over the whole game: it picks the goal and sizes its bonus.
+// like the next day), then "DAY 1 · SHIFT 2"; since 2026-10-28 every shift is a LEVEL ("LEVEL 7"), short, with its
+// three stars on show from the start (UIDayGoal) - one for finishing, one for the goal, one for the goal and an average
+// of 4 or more - and all three pay a little extra. `Day` below is the level's number: it picks the goal and sizes its
+// bonus. The real day (CafeDay) is still kept, for the daily treat.
 // Added to the GameManager's object at runtime (GameManager.Awake), like ShiftFlow.
-public enum GoalKind { Perfect, Earn, Special, NoWalkouts, Rush, Average }
+// (Fries, 2026-10-28: the fryer's level - level 5 - has "Toss 2 fries" as its goal, and it joins the others after that.)
+public enum GoalKind { Perfect, Earn, Special, NoWalkouts, Rush, Average, Fries }
 
 public sealed class DayGoal
 {
@@ -28,12 +31,16 @@ public sealed class DayGoal
         GoalKind.Special => $"Serve {Target} {Plural(Special.Name)}",
         GoalKind.NoWalkouts => "Nobody leaves hungry",
         GoalKind.Rush => $"Reach a rush of x{Target}",
+        GoalKind.Fries => $"Toss {Target} fries",
         _ => "Average 4 stars or more",
     };
 
     private static string Plural(string name) => name switch
     {
         "Garden" => "Garden burgers",
+        "Cheese Lover" => "Cheese Lovers",
+        "Veggie Deluxe" => "Veggie Deluxes",
+        "Onion Double" => "Onion Doubles",
         "The Tower" => "Towers",
         _ => name + "s",
     };
@@ -47,6 +54,7 @@ public struct DayResult
     public bool Met;
     public int DayStars;       // 1-3
     public int Bonus;          // coins for a met goal
+    public int StarBonus;      // coins for all three stars
     public float Average;
     public int Earned;         // this shift's orders and tips, without the bonus
     public int Walkouts;
@@ -57,9 +65,11 @@ public class DayGoals : MonoBehaviour
 {
     public static DayGoals Instance { get; private set; }
 
-    // The first days, in order: every kind of goal is met within the first six shifts.
+    // The first days, in order: every kind of goal is met within the first seven levels. Level 3's special is the new
+    // griddle's Bacon Burger (SpecialFor) and level 5 - the fryer's - is about fries: each new station is the goal of the
+    // level it opens at (Stations).
     private static readonly GoalKind[] FirstDays =
-        { GoalKind.Perfect, GoalKind.Earn, GoalKind.Special, GoalKind.NoWalkouts, GoalKind.Rush, GoalKind.Average };
+        { GoalKind.Perfect, GoalKind.Earn, GoalKind.Special, GoalKind.NoWalkouts, GoalKind.Fries, GoalKind.Rush, GoalKind.Average };
 
     public const float GoodAverage = 4f;
 
@@ -69,12 +79,11 @@ public class DayGoals : MonoBehaviour
     public int ShiftOfDay { get; private set; }
     public bool Running { get; private set; }
 
-    // "DAY 1 · SHIFT 2"
-    public static string Label(int day, int shift) => $"DAY {day}  ·  SHIFT {shift}";
+    // "LEVEL 7"
+    public static string Label(int level) => $"LEVEL {level}";
 
-    // The day and shift being played, or (between shifts) the next one.
-    public static (int day, int shift) Now =>
-        Instance != null && Instance.Running ? (Instance.CafeDayNumber, Instance.ShiftOfDay) : CafeDay.Upcoming;
+    // The level being played, or (between levels) the next one.
+    public static int LevelNow => Instance != null && Instance.Running ? Instance.Day : Today;
 
     private int specialServed;
     private bool announced;
@@ -88,6 +97,8 @@ public class DayGoals : MonoBehaviour
 
     // Paid at the day's end when the goal is met.
     public int Bonus => Mathf.Min(40, 10 + 2 * Day);
+    // And a little more for all three stars.
+    public int StarBonus => Mathf.Max(5, Bonus / 2);
 
     private void Update()
     {
@@ -135,8 +146,9 @@ public class DayGoals : MonoBehaviour
             // on the first card a new player sees.
             case GoalKind.Perfect: goal.Target = day == 1 ? 1 : Mathf.Min(4, 2 + (day - 1) / 4); break;
             case GoalKind.Earn:
-                // About what a good shift of this size makes, a little more every day.
-                int customers = ScoreManager.Instance != null ? ScoreManager.Instance.CustomersPerLevel : ScoreManager.BaseCustomers;
+                // About what a good shift of this size makes, a little more every day. (From the level's own size, so
+                // the road card can name the next level's goal before it starts.)
+                int customers = ScoreManager.CustomersForShift(day - 1) + CafeShop.ExtraCustomers;
                 goal.Target = Mathf.Min(35 + 5 * day, 90, customers * 7);
                 break;
             case GoalKind.Special:
@@ -144,6 +156,7 @@ public class DayGoals : MonoBehaviour
                 goal.Special = SpecialFor(day);
                 break;
             case GoalKind.Rush: goal.Target = day > 10 ? 4 : 3; break;
+            case GoalKind.Fries: goal.Target = day > 10 ? 3 : 2; break;
         }
         return goal;
     }
@@ -163,6 +176,7 @@ public class DayGoals : MonoBehaviour
     // One of the newest recipes the cafe has (the one the player most needs to meet), picked by the day.
     private static Recipe SpecialFor(int day)
     {
+        if (Stations.OpensOn(day, out var station) && station == Stations.Kind.Bacon) return Orders.BaconBurger;
         var open = Orders.Unlocked.Where(r => r != Orders.Classic).ToList();
         if (open.Count == 0) return Orders.Classic;
         int newest = open.Max(r => r.Level);
@@ -217,6 +231,7 @@ public class DayGoals : MonoBehaviour
                 GoalKind.Earn => (score.ShiftEarned, Goal.Target),
                 GoalKind.Special => (specialServed, Goal.Target),
                 GoalKind.Rush => (score.BestStreak, Goal.Target),
+                GoalKind.Fries => (score.FriesServed, Goal.Target),
                 GoalKind.NoWalkouts => (score.hostedCustomer - score.WalkoutCount, score.CustomersPerLevel),
                 _ => (0, 1),
             };
@@ -225,8 +240,39 @@ public class DayGoals : MonoBehaviour
 
     public float Average => ScoreManager.Instance != null ? AverageSoFar(false) : 0f;
 
+    // A fries goal still needs more fries than anyone in the cafe is waiting for: the next customer wants some too
+    // (Orders.WantsFries), so the goal can always be met.
+    public static bool FriesShort
+    {
+        get
+        {
+            var days = Instance;
+            if (days == null || !days.Running || days.Goal == null || days.Goal.Kind != GoalKind.Fries || ScoreManager.Instance == null)
+                return false;
+            int coming = NpcFsm.Active.Count(n => n.FriesDue);
+            return ScoreManager.Instance.FriesServed + coming < days.Goal.Target;
+        }
+    }
+
+    // The level's stars as they stand (the HUD shows them filling): the first is there from the start (finishing the
+    // level always earns it), the second once the goal is met, the third while the goal is met and the average holds.
+    public int StarsNow
+    {
+        get
+        {
+            if (Goal == null || ScoreManager.Instance == null) return 1;
+            bool met = Goal.Kind == GoalKind.Average
+                ? ScoreManager.Instance.hostedCustomer > 0 && Average >= GoodAverage && !Lost
+                : Done;
+            if (Goal.Kind == GoalKind.NoWalkouts) met = !Lost && ScoreManager.Instance.hostedCustomer > 0;
+            bool well = Goal.Kind == GoalKind.Average ? ScoreManager.Instance.WalkoutCount == 0
+                                                      : ScoreManager.Instance.hostedCustomer > 0 && Average >= GoodAverage;
+            return 1 + (met ? 1 : 0) + (met && well ? 1 : 0);
+        }
+    }
+
     // Reached already (the counting goals), or cannot be reached any more (someone left hungry).
-    public bool Done => Goal != null && Goal.Kind is GoalKind.Perfect or GoalKind.Earn or GoalKind.Special or GoalKind.Rush
+    public bool Done => Goal != null && Goal.Kind is GoalKind.Perfect or GoalKind.Earn or GoalKind.Special or GoalKind.Rush or GoalKind.Fries
                         && Progress.done >= Progress.of;
     public bool Lost => Goal != null && Goal.Kind == GoalKind.NoWalkouts && ScoreManager.Instance.WalkoutCount > 0;
 
@@ -249,7 +295,11 @@ public class DayGoals : MonoBehaviour
         bool well = Goal.Kind == GoalKind.Average ? score.WalkoutCount == 0 : average >= GoodAverage;
         int dayStars = 1 + (met ? 1 : 0) + (met && well ? 1 : 0);
         int bonus = met ? Bonus : 0;
-        if (bonus > 0) CafeProgress.AddCoins(bonus);
+        int starBonus = dayStars == 3 ? StarBonus : 0;
+        if (bonus + starBonus > 0) CafeProgress.AddCoins(bonus + starBonus);
+        CafeProgress.RecordLevelStars(Day, dayStars);
+        WeeklyTasks.Add(WeeklyTasks.Kind.Levels);
+        if (dayStars == 3) WeeklyTasks.Add(WeeklyTasks.Kind.ThreeStars);
 
         GoogleAnalytics.Event("day_end", "day", Day, "cafe_day", CafeDayNumber, "shift_of_day", ShiftOfDay,
             "goal", Goal.Kind.ToString(), "goal_met", met, "day_stars", dayStars);
@@ -257,7 +307,8 @@ public class DayGoals : MonoBehaviour
 
         return new DayResult
         {
-            Day = Day, CafeDay = CafeDayNumber, Shift = ShiftOfDay, Goal = Goal, Met = met, DayStars = dayStars, Bonus = bonus, Average = average,
+            Day = Day, CafeDay = CafeDayNumber, Shift = ShiftOfDay, Goal = Goal, Met = met, DayStars = dayStars, Bonus = bonus,
+            StarBonus = starBonus, Average = average,
             Earned = score.ShiftEarned, Walkouts = score.WalkoutCount, LevelsGained = new List<int>(levelsGained),
         };
     }

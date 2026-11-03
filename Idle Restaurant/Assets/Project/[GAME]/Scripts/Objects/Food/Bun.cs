@@ -57,6 +57,29 @@ public class Bun : EdibleBase
         }
     }
 
+    // The bottom half (the bottom of a burger in the chef's hands, as on a plate) or the whole bun (going into the oven).
+    public void LookSliced(bool sliced)
+    {
+        if (sliced == isSlicedBun || currentVersion == null) return;
+        currentVersion.SetActive(false);
+        if (sliced)
+        {
+            pool.GetObject(transform, bunSlice, PoolingManager.bunBottomList);
+            collider.size = slicedBunColSize;
+            collider.center = slicedBunColCenter;
+        }
+        else
+        {
+            pool.GetObject(transform, purePrefab, pureList);
+            collider.size = colSize;
+            collider.center = colCenter;
+        }
+        currentVersion = pool.currentObject;
+        currentVersion.transform.localPosition = Vector3.zero;
+        currentVersion.transform.localRotation = Quaternion.identity;
+        isSlicedBun = sliced;
+    }
+
     public override GameObject SetFood()
     {
         if (placeable is CookingBase)
@@ -83,8 +106,8 @@ public class Bun : EdibleBase
     protected override void OnDisable()
     {
         base.OnDisable();
-        
-        _currentBunState = 0;  
+
+        _currentBunState = 0;
         bakeTimer = 0f;
         isOver = false;
         isSlicedBun = false;

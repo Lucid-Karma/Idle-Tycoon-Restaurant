@@ -44,8 +44,10 @@ public class ScoreManager : Singleton<ScoreManager>
     // break comes at about 2-3 minutes, and each shift is a little longer than the one before. Fixed for the whole
     // shift on first use, so a table bought mid-shift adds its customer from the next shift (the pips and the end
     // stay consistent).
-    public const int BaseCustomers = 8, FirstShiftCustomers = 3;
-    public static int CustomersForShift(int shiftsPlayed) => Mathf.Min(BaseCustomers, FirstShiftCustomers + shiftsPlayed);
+    // Levels (2026-10-28): a shift is a short level now, 2-3 minutes - 3 customers (the lesson's), then 4, 4, 5, 5 and
+    // at most 6 (tables bought still add one each). Eight made a level of five minutes and more.
+    public const int BaseCustomers = 6, FirstShiftCustomers = 3;
+    public static int CustomersForShift(int shiftsPlayed) => Mathf.Min(BaseCustomers, FirstShiftCustomers + (shiftsPlayed + 1) / 2);
     private int customersThisShift;
     public int CustomersPerLevel
     {
@@ -74,6 +76,8 @@ public class ScoreManager : Singleton<ScoreManager>
     public int PerfectCount { get; private set; }
     public int ChaosCount { get; private set; }
     public int WalkoutCount { get; private set; }
+    // Fries tossed to customers who had ordered them (a level goal: DayGoals).
+    public int FriesServed { get; private set; }
     public int BestStreak { get; private set; }
     public int RushStreak { get; private set; }
     private float lastServeTime = float.NegativeInfinity;
@@ -136,7 +140,14 @@ public class ScoreManager : Singleton<ScoreManager>
         ShiftEarned += earned;
         ShiftStars += stars;
         CafeProgress.AddCoins(earned);
-        CafeProgress.AddStars(stars);   // may level the cafe up (UIToast announces it after this order)
+        CafeProgress.AddStars(stars);
+        // The book of burger names and the week's tasks count every order.
+        BurgerBook.Serve(review.Title);
+        WeeklyTasks.Add(WeeklyTasks.Kind.Serve);
+        if (review.IsPerfect) WeeklyTasks.Add(WeeklyTasks.Kind.Perfect);
+        if (review.IsChaos) WeeklyTasks.Add(WeeklyTasks.Kind.Chaos);
+        if (RushStreak == 3) WeeklyTasks.Add(WeeklyTasks.Kind.Rush);
+        WeeklyTasks.Add(WeeklyTasks.Kind.Earn, earned);
         DoPointExpression();
         return LastOrder;
     }
@@ -156,6 +167,13 @@ public class ScoreManager : Singleton<ScoreManager>
         CafeProgress.AddCoins(amount);
     }
 
+    // The fries a customer ordered, tossed to them: paid on the spot (NpcFsm.CatchThrown).
+    public void AddFries(int amount)
+    {
+        FriesServed++;
+        AddTip(amount);
+    }
+
     private bool levelFinished;
 
     // The next shift in the same scene (ShiftFlow): everything counted per shift starts again; the till, the
@@ -170,7 +188,7 @@ public class ScoreManager : Singleton<ScoreManager>
         customersThisShift = 0;
         ShiftEarned = 0;
         ShiftStars = 0;
-        ServedCount = PerfectCount = ChaosCount = WalkoutCount = BestStreak = RushStreak = 0;
+        ServedCount = PerfectCount = ChaosCount = WalkoutCount = BestStreak = RushStreak = FriesServed = 0;
         lastServeTime = float.NegativeInfinity;
         titleCounts.Clear();
         SignatureBurger = null;

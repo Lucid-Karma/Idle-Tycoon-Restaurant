@@ -77,8 +77,8 @@ public class OvenDoor : MonoBehaviour
     {
         if (Time.time < peekUntil) return true;
         if (food != null) return food.Preparation != Prep.Raw;           // ready or burnt: show it
-        // Empty: open for a chef on his way here with a raw bun.
-        if (chef == null || chef.HeldFood is not Bun bun || bun.Preparation != Prep.Raw) return false;
+        // Empty: open for a chef on his way here with a raw bun (anywhere in his stack).
+        if (chef == null || !chef.Carries(f => f is Bun && f.Preparation == Prep.Raw)) return false;
         var offset = chef.transform.position - trayOut;
         offset.y = 0f;
         return offset.magnitude < welcomeDistance;

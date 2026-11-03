@@ -102,10 +102,17 @@ public static class Customers
         return (review.Reaction, review.Mood);
     }
 
-    // Knights are too polite to throw tomatoes at the chef.
-    public static bool ThrowsBack(CustomerKind kind) => kind != CustomerKind.Knight;
+    // While a new player is still learning (the lesson and the first two levels; user, 2026-10-30: "while learning, the
+    // customers' reactions could be more constructive"), customers coach instead of jeer: a flawed burger gets a tip for
+    // next time ("Chop the tomato first!", BurgerReview.Coach), nobody throws a tomato back, and someone who runs out
+    // of patience says they'll come back.
+    public static bool Gentle => Tutorial.Running || CafeProgress.LevelNumber <= 2;
 
-    public static string GiveUpLine(CustomerKind kind) => kind == CustomerKind.Knight ? "Farewell, chef..." : "Too slow!";
+    // Knights are too polite to throw tomatoes at the chef (and nobody throws one at a beginner).
+    public static bool ThrowsBack(CustomerKind kind) => kind != CustomerKind.Knight && !Gentle;
+
+    public static string GiveUpLine(CustomerKind kind) =>
+        Gentle ? "I'll come back!" : kind == CustomerKind.Knight ? "Farewell, chef..." : "Too slow!";
 
     // How much a thrown snack is worth to them (Rangers love snacks: twice the time, twice the tip).
     public static float SnackScale(CustomerKind kind) => kind == CustomerKind.Ranger ? 2f : 1f;

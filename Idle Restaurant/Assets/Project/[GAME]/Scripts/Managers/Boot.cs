@@ -16,52 +16,95 @@ using UnityEngine.UI;
 // it ~50 ms a frame (the screen only shows "Loading..." meanwhile); it goes back to Normal once the scene is in.
 // On the web the page's own loading screen (WebGL template ChibiCafe) stays up until the game scene is in
 // (ChibiGameReady), so this scene shows nothing of its own there: one loading screen, not two (2026-10-20).
+// The game scene is loaded additively and this one unloaded after it (2026-10-31): a scene loaded in Single mode makes
+// Unity unload every unused asset and collect garbage before the first frame, which in a web build measured 1.4-3.2 s
+// of the load - for an empty boot scene there is nothing to free. Roots the game made while this scene was still the
+// active one (its Awake / OnEnable / sceneLoaded) are moved over first, so they do not go when this scene does.
 public class Boot : MonoBehaviour
 {
 #if UNITY_WEBGL && !UNITY_EDITOR
     [System.Runtime.InteropServices.DllImport("__Internal")] private static extern void ChibiGameReady();
+    [System.Runtime.InteropServices.DllImport("__Internal")] private static extern double ChibiPageSeconds();
+    [System.Runtime.InteropServices.DllImport("__Internal")] private static extern void ChibiConsole(string text);
     private const bool PageShowsLoading = true;
 #else
     private static void ChibiGameReady() { }
+    private static double ChibiPageSeconds() => Time.realtimeSinceStartupAsDouble;
+    private static void ChibiConsole(string text) => Debug.Log(text);
     private const bool PageShowsLoading = false;
 #endif
+
+    // One line in the console at each step of the first load, timed from the start of the page, so a portal's QA tool
+    // log shows where its load time went (2026-10-31: CrazyGames measured 27 s where a local test takes 7).
+    public static void Mark(string step) => ChibiConsole($"[Chibi load] {step} at {ChibiPageSeconds():0.0} s");
 
     [SerializeField] private string gameScene = "GameScene";
     private const float MaxWait = 6f;
     private const float ShowLoadingAfter = 0.4f;   // a fast load never flashes it
 
     private float startedAt;
-    private bool sdkDone, activated;
+    private bool sdkDone, activated, markedLoaded;
     private AsyncOperation loading;
+    private GameObject[] ownRoots;
     private TextMeshProUGUI loadingText;
 
     private void Start()
     {
         startedAt = Time.realtimeSinceStartup;
+        Mark("engine started");
         Application.backgroundLoadingPriority = ThreadPriority.High;
         SceneManager.sceneLoaded += OnGameSceneLoaded;
-        loading = SceneManager.LoadSceneAsync(gameScene);
+        loading = SceneManager.LoadSceneAsync(gameScene, LoadSceneMode.Additive);
         loading.allowSceneActivation = false;
         GamePlatform.Init(OnSdkReady);
         if (!PageShowsLoading) BuildLoadingText();
+        ownRoots = gameObject.scene.GetRootGameObjects();
     }
 
-    private void OnSdkReady() => sdkDone = true;
+    private void OnSdkReady()
+    {
+        sdkDone = true;
+        Mark("SDK ready");
+    }
 
-    private static void OnGameSceneLoaded(Scene scene, LoadSceneMode mode)
+    private void OnGameSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         SceneManager.sceneLoaded -= OnGameSceneLoaded;
+        var boot = gameObject.scene;
+        SceneManager.SetActiveScene(scene);   // its lighting, and where new objects go from now on
+        foreach (var root in boot.GetRootGameObjects())
+            if (System.Array.IndexOf(ownRoots, root) < 0) SceneManager.MoveGameObjectToScene(root, scene);
+        SceneManager.UnloadSceneAsync(boot).completed += _ => LightProbes.TetrahedralizeAsync();
         Application.backgroundLoadingPriority = ThreadPriority.Normal;
+        Mark("kitchen in (every Awake run)");
         ChibiGameReady();
+        new GameObject("FirstFrameMark").AddComponent<FirstFrameMark>();
+    }
+
+    // The two marks after the scene is in: every Start has run (the first Update), and the first frame is drawn.
+    private sealed class FirstFrameMark : MonoBehaviour
+    {
+        private System.Collections.IEnumerator Start()
+        {
+            yield return null;
+            Mark("first update done");
+            yield return new WaitForEndOfFrame();
+            Mark("first frame drawn");
+            Destroy(gameObject);
+        }
     }
 
     private void Update()
     {
         AnimateLoadingText();
         if (activated) return;
+        if (!markedLoaded && loading.progress >= 0.9f) { markedLoaded = true; Mark("kitchen loaded"); }
         if (!sdkDone && Time.realtimeSinceStartup - startedAt < MaxWait) return;
-        if (!sdkDone) GamePlatform.GiveUpWaiting();
+        if (!sdkDone) { GamePlatform.GiveUpWaiting(); Mark("SDK not ready, starting without it"); }
         activated = true;
+        Mark("switching to the kitchen");
+        // Its camera (and audio listener) off before the kitchen's scripts look for Camera.main (CameraAB, SeasonalDecor).
+        foreach (var cam in FindObjectsByType<Camera>(FindObjectsSortMode.None)) if (cam.gameObject.scene == gameObject.scene) cam.gameObject.SetActive(false);
         PlatformSession.Ensure();
         loading.allowSceneActivation = true;
     }

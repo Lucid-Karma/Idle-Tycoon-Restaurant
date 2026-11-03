@@ -86,6 +86,18 @@ public class NpcFsm : MonoBehaviour
     // the burger made for them and the order card (UIOrderTags), so who a burger is for is a matter of matching two
     // numbers (user: "clear enough for a five-year-old"). 0 until they order; kept until they leave.
     public int Ticket { get; private set; }
+    // Fries on the side (Orders.WantsFries, from level 5): a little carton by their order until they are tossed some.
+    public bool WantsFries { get; private set; }
+    public bool GotFries { get; private set; }
+    // Still to be tossed their fries: while they wait, and while they eat (a side can come with the burger).
+    public bool FriesDue => WantsFries && !GotFries && isActiveAndEnabled
+                            && (executingNpcState == ExecutingNpcState.WAIT || executingNpcState == ExecutingNpcState.EAT);
+    // What the fries they ordered pay, tossed to them (more for a Ranger: Customers.SnackScale).
+    public const int FriesPay = 3;
+    // Fries reached the customer who ordered them (the fries' first go ends with it: Tutorial). Static: named methods.
+    public static event System.Action<NpcFsm> FriesServed;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetFriesEvent() => FriesServed = null;
     public static readonly UnityEngine.Events.UnityEvent<NpcFsm> OnOrdered = new();
     // An order was rated (who, and how it went): a perfect one pops "PERFECT!" over them (UISplatPop).
     // Static: subscribe with named methods only.
@@ -124,6 +136,7 @@ public class NpcFsm : MonoBehaviour
         LastReview = null;
         Ordered = null;
         Ticket = 0;
+        WantsFries = GotFries = false;
         caughtCount = 0;
 
         executingNpcState = ExecutingNpcState.COME;
@@ -177,6 +190,7 @@ public class NpcFsm : MonoBehaviour
             Seat();
             Ticket = FreeTicket();
             Ordered = Orders.Pick();
+            WantsFries = Orders.WantsFries();
             OnOrdered.Invoke(this);
             OnNpcSitChairDown.Invoke();
             executingNpcState = ExecutingNpcState.WAIT;
@@ -253,13 +267,29 @@ public class NpcFsm : MonoBehaviour
     // Something the chef threw hit them (FoodFight). Only customers still waiting for their order react.
     public void CatchThrown(BurgerLayer item)
     {
-        if (executingNpcState != ExecutingNpcState.WAIT) return;
+        // The fries they ordered are taken while they wait and while they eat; anything else only while they wait.
+        bool theirFries = item.Name == "fries" && FriesDue;
+        if (executingNpcState != ExecutingNpcState.WAIT && !theirFries) return;
+        if (theirFries && item.Prep == Prep.Good)
+        {
+            GotFries = true;
+            float scale = Customers.SnackScale(kind);
+            int pay = Mathf.RoundToInt(FriesPay * scale);
+            if (executingNpcState == ExecutingNpcState.WAIT) waitingTimer = Mathf.Max(0f, waitingTimer - snackPatience * scale);
+            OnNpcSays.Invoke("My fries! Yum!", Mood.Delighted);
+            ScoreManager.Instance.AddFries(pay);
+            OnNpcTipped.Invoke(pay);
+            GameSfx.Play(GameSfx.Cue.Tip);
+            EventManager.OnScoreUpdate.Invoke();
+            FriesServed?.Invoke(this);
+            return;
+        }
         caughtCount++;
 
         bool throwsBack = Customers.ThrowsBack(kind);
         if (caughtCount > 1)
         {
-            OnNpcSays.Invoke("I want a BURGER!", Mood.Shocked);
+            OnNpcSays.Invoke(Customers.Gentle ? "A burger, please!" : "I want a BURGER!", Customers.Gentle ? Mood.Amused : Mood.Shocked);
             if (throwsBack) FoodFight.Instance.CustomerThrows(this);
         }
         else if (item.Prep == Prep.Good)
@@ -273,11 +303,13 @@ public class NpcFsm : MonoBehaviour
             GameSfx.Play(GameSfx.Cue.Tip);
             EventManager.OnScoreUpdate.Invoke();
             FoodFight.OnSnackAccepted.Invoke();
+            WeeklyTasks.Add(WeeklyTasks.Kind.Snacks);
         }
         else
         {
             waitingTimer = Mathf.Min(Patience - 1f, waitingTimer + bonkPatience);
-            OnNpcSays.Invoke(throwsBack ? BurgerReview.BonkLine(item) : "How rude!", Mood.Shocked);
+            if (Customers.Gentle) OnNpcSays.Invoke("Cook it first, chef!", Mood.Amused);
+            else OnNpcSays.Invoke(throwsBack ? BurgerReview.BonkLine(item) : "How rude!", Mood.Shocked);
             if (throwsBack) FoodFight.Instance.CustomerThrows(this);
         }
     }

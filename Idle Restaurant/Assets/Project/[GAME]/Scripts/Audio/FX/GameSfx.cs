@@ -4,7 +4,7 @@ using UnityEngine;
 // Short sounds for what happens in the cafe, so the player hears it without looking: money coming in, a
 // customer sitting down or leaving hungry, food flying, the chef getting splatted or slipping, a burger
 // done, the cafe levelling up - and the kitchen itself: picking food up and putting it down, the knife on the
-// board, the patty sizzling, a bun or patty ready (a bright ding) or burnt (a poof), a bin. One AudioSource playing one-shots with a little pitch jitter so repeats
+// board, the patty sizzling, a bun or patty ready (a bright ding) or burnt (a poof), a bin, the dishes. One AudioSource playing one-shots with a little pitch jitter so repeats
 // don't grate. Silent while the sound is off (the speaker button, Audio.IsMusicOn).
 // Lives on a scene object (<<<Controllers>>>/Sfx): gameplay calls GameSfx.Play(cue); cues that already
 // have an event (order rated, customer protest, level up) are picked up here.
@@ -13,7 +13,7 @@ public class GameSfx : MonoBehaviour
 {
     // Append new cues at the end: the scene stores them by index.
     public enum Cue { Coin, Tip, Seated, LeftHungry, CustomerThrow, ChefThrow, Splat, Slip, Bonk, BurgerDone, LevelUp, ArrowShot, ArrowHit,
-        Pickup, PutDown, Chop, Ready, Burnt, Trash }
+        Pickup, PutDown, Chop, Ready, Burnt, Trash, Dish }
 
     [Serializable]
     private struct Sound
@@ -55,6 +55,18 @@ public class GameSfx : MonoBehaviour
         if (on) sizzlers.Add(pan); else sizzlers.Remove(pan);
     }
 
+    // The fryer says whether its oil is bubbling (its own crackle, not the pan's sizzle).
+    public static void Fry(UnityEngine.Object fryer, bool on)
+    {
+        if (on) friers.Add(fryer); else friers.Remove(fryer);
+    }
+
+    // The fryer's crackle: a recording, CC0 (BigSoundBank, Graphics/Audio/CREDITS.txt). (A restaurant murmur that
+    // grew with the seated customers was tried and taken out after the user heard it in a build, 2026-10-28.)
+    private const float FryVolume = 0.2f;
+    private static readonly System.Collections.Generic.HashSet<UnityEngine.Object> friers = new();
+    private AudioSource fry;
+
     private void Awake()
     {
         instance = this;
@@ -72,6 +84,10 @@ public class GameSfx : MonoBehaviour
             voices[i] = voice;
         }
         for (int i = 0; i < lastPlayed.Length; i++) lastPlayed[i] = float.NegativeInfinity;
+        dishes = Resources.LoadAll<AudioClip>("Sounds/Plate");
+
+        friers.Clear();
+        fry = Loop(Resources.Load<AudioClip>("Sounds/Fryer/fryer_loop"), first);
 
         sizzlers.Clear();
         if (sizzleLoop != null)
@@ -89,8 +105,41 @@ public class GameSfx : MonoBehaviour
         }
     }
 
+    // A looping source for a recorded loop, silent until asked for (Steer).
+    private AudioSource Loop(AudioClip clip, AudioSource like)
+    {
+        if (clip == null) return null;
+        var source = gameObject.AddComponent<AudioSource>();
+        source.clip = clip;
+        source.loop = true;
+        source.playOnAwake = false;
+        source.volume = 0f;
+        source.spatialBlend = 0f;
+        source.outputAudioMixerGroup = like.outputAudioMixerGroup;
+        if (clip.loadState == AudioDataLoadState.Unloaded) clip.LoadAudioData();
+        return source;
+    }
+
+    // Fades a loop towards a volume, starting it (once its data is in, at a random point) or stopping it at 0.
+    private static void Steer(AudioSource source, float target, float speed)
+    {
+        if (source == null) return;
+        source.volume = Mathf.MoveTowards(source.volume, target, Time.unscaledDeltaTime * speed);
+        if (source.volume > 0f && !source.isPlaying)
+        {
+            var state = source.clip.loadState;
+            if (state == AudioDataLoadState.Loaded) { source.time = UnityEngine.Random.Range(0f, source.clip.length); source.Play(); }
+            else if (state == AudioDataLoadState.Unloaded) source.clip.LoadAudioData();
+        }
+        else if (source.volume <= 0f && source.isPlaying) source.Stop();
+    }
+
     private void Update()
     {
+        bool live = Audio.IsMusicOn && Time.timeScale > 0f && !LessonIntro.Playing;
+        friers.RemoveWhere(x => x == null);
+        Steer(fry, live && friers.Count > 0 ? FryVolume : 0f, FryVolume * 4f);
+
         if (sizzle == null) return;
         sizzlers.RemoveWhere(x => x == null);
         // Paused (menus, the result card): the kitchen goes quiet too.
@@ -111,6 +160,12 @@ public class GameSfx : MonoBehaviour
     {
         if (instance == this) instance = null;
     }
+
+    // Dishes (user, 2026-10-28: "plate sounds" - a clink made in code was turned down, real ones were asked for):
+    // a light china clink when food goes onto a plate or a burger onto a customer's table. Recorded sounds, CC0
+    // (Kenney's "Impact Sounds", Resources/Sounds/Plate, see Graphics/Audio/CREDITS.txt), one of five at random.
+    private AudioClip[] dishes;
+    private const float DishVolume = 0.26f;   // its peak about the put-down sound's (it rings longer)
 
     // Named methods: these events are static and outlive a Replay.
     private void OnEnable()
@@ -136,11 +191,21 @@ public class GameSfx : MonoBehaviour
 
     private void PlayCue(Cue cue)
     {
-        if (!Audio.IsMusicOn || LessonIntro.Playing) return;   // (the titles have sounds of their own)
+        if (!Audio.IsMusicOn || LessonIntro.Playing) return;   // (the titles are quiet: music only)
         // The same cue twice in one moment (two tips at once) plays once.
         float now = Time.unscaledTime;
         if (now - lastPlayed[(int)cue] < 0.06f) return;
         lastPlayed[(int)cue] = now;
+
+        if (cue == Cue.Dish)
+        {
+            if (dishes == null || dishes.Length == 0) return;
+            var dishVoice = voices[nextVoice];
+            nextVoice = (nextVoice + 1) % voices.Length;
+            dishVoice.pitch = 1f + UnityEngine.Random.Range(-0.05f, 0.05f);
+            dishVoice.PlayOneShot(dishes[UnityEngine.Random.Range(0, dishes.Length)], DishVolume);
+            return;
+        }
 
 
         foreach (var sound in sounds)

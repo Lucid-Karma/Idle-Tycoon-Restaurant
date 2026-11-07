@@ -9,6 +9,10 @@ using UnityEngine.AI;
 // it on a waiting customer's table spot (the same ServiceBase.UseFood the chef uses, so scoring, tips and
 // the customer's reaction are untouched).
 // No rig and no animator: he is one mesh that hops, which is cheaper than a walk cycle and cuter.
+// More of him (user, 2026-11-03): tapped, he purrs and spins (PetAt); he takes fried fries out of the fryer and
+// tosses them to the customer who ordered them, as the chef does; when the chef slips, he runs over and catches what
+// flew out of the chef's hands on his tray (Catch), and hands it back; and between errands he sometimes digs in the
+// bin and eats what he finds (Bin.Dig).
 [RequireComponent(typeof(NavMeshAgent))]
 public class Waiter : MonoBehaviour
 {
@@ -36,7 +40,7 @@ public class Waiter : MonoBehaviour
     private const float WagDegrees = 22f;           // ...and his tail wags, in little bursts
     private const float WagRate = 6.5f;
 
-    private enum Job { Waiting, Fetching, Delivering, GoingHome }
+    private enum Job { Waiting, Fetching, Delivering, GoingHome, Catching, Rummaging, Eating, Visiting }
 
     private NavMeshAgent agent;
     private Vector3 home;
@@ -45,6 +49,11 @@ public class Waiter : MonoBehaviour
     private Plate from;
     private ServiceBase to;
     private Hamburger carrying;
+    // Fries he is taking to a customer (instead of a burger): from which station, for whom.
+    private EdibleBase fries;
+    private HeatStation friesFrom;
+    private NpcFsm friesFor;
+    private const float ThrowFrom = 4f;             // he tosses fries from this close, as the chef does from the kitchen
     private Vector3 carriedScale;
     private float nextLook;
     private float nextAsk;
@@ -57,6 +66,7 @@ public class Waiter : MonoBehaviour
     private float standing;     // 0 while hopping, 1 once he has settled: how much of the sway shows
     private float cheerAt = -10f;
     private Vector3 trayRest;
+    private Quaternion trayTurn = Quaternion.identity;
     private Vector3 lastVelocity;
     private Vector2 wobble, wobbleVelocity;     // the burger on the tray: x forward/back, y side to side
 
@@ -83,9 +93,33 @@ public class Waiter : MonoBehaviour
         get
         {
             var mochi = FindFirstObjectByType<Waiter>();
-            return mochi != null && mochi.isActiveAndEnabled && mochi.carrying == null
-                   && (mochi.job == Job.Waiting || mochi.job == Job.GoingHome);
+            return mochi != null && mochi.isActiveAndEnabled && mochi.Idle;
         }
+    }
+
+    // Nothing in his paws and nothing he can't drop for a job (looking for a bite in the bin can wait).
+    private bool Idle => carrying == null && fries == null
+                         && (job == Job.Waiting || job == Job.GoingHome || job == Job.Rummaging || job == Job.Visiting);
+
+    // Walking somewhere, for the game's watchdog (Unstuck): it calls Unstick when he has not moved for a while.
+    // Not on a visit: walking up to the chef he stops short against him, which looked stuck - the watchdog put him
+    // back in his corner and he came hopping over again (user, 2026-11-06). A visit gives up by itself (Visit).
+    public bool OnTheMove => job != Job.Waiting && job != Job.Eating && job != Job.Visiting && agent.isOnNavMesh && agent.hasPath
+                             && !agent.pathPending && agent.remainingDistance > 0.3f;
+
+    // Stuck on the way somewhere: whatever he carried goes back, and he is home again.
+    public void Unstick()
+    {
+        if (carrying != null) Drop(false);
+        if (fries != null) DropFries();
+        (from, to) = (null, null);
+        (friesFrom, friesFor) = (null, null);
+        rummageIn = null;
+        Claimed = null;
+        agent.speed = Speed;
+        Unstuck.Floor(agent, 6f, home);
+        if (agent.isOnNavMesh) agent.ResetPath();
+        SetJob(Job.Waiting);
     }
 
     // What the chef shouldn't bother with any more: a burger the waiter has already claimed.
@@ -98,8 +132,13 @@ public class Waiter : MonoBehaviour
         agent.acceleration = Acceleration;
         agent.angularSpeed = 900f;
         agent.stoppingDistance = 0.15f;
-        home = homePoint != Vector3.zero ? homePoint : transform.position;
-        if (tray != null) trayRest = tray.localPosition;
+        // The least important agent in the cafe: everyone else walks on as if he weren't there and he steps aside
+        // (user, 2026-11-06: coming over to rub against the chef he pushed him about and got in his way).
+        agent.avoidancePriority = 99;
+        home =homePoint != Vector3.zero ? homePoint : transform.position;
+        if (tray != null) (trayRest, trayTurn) = (tray.localPosition, tray.localRotation);
+        nextRummage = Time.time + 20f;
+        nextVisit = Time.time + 12f;
     }
 
     // The shop reveals something bought by growing its group from scale zero. A NavMeshAgent switched on in
@@ -131,6 +170,7 @@ public class Waiter : MonoBehaviour
     {
         // Put down whatever he was holding, so a burger is never lost with him.
         if (carrying != null && from != null) Drop(false);
+        if (fries != null) DropFries();
         // A burger caught in the air when he switched off would stay there: settle it where it was going.
         foreach (var (item, size) in airborne)
         {
@@ -151,7 +191,7 @@ public class Waiter : MonoBehaviour
         // Looking costs a search of the plates, so it is done a few times a second; heading for something
         // is checked every frame, or he runs past the table before noticing he has got there. He keeps
         // looking on the way home, so a burger that comes up meanwhile does not wait for him to sit down.
-        if (job == Job.Waiting || job == Job.GoingHome)
+        if (job == Job.Waiting || job == Job.GoingHome || job == Job.Rummaging || job == Job.Visiting)
         {
             if (Time.time >= nextLook)
             {
@@ -160,13 +200,18 @@ public class Waiter : MonoBehaviour
             }
             if (job == Job.GoingHome && Arrived(home)) SetJob(Job.Waiting);
             if (job == Job.Waiting) FaceTheViewer();
+            if (job == Job.Rummaging) Rummage();
+            if (job == Job.Visiting) Visit();
             return;
         }
+        if (job == Job.Catching) { Catching(); return; }
+        if (job == Job.Eating) return;   // (Eat runs it)
 
         // Whatever is in his way, he doesn't carry a burger around forever: put it back, go home, try again.
         if (Time.time - jobSince > GiveUpAfter) { GiveUp(); return; }
 
-        if (job == Job.Fetching) Fetch();
+        if (job == Job.Fetching) { if (friesFor != null) FetchFries(); else Fetch(); }
+        else if (friesFor != null) DeliverFries();
         else Deliver();
     }
 
@@ -188,6 +233,7 @@ public class Waiter : MonoBehaviour
         job = next;
         jobSince = Time.time;
         closeSince = -1f;
+        rubUntil = -1f;   // (a visit cut short by a burger to deliver starts afresh next time)
     }
 
     #region The job
@@ -205,6 +251,21 @@ public class Waiter : MonoBehaviour
             Claimed = burger;
             GoTo(plate.transform.position, false);
             return;
+        }
+        if (LookForFries()) return;
+        if (job == Job.Waiting && Time.time >= nextVisit && FindFirstObjectByType<PlayerFSM>() is PlayerFSM chef && chef.Idle
+            && !Tutorial.Running && Flat(chef.transform.position) < 9f)
+        {
+            visiting = chef;
+            SetJob(Job.Visiting);
+            GoTo(BesideChef(), true);
+            return;
+        }
+        if (job == Job.Waiting && Time.time >= nextRummage && Object.FindFirstObjectByType<Bin>() is Bin bin && bin.HasLeftovers)
+        {
+            rummageIn = bin;
+            SetJob(Job.Rummaging);
+            GoTo(bin.Mouth, false);
         }
     }
 
@@ -297,6 +358,7 @@ public class Waiter : MonoBehaviour
     private void GiveUp()
     {
         if (carrying != null) Drop(false);
+        if (fries != null) DropFries();
         GoHome();
     }
 
@@ -311,6 +373,17 @@ public class Waiter : MonoBehaviour
         var (start, size) = (burger.transform.position, burger.transform.lossyScale.x);
         burger.transform.SetParent(null, true);
         burger.transform.localScale = carriedScale;
+        // Nowhere to put it (every plate busy, its plate taken meanwhile): it went nowhere and floated at tray height
+        // for good (user's phone, 2026-11-04). Then into the bin with a toss, like anything else nobody can use.
+        if (place == null || place is Plate full && !full.Accepts(burger))
+        {
+            var bin = Object.FindFirstObjectByType<Bin>();
+            if (bin != null) bin.Junk(burger);
+            else burger.gameObject.SetActive(false);
+            carrying = null;
+            Claimed = null;
+            return;
+        }
         place.UseFood(burger);
         // (Not when he is being switched off: a coroutine can't start then, and the burger just lands.)
         if (isActiveAndEnabled && burger.transform.parent != null)
@@ -357,6 +430,8 @@ public class Waiter : MonoBehaviour
     private void GoHome()
     {
         (from, to) = (null, null);
+        (friesFrom, friesFor) = (null, null);
+        agent.speed = Speed;
         SetJob(Job.GoingHome);
         Claimed = null;
         GoTo(home, true);
@@ -411,7 +486,7 @@ public class Waiter : MonoBehaviour
         if (cat == null) return;
         float speed = agent.isOnNavMesh ? agent.velocity.magnitude : 0f;
         moving = moving ? speed > 0.25f : speed > 0.5f;     // a gap between starting and stopping, so he doesn't flicker
-        bool carry = carrying != null;
+        bool carry = carrying != null || fries != null;
         float rate = carry ? CarryHopRate : HopRate;
 
         if (moving)
@@ -435,6 +510,14 @@ public class Waiter : MonoBehaviour
         // The happy little jump after setting a burger down.
         float cheer = (Time.time - cheerAt) / 0.5f;
         if (cheer >= 0f && cheer < 1f) lift += 0.17f * 4f * cheer * (1f - cheer);
+        // Petted: a higher jump with a full turn in the air.
+        float pet = (Time.time - pettedAt) / PetSeconds;
+        float spin = 0f;
+        if (pet >= 0f && pet < 1f)
+        {
+            lift += 0.26f * 4f * pet * (1f - pet);
+            spin = 360f * pet * pet * (3f - 2f * pet);
+        }
 
         float nod = Mathf.Sin(Time.time * SwayRate);
         // A good squash as he lands is what makes the hop read as bouncy (it was tried at a few percent, and
@@ -450,7 +533,7 @@ public class Waiter : MonoBehaviour
 
         Puff(ref wide, ref tall, ref roll);
         cat.localPosition = new Vector3(0f, lift, 0f);
-        cat.localRotation = Quaternion.Euler(lean, 0f, roll);
+        cat.localRotation = Quaternion.Euler(lean, spin, roll);
         cat.localScale = new Vector3(wide, tall, wide);
 
         if (tail != null)
@@ -458,7 +541,8 @@ public class Waiter : MonoBehaviour
             // Standing, the tail wags in bursts (it swells and fades, then rests); hopping, it streams out
             // against the way he rocks and flicks once each hop.
             float burst = 0.55f + 0.45f * Mathf.Sin(Time.time * 0.9f);
-            float wag = Mathf.Sin(Time.time * WagRate) * WagDegrees * burst;
+            bool happy = Time.time - pettedAt < 2.5f;   // a petted cat's tail goes like mad for a while
+            float wag = Mathf.Sin(Time.time * WagRate * (happy ? 2.2f : 1f)) * WagDegrees * (happy ? 1.3f : burst);
             float streaming = -rock * 1.6f + Mathf.Sin(u * Mathf.PI * 2f) * 10f;
             tail.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(streaming, wag, standing));
         }
@@ -468,10 +552,264 @@ public class Waiter : MonoBehaviour
         float side = -Mathf.Sin(roll * Mathf.Deg2Rad) * trayRest.y;
         float ahead = Mathf.Sin(lean * Mathf.Deg2Rad) * trayRest.y;
         float bob = carry ? Mathf.Abs(nod) * 0.012f * standing : 0f;
-        tray.localPosition = new Vector3(trayRest.x + side, trayRest.y * tall + lift + bob, trayRest.z + ahead);
+        var turn = Quaternion.Euler(0f, spin, 0f);   // (turning round with him when he is petted)
+        tray.localPosition = turn * new Vector3(trayRest.x + side, trayRest.y * tall + lift + bob, trayRest.z + ahead);
+        tray.localRotation = turn * trayTurn;
 
-        if (hold != null) Wobble(dt, carry, speed, air, rock, nod);
+        if (hold != null) Wobble(dt, carrying != null, speed, air, rock, nod);
     }
+
+    #region Fries
+    // Fries done in a fryer (not burnt) and a customer still waiting for theirs: he fetches them and tosses them over.
+    private bool LookForFries()
+    {
+        foreach (var station in Object.FindObjectsByType<HeatStation>(FindObjectsSortMode.None))
+        {
+            if (station.Food is not Fries done || done.Preparation != Prep.Good || done.untouchable) continue;
+            var who = FriesCustomer();
+            if (who == null) return false;
+            (friesFrom, friesFor) = (station, who);
+            SetJob(Job.Fetching);
+            GoTo(station.transform.position, false);
+            return true;
+        }
+        return false;
+    }
+
+    // Whoever has waited longest for their fries.
+    private static NpcFsm FriesCustomer()
+    {
+        NpcFsm best = null;
+        foreach (var npc in NpcFsm.Active)
+            if (npc.FriesDue && (best == null || npc.WaitedSeconds > best.WaitedSeconds)) best = npc;
+        return best;
+    }
+
+    private void FetchFries()
+    {
+        // The chef may have taken them meanwhile, or burnt them.
+        if (friesFrom == null || friesFrom.Food is not Fries done || done.Preparation != Prep.Good) { GoHome(); return; }
+        if (!friesFor.FriesDue) friesFor = FriesCustomer();
+        if (friesFor == null) { GoHome(); return; }
+        if (!Arrived(friesFrom.transform.position)) return;
+        var (start, size) = (done.transform.position, done.transform.lossyScale.x);
+        done.RemoveFromList();
+        done.transform.SetParent(hold, false);
+        done.transform.localPosition = Vector3.zero;
+        done.transform.localRotation = Quaternion.identity;
+        carriedScale = done.transform.localScale;
+        fries = done;
+        SetJob(Job.Delivering);
+        GoTo(friesFor.transform.position, false);
+        StartCoroutine(Toss(done.transform, start, size, hold, 0.22f, 0.35f));
+    }
+
+    private void DeliverFries()
+    {
+        if (fries == null) { GoHome(); return; }
+        if (friesFor == null || !friesFor.FriesDue)
+        {
+            friesFor = FriesCustomer();
+            if (friesFor == null) { DropFries(); GoHome(); return; }
+            GoTo(friesFor.transform.position, false);
+        }
+        if (Flat(friesFor.transform.position) > ThrowFrom && !Arrived(friesFor.transform.position)) return;
+        // Close enough: a toss, as the chef does.
+        var toward = friesFor.transform.position - transform.position;
+        toward.y = 0f;
+        if (toward.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(toward);
+        agent.ResetPath();
+        var food = fries;
+        fries = null;
+        food.transform.localScale = carriedScale;
+        FoodFight.Instance.MochiThrows(food, friesFor);
+        cheerAt = Time.time;
+        GoHome();
+    }
+
+    // Nobody wants them any more: back into the fryer if it is free, otherwise into the bin.
+    private void DropFries()
+    {
+        var food = fries;
+        fries = null;
+        if (food == null) return;
+        food.transform.SetParent(null, true);
+        food.transform.localScale = carriedScale;
+        if (friesFrom != null && friesFrom.isActiveAndEnabled && !friesFrom.IsHaveFood()) { friesFrom.UseFood(food); return; }
+        var bin = Object.FindFirstObjectByType<Bin>();
+        if (bin != null) bin.Junk(food);
+        else food.gameObject.SetActive(false);
+    }
+    #endregion
+
+    #region Petting, catching, the bin
+    private const float PetSeconds = 0.7f;
+    private static readonly string[] PetLines = { "Purr!", "Mrrp!", "Meow!", "Prrrr!" };
+    private float pettedAt = -10f;
+
+    // A tap on him (PlayerFSM.HandleScreenTap asks first): he purrs and spins, and the tap goes no further.
+    public static bool PetAt(Vector3 screen)
+    {
+        var mochi = FindFirstObjectByType<Waiter>();
+        var cam = Camera.main;
+        if (mochi == null || !mochi.isActiveAndEnabled || cam == null) return false;
+        var p = cam.WorldToScreenPoint(mochi.transform.position + Vector3.up * 0.45f);
+        float d = Vector2.Distance(p, screen);
+        if (p.z <= 0f || d > Screen.height * 0.055f) return false;
+        // A customer nearer the finger is who the tap is for.
+        foreach (var npc in NpcFsm.Active)
+        {
+            if (npc == null) continue;
+            var q = cam.WorldToScreenPoint(npc.transform.position + Vector3.up * 0.9f);
+            if (q.z > 0f && Vector2.Distance(q, screen) < d) return false;
+        }
+        mochi.Petted();
+        return true;
+    }
+
+    private void Petted()
+    {
+        if (Time.time - pettedAt < PetSeconds * 0.6f) return;
+        pettedAt = Time.time;
+        GameSfx.Play(GameSfx.Cue.Seated);
+        UICheerPop.OnSay.Invoke(Head - Vector3.up * 0.2f, PetLines[Random.Range(0, PetLines.Length)]);
+    }
+
+    // The chef slipped (PlayerFSM.Slip): if he is free and near enough to get there before what flew out of the chef's
+    // hands comes down, he dashes over and it lands on his tray; it goes back to the chef at `until`. The function says
+    // where the i-th thing lands (null: he can't).
+    private float catchUntil;
+    public static System.Func<int, Vector3> Catch(Vector3 chef, float within, float until)
+    {
+        var mochi = FindFirstObjectByType<Waiter>();
+        if (mochi == null || !mochi.isActiveAndEnabled || !mochi.Idle || !mochi.agent.isOnNavMesh) return null;
+        const float Dash = 2f;   // a dash: twice his running speed
+        if (mochi.Flat(chef) / (Speed * Dash) > within * 0.8f) return null;
+        mochi.rummageIn = null;
+        mochi.SetJob(Job.Catching);
+        mochi.catchUntil = until;
+        mochi.agent.speed = Speed * Dash;
+        mochi.GoTo(chef, false);
+        var tray = mochi.hold != null ? mochi.hold : mochi.transform;
+        return i => tray.position + Vector3.up * (0.08f + 0.14f * i);
+    }
+
+    private void Catching()
+    {
+        if (Time.time < catchUntil + 0.3f) return;
+        cheerAt = Time.time;
+        GoHome();
+    }
+
+    // Now and then, with nothing to do, he trots over to the chef and rubs against his legs, purring (user,
+    // 2026-11-04: little life in the quiet moments), then goes back to his corner.
+    // It shows what he is up to (user, 2026-11-06): a heart now and then over his head on the way, and once there he
+    // stays a moment rubbing against him, hearts floating up, before he trots home.
+    private float nextVisit;
+    private PlayerFSM visiting;
+    private float rubUntil = -1f, nextHeart;
+    private const float RubSeconds = 1.6f, HeartEvery = 0.55f, RubHeartEvery = 0.28f;
+
+    private void Visit()
+    {
+        if (visiting == null || (rubUntil < 0f && Time.time - jobSince > 8f)) { EndVisit(30f); return; }
+        if (rubUntil < 0f)
+        {
+            // There once he is at the chef's legs: near him, or as near as the floor lets him (the spot beside the chef
+            // can be cut off by a counter - he stopped short and only ever gave up).
+            bool there = Flat(visiting.transform.position) <= 1.5f
+                         || agent.isOnNavMesh && !agent.pathPending && agent.hasPath && agent.remainingDistance < 0.3f && Flat(visiting.transform.position) < 2.2f;
+            if (!there)
+            {
+                if (Time.time >= nextAsk) GoTo(BesideChef(), true);
+                if (Time.time >= nextHeart) { nextHeart = Time.time + HeartEvery; KitchenFx.Hearts(Head, 1); }
+                return;
+            }
+            // There: a burst of hearts, the purr, and the chef gives a little hop.
+            agent.ResetPath();
+            rubUntil = Time.time + RubSeconds;
+            nextHeart = Time.time + RubHeartEvery;
+            KitchenFx.Hearts(Head, 6);
+            pettedAt = Time.time;   // the happy jump and spin, and the tail going like mad
+            UICheerPop.OnSay.Invoke(Head - Vector3.up * 0.2f, "Mrrrp~");
+            var body = visiting.GetComponentInChildren<Animator>();
+            if (body != null && body.transform != visiting.transform) TapJuice.Hop(body.transform, 0.1f);
+        }
+        // Rubbing: side on to him, swaying against his legs; off again if he walks away.
+        if (Flat(visiting.transform.position) > 2.6f) { EndVisit(Random.Range(35f, 60f)); return; }
+        var toward = visiting.transform.position - transform.position;
+        toward.y = 0f;
+        float rub = Mathf.Sin(Time.time * 9f) * 14f;
+        if (toward.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, 70f + rub, 0f) * toward);
+        if (Time.time >= nextHeart) { nextHeart = Time.time + RubHeartEvery; KitchenFx.Hearts(Head, 1); }
+        if (Time.time >= rubUntil) EndVisit(Random.Range(35f, 60f));
+    }
+
+    // A spot at the chef's legs on Mochi's side of him, not the chef's own spot (he can't stand there).
+    private Vector3 BesideChef()
+    {
+        var chef = visiting.transform.position;
+        var away = transform.position - chef;
+        away.y = 0f;
+        return chef + (away.sqrMagnitude > 0.01f ? away.normalized : visiting.transform.right) * 0.7f;
+    }
+
+    private void EndVisit(float nextIn)
+    {
+        nextVisit = Time.time + nextIn;
+        visiting = null;
+        rubUntil = -1f;
+        GoHome();
+    }
+
+    // Now and then, with nothing to do, he goes and digs in the bin: a thing or two flies out and he eats it.
+    private float nextRummage;
+    private Bin rummageIn;
+
+    private void Rummage()
+    {
+        if (rummageIn == null || !rummageIn.HasLeftovers) { GoHome(); return; }
+        if (Time.time - jobSince > GiveUpAfter) { GoHome(); return; }
+        if (!Arrived(rummageIn.Mouth)) return;
+        agent.ResetPath();
+        var found = rummageIn.Dig(transform.position, Random.value < 0.4f ? 2 : 1);
+        rummageIn = null;
+        SetJob(Job.Eating);
+        StartCoroutine(Eat(found));
+    }
+
+    private IEnumerator Eat(List<Transform> pieces)
+    {
+        yield return new WaitForSeconds(0.75f);   // they land first
+        bool said = false;
+        foreach (var piece in pieces)
+        {
+            if (piece == null) continue;
+            var toward = piece.position - transform.position;
+            toward.y = 0f;
+            if (toward.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(toward);
+            yield return new WaitForSeconds(0.2f);
+            if (!said) { UICheerPop.OnSay.Invoke(Head - Vector3.up * 0.2f, "Nom!"); said = true; }
+            GameSfx.Play(GameSfx.Cue.Pickup);
+            // Into his mouth, shrinking as it goes; then a happy little hop.
+            var from = piece.position;
+            var size = piece.localScale;
+            for (float t = 0f; t < 1f;)
+            {
+                t = Mathf.Min(1f, t + Time.deltaTime / 0.35f);
+                if (piece == null) break;
+                piece.position = Vector3.Lerp(from, Head + transform.forward * 0.25f - Vector3.up * 0.2f, t);
+                piece.localScale = size * (1f - t);
+                yield return null;
+            }
+            if (piece != null) Destroy(piece.gameObject);
+            cheerAt = Time.time;
+            yield return new WaitForSeconds(0.45f);
+        }
+        nextRummage = Time.time + Random.Range(25f, 45f);
+        GoHome();
+    }
+    #endregion
 
     #region Tomato fight
     // A customer's tomato can land on him instead of the chef (FoodFight). He does not take it quietly: his fur

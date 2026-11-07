@@ -17,6 +17,9 @@ public static class ShopIcons
     private static readonly Dictionary<string, Sprite> cache = new();
     private static bool loading;
 
+    // Every picture of the catalogue in the scene has arrived (Tutorial's shop tip waits for it).
+    public static bool Ready => !loading && CafeShop.Instance != null && AllCached(CafeShop.Instance.Upgrades);
+
     // From CafeShop.Start: pictures already fetched go on at once; the rest are fetched on an object that survives
     // a Replay, and go onto whichever catalogue is in the scene when they arrive.
     public static void Begin(IReadOnlyList<Upgrade> upgrades, float delay)

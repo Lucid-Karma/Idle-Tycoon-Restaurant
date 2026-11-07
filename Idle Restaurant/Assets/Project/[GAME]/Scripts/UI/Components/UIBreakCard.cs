@@ -79,6 +79,12 @@ public class UIBreakCard : MonoBehaviour
     private TMP_Text earnedValue;
     private int earnedFrom, earnedTo;
     private float earnedAt = -10f;
+    // The level's end cards (autoNext) sit aside in the bottom-right corner, small and a little see-through, like the
+    // order ticket that lives there (user, 2026-11-05: in the middle they lay over the coach's tips while the next
+    // level was already starting). Other cards keep the middle of the screen.
+    private const float AsideScale = 0.7f, AsideAlpha = 0.88f;
+    private static readonly Vector2 AsideMargin = new(-24f, 24f);
+    private float cardScale = 1f, maxAlpha = 1f;
 
     private void Awake()
     {
@@ -158,13 +164,26 @@ public class UIBreakCard : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
-    public void Play(List<Card> cards, Action done, bool tapOutsideCloses = false) => StartCoroutine(Run(cards, done, tapOutsideCloses));
+    // `autoNext`: each card moves on by itself after AutoNextSeconds, its button counting down - the shift-end cards,
+    // where most players used to stop (CrazyGames 2026-11-05: average play 2.5 min, about the end of the first level).
+    public void Play(List<Card> cards, Action done, bool tapOutsideCloses = false, bool autoNext = false) =>
+        StartCoroutine(Run(cards, done, tapOutsideCloses, autoNext));
 
-    private IEnumerator Run(List<Card> cards, Action done, bool tapOutsideCloses)
+    public const float AutoNextSeconds = 4f;
+
+    private IEnumerator Run(List<Card> cards, Action done, bool tapOutsideCloses, bool autoNext)
     {
         Showing = true;
         closeAll = false;
         catcher.raycastTarget = tapOutsideCloses;
+        var home = (card.anchorMin, card.anchorMax, card.pivot, card.anchoredPosition);
+        if (autoNext)
+        {
+            card.anchorMin = card.anchorMax = card.pivot = new Vector2(1f, 0f);
+            card.anchoredPosition = AsideMargin;
+        }
+        cardScale = autoNext ? AsideScale : 1f;
+        maxAlpha = autoNext ? AsideAlpha : 1f;
         // The "Double it" offer decides for itself at the end of the day (UIRewardedBonus.Offer): let it, first.
         yield return null;
         bool offerDouble = doubleButton != null && doubleButton.activeSelf;
@@ -180,31 +199,45 @@ public class UIBreakCard : MonoBehaviour
                 if (c.Double > 0 && bonus != null) bonus.OfferAmount(c.Double);   // shows itself if it may
                 else doubleButton.SetActive(offerDouble && c.Double < 0);
             }
-            if (nextLabel != null) nextLabel.text = i == cards.Count - 1 ? LastButton : "Next";
+            string label = i == cards.Count - 1 ? LastButton : "Next";
+            if (nextLabel != null) nextLabel.text = label;
+            int shownSecond = -1;
             if (c.Stars > 0 || c.Tiles.Count > 0) GameSfx.Play(GameSfx.Cue.LevelUp);
             float age = 0f;
             cardShownAt = Time.unscaledTime;
-            // No timer: the card waits for "Next" (a tap in its first moment is not taken, so a tap meant for the
-            // kitchen does not skip it unread).
+            // The card waits for "Next" (a tap in its first moment is not taken, so a tap meant for the kitchen does not
+            // skip it unread) - or, with autoNext, for its few seconds, unless a "Double it" offer is up (that is a choice).
+            bool auto = false;
             while (!(next && age > 0.35f))
             {
                 // Paused with the game (the shop or help card is open on top).
                 if (Time.timeScale > 0f) age += Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
+                bool offer = doubleButton != null && doubleButton.activeSelf;
+                if (autoNext && !offer)
+                {
+                    int left = Mathf.CeilToInt(AutoNextSeconds - age);
+                    if (left != shownSecond && nextLabel != null) { shownSecond = left; nextLabel.text = $"{label} in {Mathf.Max(left, 1)}"; }
+                    if (age >= AutoNextSeconds) { next = true; auto = true; }
+                }
                 Animate(c, age);
                 CountEarned();
                 yield return null;
             }
+            if (autoNext) GoogleAnalytics.Event("break_card", "index", i, "of", cards.Count, "card", c.Kicker, "auto", auto);
             if (doubleButton != null) doubleButton.SetActive(false);
             group.blocksRaycasts = false;
             for (float t = 0f; t < UITokens.Motion.Normal; t += Mathf.Min(Time.unscaledDeltaTime, 1f / 30f))
             {
-                group.alpha = 1f - t / UITokens.Motion.Normal;
+                group.alpha = (1f - t / UITokens.Motion.Normal) * maxAlpha;
                 yield return null;
             }
             group.alpha = 0f;
             if (closeAll) break;
         }
         catcher.raycastTarget = false;
+        (card.anchorMin, card.anchorMax, card.pivot, card.anchoredPosition) = home;
+        card.localScale = Vector3.one;
+        cardScale = maxAlpha = 1f;
         Showing = false;
         done?.Invoke();
     }
@@ -212,8 +245,8 @@ public class UIBreakCard : MonoBehaviour
     private void Animate(Card c, float age)
     {
         float t = Mathf.Clamp01(age / UITokens.Motion.Slow);
-        group.alpha = Mathf.Clamp01(age / UITokens.Motion.Normal);
-        float s = Mathf.LerpUnclamped(0.92f, 1f, BackOut(t));
+        group.alpha = Mathf.Clamp01(age / UITokens.Motion.Normal) * maxAlpha;
+        float s = Mathf.LerpUnclamped(0.92f, 1f, BackOut(t)) * cardScale;
         card.localScale = new Vector3(s, s, 1f);
         for (int i = 0; i < stars.Length; i++)
         {

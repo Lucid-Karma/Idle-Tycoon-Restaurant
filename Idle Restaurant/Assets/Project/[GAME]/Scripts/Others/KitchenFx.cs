@@ -15,7 +15,7 @@ public class KitchenFx : MonoBehaviour
 
     private Material crisp;
     private Texture2D sparkle, disc, rings;
-    private ParticleSystem flares, chunks, thickRing;
+    private ParticleSystem flares, chunks, thickRing, hearts;
 
     public static void Create(GameObject host, Material crisp, Texture2D sparkle, Texture2D disc, Texture2D rings)
     {
@@ -44,6 +44,15 @@ public class KitchenFx : MonoBehaviour
         instance.Emit(instance.flares, at, 4, UITokens.Colors.Yellow);
         instance.Emit(instance.flares, at, 2, UITokens.Colors.WarmWhite);
         instance.Emit(instance.flares, at, 2, UITokens.Colors.Raspberry);
+    }
+
+    // Little hearts floating up and away: Mochi when he comes to rub against the chef (user, 2026-11-06: "it should
+    // show that he's come over to be cuddly").
+    public static void Hearts(Vector3 at, int count)
+    {
+        if (instance == null) return;
+        for (int i = 0; i < count; i++)
+            instance.Emit(instance.hearts, at, 1, i % 3 == 2 ? UITokens.Colors.Pink : UITokens.Colors.Raspberry);
     }
 
     private static Color ColorOf(string ingredient) => ingredient switch
@@ -86,6 +95,41 @@ public class KitchenFx : MonoBehaviour
 
         // A ring that grows out to its full size and fades (a tile of the 2x2 ring sheet).
         thickRing = Ring("ThickRing", tile: 1, size: 3.2f);
+
+        // Hearts: drift up slowly, swaying, swell in and fade at the top.
+        hearts = System("Hearts", HeartTexture(), lifetime: (1.2f, 1.5f), speed: (0.6f, 0.9f), size: (0.62f, 0.8f), gravity: -0.08f,
+            Curve((0f, 0.3f), (0.2f, 1.1f), (0.35f, 1f), (1f, 0.8f)), fadeFrom: 0.55f);
+        shape = hearts.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 20f;
+        shape.radius = 0.2f;
+        shape.rotation = new Vector3(-90f, 0f, 0f);
+        var main = hearts.main;
+        main.startRotation = new ParticleSystem.MinMaxCurve(-0.25f, 0.25f);
+        var sway = hearts.noise;
+        sway.enabled = true;
+        sway.strength = 0.25f;
+        sway.frequency = 0.6f;
+    }
+
+    // A white heart, drawn here (nothing new in the download): the implicit heart (x^2+y^2-1)^3 - x^2*y^3 <= 0,
+    // with a soft one-pixel edge.
+    private static Texture2D HeartTexture()
+    {
+        const int N = 64;
+        var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "Heart" };
+        var px = new Color32[N * N];
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float u = (x + 0.5f) / N * 2.6f - 1.3f, v = (y + 0.5f) / N * 2.6f - 1.15f;
+                float f = Mathf.Pow(u * u + v * v - 1f, 3f) - u * u * v * v * v;
+                float a = Mathf.Clamp01(0.5f - f * 18f);
+                px[y * N + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+            }
+        tex.SetPixels32(px);
+        tex.Apply(false, true);
+        return tex;
     }
 
     private ParticleSystem Ring(string name, int tile, float size)

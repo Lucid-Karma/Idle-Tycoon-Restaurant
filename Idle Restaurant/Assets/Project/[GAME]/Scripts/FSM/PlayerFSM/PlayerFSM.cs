@@ -99,6 +99,8 @@ public class PlayerFSM : MonoBehaviour
         stack = gameObject.AddComponent<CarryStack>();
         var anyPlate = FindFirstObjectByType<Plate>();
         stack.Init(this, holdParent.transform, anyPlate != null ? anyPlate.TopBunPrefab : null);
+        sideHand = SideHand(holdParent.transform);
+        gameObject.AddComponent<ChefIdle>();
 
         executingState = ExecutingState.IDLE;
         currentState = playerIdleState;
@@ -190,6 +192,7 @@ public class PlayerFSM : MonoBehaviour
     // The UI check only gates new taps (MovePlayer), so the chef keeps walking while the pointer is over UI.
     void Update()
     {
+        ForgetGone();
         Steer();
         UseWhatHeWalksUpTo();
         currentState.UpdateState(this);
@@ -472,6 +475,8 @@ public class PlayerFSM : MonoBehaviour
 
     public void HandleScreenTap(Vector3 screenPosition)
     {
+        // A tap on Mochi pets him, and that is all it does (the chef doesn't walk off to where the cat is).
+        if (Waiter.PetAt(screenPosition)) { UITapRipple.Show(screenPosition); return; }
         TapFeedback.On(screenPosition, this);   // whatever the tap does next, what it landed on answers
         if (IsStunned) return;
         // The first lesson only takes taps on what its arrow points at (and aims them at it).
@@ -791,8 +796,10 @@ public class PlayerFSM : MonoBehaviour
 
     private bool slipped;
 
-    // Hit by a tomato while running: he slips on it, lands on his back and gets up again, still holding
-    // whatever he was carrying. Hit from behind, he goes down on his face instead (and hops back up).
+    // Hit by a tomato while running: he slips on it, lands on his back and gets up again. Hit from behind, he goes down
+    // on his face instead (and hops back up). What he carries flies up out of his hands and comes down into them again
+    // as he gets up - or onto Mochi's tray if the cat gets there first, who hands it back (user, 2026-11-03). Nothing
+    // is lost: it stays his all along (CarryStack.Scatter only moves it about).
     public bool SlipsForward { get; private set; }
 
     public void Slip(float seconds, bool forward = false)
@@ -801,6 +808,11 @@ public class PlayerFSM : MonoBehaviour
         stunnedUntil = Time.time + seconds;
         Agent.isStopped = true;
         Agent.velocity = Vector3.zero;
+        if (isHolded && stack != null && !stack.Scattering)
+        {
+            float air = seconds * 0.8f, until = Time.time + seconds + 0.2f;
+            stack.Scatter(air, Waiter.Catch(transform.position, air, until), until);
+        }
         slipped = true;
         OnPlayerSlip.Invoke();
         CancelInvoke(nameof(Recover));
@@ -911,10 +923,16 @@ public class PlayerFSM : MonoBehaviour
             }
             if (edible != null && StillPreparing(edible)) return;
         }
+        // Whatever the tap was for, it does something or says why not (user, 2026-11-04: "whatever the player does,
+        // they should keep having fun" - a tap that did nothing read as the game being broken).
+        var target = selectable as Component;
+        var before = Signature(target);
+        bool fromCrate = spawnable != null;
         GetFoodFromSource();
         GetFood();
         PlaceFood();
         TrashEdible();
+        if (target != null && !fromCrate && Signature(target) == before) Nope(target, WhyNot(target));
         RotateToSelectable();
         if (queue.Count > 0 && !runningQueue) StartCoroutine(RunNextQueued());
     }
@@ -1154,9 +1172,35 @@ public class PlayerFSM : MonoBehaviour
     // Room for one more (nothing goes on a burger he carries, and a burger only into empty hands).
     public bool CanTakeMore => !isHolded || currentFood is not Hamburger && under.Count + 1 < MaxCarry;
 
+    // Something he carried was put away behind his back (switched off: back in its pool, and soon used again somewhere
+    // else - the chaos bot found a carried onion that had become someone else's): it is no longer his. Every frame,
+    // so his stack never shows or uses a thing that is gone.
+    // Likewise a thing that something else has taken (it hangs under a plate, a station...): it is theirs now, and his
+    // stack must stop moving it (it pulled a plate's cheese off to where it had been in his hands). One that fell out
+    // of everything (no parent at all) is his again, back in his hands (the chaos bot found both, 2026-11-04).
+    private bool Gone(EdibleBase f)
+    {
+        if (f == null || !f.gameObject.activeSelf) return true;
+        var parent = f.transform.parent;
+        if (parent == null) { f.transform.SetParent(holdParent.transform, true); return false; }
+        return parent != holdParent.transform && parent != sideHand;
+    }
+
+    private void ForgetGone()
+    {
+        if (!isHolded) return;
+        bool changed = under.RemoveAll(Gone) > 0;
+        if (Gone(currentFood)) { currentFood = null; changed = true; }
+        if (!changed) return;
+        if (currentFood == null && under.Count > 0) { currentFood = under[under.Count - 1]; under.RemoveAt(under.Count - 1); }
+        isHolded = currentFood != null;
+        Restack();
+    }
+
     // `food` is the new top: what was on top goes under it. It flies there from `from` (a crate, a station).
     private void Push(EdibleBase food, Vector3 from)
     {
+        under.Remove(food);   // (never listed twice)
         if (isHolded && currentFood != null && currentFood != food) under.Add(currentFood);
         currentFood = food;
         isHolded = true;
@@ -1191,17 +1235,36 @@ public class PlayerFSM : MonoBehaviour
 
     // One on another in his hands, bottom first (CarryStack moves them there). A burger in his hands (two things or
     // more) has its bun at the bottom, cut like a plate's bottom bun, and its top on top - whenever the bun came.
+    // Fries are a side, not a layer (user, 2026-11-03: potatoes rode between the patty and the top bun): with anything
+    // else in his hands they go in his other hand (sideHand); alone they are in the first one.
     private readonly List<EdibleBase> shown = new();
+    private readonly List<EdibleBase> side = new();
+    private Transform sideHand;
+
+    // An empty to hold things by his other hand: the stack's hand mirrored across his body.
+    private static Transform SideHand(Transform hand)
+    {
+        var other = new GameObject("SideHand").transform;
+        other.SetParent(hand.parent, false);
+        var at = hand.localPosition;
+        other.localPosition = new Vector3(-at.x, at.y, at.z);
+        other.localRotation = hand.localRotation;
+        other.localScale = hand.localScale;
+        return other;
+    }
 
     private void Restack()
     {
         var hand = holdParent.transform;
         shown.Clear();
+        side.Clear();
+        bool aside = Carried.Any(f => f != null && f is not Fries);
         foreach (var food in Carried)
         {
             if (food == null) continue;
-            if (food.transform.parent != hand) food.transform.SetParent(hand, true);
-            shown.Add(food);
+            var holder = aside && food is Fries && sideHand != null ? sideHand : hand;
+            if (food.transform.parent != holder) food.transform.SetParent(holder, true);
+            (holder == hand ? shown : side).Add(food);
         }
         Bun bottom = null;
         if (currentFood is not Hamburger && BurgerParts() >= 2)
@@ -1212,7 +1275,7 @@ public class PlayerFSM : MonoBehaviour
             shown.Remove(bottom);
             shown.Insert(0, bottom);
         }
-        if (stack != null) stack.Layout(shown, bottom != null);
+        if (stack != null) stack.Layout(shown, bottom != null, side);
     }
 
     // What a station takes from his stack: raw buns for the oven, raw patties for the pan, raw bacon / potatoes for the
@@ -1238,20 +1301,27 @@ public class PlayerFSM : MonoBehaviour
 
     // One visit to a station: take what is ready on it (waiting for it if it is still cooking and he came for it), put
     // in the first raw thing it cooks; at the board, chop everything whole he carries and keep it.
+    // He does not stand waiting while there is something else to do in his line of taps (user, 2026-11-06: chopping the
+    // cheese, he stayed at the board until it was done while the bun and the patty burnt): he goes, and what is still
+    // cooking or being chopped goes to the end of the line, so he comes back for it. Only taps that would also just
+    // wait (a station whose food is still cooking) let him stay - or he would walk to and fro between the two.
     private IEnumerator UseStation(NonStackBase station)
     {
         busyAt = station;
         RotateToSelectable();
+        var before = Signature(station);
+        bool movedOn = false;
         var on = station.Food;
         if (on != null)
         {
             float giveUp = Time.time + 40f;
-            while (busyAt == station && station.Food == on && StillPreparing(on) && Time.time < giveUp)
+            while (busyAt == station && station.Food == on && StillPreparing(on) && Time.time < giveUp && !SomethingElseToDo)
             {
                 RotateToSelectable();
                 yield return null;
             }
             if (busyAt != station) yield break;   // called off: another tap, steering
+            if (station.Food == on && StillPreparing(on) && SomethingElseToDo) { ComeBackTo(station); movedOn = true; }
             if (station.Food == on && !StillPreparing(on) && CanTakeMore && !on.untouchable)
             {
                 on.isLastPiece = true;
@@ -1259,15 +1329,19 @@ public class PlayerFSM : MonoBehaviour
                 yield return null;
             }
         }
-        while (busyAt == station && !station.IsHaveFood() && FirstFor(station) is EdibleBase raw)
+        while (!movedOn && busyAt == station && !station.IsHaveFood() && FirstFor(station) is EdibleBase raw)
         {
             if (raw is Bun whole) whole.LookSliced(false);   // (the bottom of a burger in his hands goes in whole)
             BringToTop(raw);
             DropObject(station);
+            // Not taken after all: back to the look and the place it has in his stack (the stack was measured with
+            // its cut look, and the next layer sat inside the whole bun - chaos bot, 2026-11-04).
+            if (Carried.Contains(raw)) { Restack(); break; }
             if (station is not ChoppingBoard) break;
             float giveUp = Time.time + 10f;
-            while (busyAt == station && station.Food == raw && StillPreparing(raw) && Time.time < giveUp) yield return null;
+            while (busyAt == station && station.Food == raw && StillPreparing(raw) && Time.time < giveUp && !SomethingElseToDo) yield return null;
             if (busyAt != station) yield break;
+            if (station.Food == raw && StillPreparing(raw) && SomethingElseToDo) { ComeBackTo(station); movedOn = true; break; }
             if (station.Food != raw || StillPreparing(raw)) break;
             raw.isLastPiece = true;
             PickUpObject(raw);
@@ -1275,8 +1349,106 @@ public class PlayerFSM : MonoBehaviour
         }
         if (busyAt != station) yield break;
         busyAt = null;
+        if (Signature(station) == before && !movedOn) Nope(station, WhyNot(station));
         if (queue.Count > 0 && !runningQueue) StartCoroutine(RunNextQueued());
     }
+
+    // A waiting tap he can get on with now, that only gathers ingredients: a crate, or a station (or its food) whose
+    // food is not still cooking or chopping. Serving, a plate or a table never take him away from food that is nearly
+    // done (user, 2026-11-06: tapping the customer while the patty cooked served a burger without it). Only the taps
+    // before the first of those count: the player's order is kept (what comes after the customer waits its turn).
+    private bool SomethingElseToDo
+    {
+        get
+        {
+            foreach (var t in queue)
+            {
+                if (!Gathers(t)) return false;
+                if (!StillCooking(t.Thing)) return true;
+            }
+            return false;
+        }
+    }
+
+    private bool Gathers(QueuedTap t)
+    {
+        if (t.Customer != null || t.Thing == null) return false;
+        var col = ResolveTap(t.Thing);
+        if (col == null) return false;
+        return col.GetComponentInParent<IngredientsSource>() != null
+               || col.GetComponentInParent<NonStackBase>() is NonStackBase n && (n is CookingBase || n is ChoppingBoard);
+    }
+
+    private static bool StillCooking(Collider thing)
+    {
+        var food = thing.GetComponentInParent<EdibleBase>();
+        if (food == null && thing.GetComponentInParent<NonStackBase>() is NonStackBase station) food = station.Food;
+        return food != null && StillPreparing(food);
+    }
+
+    // The station he leaves something cooking or chopping on: tapped again in his line, so he comes back, takes it
+    // and goes on (the board chops the rest he carries) - after the other gathering taps, before serving or a plate.
+    private void ComeBackTo(NonStackBase station)
+    {
+        var col = station.GetComponentInChildren<Collider>(true);
+        if (col == null || queue.Count >= MaxQueued) return;
+        int at = queue.FindIndex(t => !Gathers(t));
+        queue.Insert(at < 0 ? queue.Count : at, new QueuedTap { Thing = col, Point = col.bounds.center });
+        EventManager.OnClick.Invoke();
+    }
+
+    #region Saying why not
+    // What a use changes: what he carries, and what lies on the thing used.
+    private int Signature(Component at)
+    {
+        int s = Carried.Count * 7919;
+        foreach (var f in Carried) s = s * 31 + f.GetInstanceID();
+        if (at is Plate plate) s = s * 31 + plate.LayerCount * 3 + (plate.HasHamburger ? 1 : 0);
+        else if (at is NonStackBase station) s = s * 31 + (station.Food != null ? station.Food.GetInstanceID() : 0);
+        return s;
+    }
+
+    // Why a tap on `at` couldn't do anything, the way the player would say it.
+    private string WhyNot(Component at)
+    {
+        bool fries = Carried.Count > 0 && Carried.All(f => f is Fries);
+        switch (at)
+        {
+            case Bin: return "Nothing to toss!";
+            case Plate plate:
+                if (plate.HasHamburger) return isHolded ? "Hands full!" : "Nope!";
+                return fries ? "Fries go to a customer!" : "Grab something first!";
+            case ServiceBase table: return table.IsHaveFood() ? "Table's taken!" : "Bring a burger!";
+            case NonStackBase station when station.Food != null:
+                return !CanTakeMore ? "Hands full!" : "Not ready yet!";
+            case Oven: return "Buns go in here!";
+            case Pan: return "Patties go here!";
+            case ChoppingBoard: return isHolded ? "Nothing to chop!" : "Bring veggies to chop!";
+            case Fryer: return "Potatoes go here!";
+            case HeatStation: return "Bacon goes here!";
+            case EdibleBase food when StillPreparing(food): return "Not ready yet!";
+            default: return "Nope!";
+        }
+    }
+
+    private float nopedAt = -10f;
+    private string noped;
+
+    // He can't: what was tapped wobbles, he gives a little hop and a plain word over him says why. Never twice in a
+    // row for the same reason within a second (a burst of taps is one answer).
+    public void Nope(Component at, string why)
+    {
+        if (why == noped && Time.time - nopedAt < 1f) return;
+        noped = why;
+        nopedAt = Time.time;
+        GameSfx.Play(GameSfx.Cue.Bonk);
+        if (at != null) TapJuice.Boing(at.transform, 0.18f);
+        var body = GetComponentInChildren<Animator>();
+        if (body != null && body.transform != transform) TapJuice.Hop(body.transform, 0.12f);
+        UICheerPop.OnNope.Invoke(transform.position + Vector3.up * 2.4f, why);
+        UIChefLaugh.Noped();
+    }
+    #endregion
 
     // Interactive with either empty or full hands (what it will be used with is only known when its turn comes).
     private static bool Usable(Collider col)
@@ -1361,7 +1533,7 @@ public class PlayerFSM : MonoBehaviour
     {
         if(spawnable != null)
         {
-            if (!CanTakeMore) { GameSfx.Play(GameSfx.Cue.Bonk); return; }
+            if (!CanTakeMore) { Nope(spawnable as Component, currentFood is Hamburger ? "Serve the burger first!" : "Hands full!"); return; }
 
             spawnable?.Spawn();
             EventManager.OnFoodHolded.Invoke();
@@ -1414,6 +1586,9 @@ public class PlayerFSM : MonoBehaviour
     void PickUpObject(EdibleBase ingredient)
     {
         if (ingredient == null || ingredient.untouchable || !ingredient.isLastPiece) return;
+        // Already in his hands (a tap on his own stack): taking it again listed it twice, and the second copy later
+        // pulled it back off whatever plate or station it had been put on (chaos bot, 2026-11-04).
+        if (ingredient == currentFood || under.Contains(ingredient)) return;
         // Onto his stack; a finished burger only into empty hands.
         if (isHolded && (!CanTakeMore || ingredient is Hamburger)) return;
 
@@ -1496,17 +1671,18 @@ public class PlayerFSM : MonoBehaviour
             if (isHolded)
             {
                 if (currentFood == null) return;
-                // Burnt things if he carries any (all of them), otherwise the top one.
+                // Burnt things if he carries any (all of them), otherwise the top one - tossed in one after another
+                // (the bin plays the plop as each lands).
                 var burnt = Carried.Where(f => f != null && f.Preparation == Prep.Burnt).ToList();
                 if (burnt.Count == 0) burnt.Add(currentFood);
-                foreach (var food in burnt)
+                for (int i = 0; i < burnt.Count; i++)
                 {
-                    BringToTop(food);
-                    bin.Junk(currentFood);
+                    BringToTop(burnt[i]);
+                    var food = currentFood;
                     PopTop();
+                    bin.Junk(food, i * 0.1f);
                 }
-                GameSfx.Play(GameSfx.Cue.Trash);
-                TapJuice.Boing(bin.transform, 0.2f);
+                GameSfx.Play(GameSfx.Cue.ChefThrow);
             }
         }
     }

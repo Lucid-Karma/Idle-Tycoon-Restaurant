@@ -61,6 +61,9 @@ public class NpcFsm : MonoBehaviour
 
     #region Components
     private NavMeshAgent agent;
+    // Where customers come in and go out.
+    public static readonly Vector3 Door = new(21.35f, 1.2f, 8.79f);
+
     public NavMeshAgent Agent{ get { return (agent == null) ? agent = GetComponent<UnityEngine.AI.NavMeshAgent>() : agent; } }
     #endregion
 
@@ -132,7 +135,9 @@ public class NpcFsm : MonoBehaviour
         Active.Add(this);
         warnedOffFloor = false;
         if (!Agent.enabled) Agent.enabled = true;   // switched off while they sat (Seat)
-        Patience = Random.Range(patienceRange.x, patienceRange.y) * Customers.Of(kind).PatienceScale * CafeShop.PatienceScale;
+        Patience = Random.Range(patienceRange.x, patienceRange.y) * Customers.Of(kind).PatienceScale * CafeShop.PatienceScale
+                   * ScoreManager.Mercy;
+        unstuckTries = 0;
         LastReview = null;
         Ordered = null;
         Ticket = 0;
@@ -205,7 +210,8 @@ public class NpcFsm : MonoBehaviour
     {
         // No clock on the player during the first-shift lesson: nobody loses patience, so nobody leaves,
         // throws a tomato, or rushes him, however long he takes to read a card (Tutorial).
-        if (!Tutorial.Running) waitingTimer += Time.deltaTime;
+        // Nor while the level's end cards are up: the next level's customers come in behind them (ShiftFlow).
+        if (!Tutorial.Running && !(UIBreakCard.Instance != null && UIBreakCard.Instance.Showing)) waitingTimer += Time.deltaTime;
         if (waitingTimer > Patience)
         {
             // Out of patience: "Too slow!", and a tomato for the chef on the way out (knights just sigh).
@@ -356,6 +362,24 @@ public class NpcFsm : MonoBehaviour
         chair.Open(this, false);
     }
 
+    // The game's watchdog (Unstuck) found them walking without moving, or off the floor: back on the floor and on
+    // their way; on the way out with nowhere to stand (or stuck a second time), simply gone - they were leaving anyway
+    // (found by the chaos bot: customers left standing for good on their way out, holding the shift open).
+    private int unstuckTries;
+    public void Unstick()
+    {
+        if (vanishing || !isActiveAndEnabled) return;
+        if (!Agent.enabled) Agent.enabled = true;
+        bool onFloor = Agent.isOnNavMesh || Unstuck.Floor(Agent, 20f);
+        if (executingNpcState == ExecutingNpcState.GO)
+        {
+            if (!onFloor || unstuckTries++ > 0) { StartCoroutine(Vanish()); return; }
+            Agent.isStopped = false;
+            Agent.SetDestination(Door);
+        }
+        else if (executingNpcState == ExecutingNpcState.COME && onFloor) MoveNpc();
+    }
+
     public void Go()
     {
         if (!Agent.enabled || vanishing) return;   // still getting up (Leave), or already on the way out
@@ -428,7 +452,7 @@ public class NpcFsm : MonoBehaviour
         }
         if (!found || !Agent.Warp(hit.position)) return false;
         if (executingNpcState == ExecutingNpcState.COME) MoveNpc();
-        else if (executingNpcState == ExecutingNpcState.GO) Agent.SetDestination(new Vector3(21.35f, 1.2f, 8.79f));
+        else if (executingNpcState == ExecutingNpcState.GO) Agent.SetDestination(Door);
         return Agent.isOnNavMesh;
     }
 

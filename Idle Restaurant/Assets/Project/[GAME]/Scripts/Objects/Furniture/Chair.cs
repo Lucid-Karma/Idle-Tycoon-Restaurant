@@ -59,15 +59,36 @@ public class Chair : MonoBehaviour, ISedile
 
     private NavMeshObstacle BuildBlock()
     {
-        var scale = transform.lossyScale;
-        var perMetre = new Vector3(1f / Mathf.Max(0.01f, scale.x), 1f / Mathf.Max(0.01f, scale.y), 1f / Mathf.Max(0.01f, scale.z));
         var obstacle = gameObject.AddComponent<NavMeshObstacle>();
         obstacle.shape = NavMeshObstacleShape.Box;
-        obstacle.center = Vector3.Scale(BlockCenter, perMetre);
-        obstacle.size = Vector3.Scale(BlockSize, perMetre);
-        obstacle.carving = true;
         obstacle.carveOnlyStationary = true;
         obstacle.carvingTimeToStationary = 0f;
+        block = obstacle;
+        Fit();
         return obstacle;
+    }
+
+    // The box is in the chair's own units, so it is sized for its scale - and sized again whenever that changes. A
+    // table bought mid-shift pops in growing from nothing (CafeShop's reveal): its chairs woke up at scale zero, the
+    // box was made for a scale of 0.01 (100 times too big), and once the table had grown it carved away the whole
+    // cafe - customers and Mochi froze where they stood, with no floor within 20 m (found by the chaos bot, 2026-11-04).
+    // While it is too small to stand on, it carves nothing.
+    private Vector3 fittedFor;
+
+    private void LateUpdate()
+    {
+        if (block != null && transform.lossyScale != fittedFor) Fit();
+    }
+
+    private void Fit()
+    {
+        var scale = transform.lossyScale;
+        fittedFor = scale;
+        bool tiny = Mathf.Abs(scale.x) < 0.05f || Mathf.Abs(scale.y) < 0.05f || Mathf.Abs(scale.z) < 0.05f;
+        block.carving = !tiny;
+        if (tiny) return;
+        var perMetre = new Vector3(1f / scale.x, 1f / scale.y, 1f / scale.z);
+        block.center = Vector3.Scale(BlockCenter, perMetre);
+        block.size = Vector3.Scale(BlockSize, perMetre);
     }
 }

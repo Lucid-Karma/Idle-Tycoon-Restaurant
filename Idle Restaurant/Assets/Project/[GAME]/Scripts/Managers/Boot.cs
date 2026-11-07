@@ -65,6 +65,7 @@ public class Boot : MonoBehaviour
     {
         sdkDone = true;
         Mark("SDK ready");
+        GoogleAnalytics.Start();   // (lost in the 2026-10-17 rewrite: GA got nothing until 2026-11-05)
     }
 
     private void OnGameSceneLoaded(Scene scene, LoadSceneMode mode)

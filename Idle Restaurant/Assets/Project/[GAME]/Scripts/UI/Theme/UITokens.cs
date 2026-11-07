@@ -78,7 +78,10 @@ public static class UITokens
     // An order's number badge (UIOrderTags: the customer's bubble, the plate, the burger and the order card all wear
     // it): one hue per number so a match is seen before it is read. Never teal, yellow or tomato - those are the
     // patience ring's "how long have they waited".
-    private static readonly Color[] TicketColors = { Hex(0x4A7FD8), Hex(0x9A62CF), Hex(0x45A85A), Colors.Raspberry };
+    // Hex values only, never Colors.*: when Colors is touched first its initialiser calls Hex, which starts this class's
+    // initialiser while Colors is still half-made - Colors.Raspberry read as (0,0,0,0) here, and every 4th order number
+    // was a see-through badge with a white number on the white rim (user, 2026-11-06: "sometimes the numbers are missing").
+    private static readonly Color[] TicketColors = { Hex(0x4A7FD8), Hex(0x9A62CF), Hex(0x45A85A), Hex(0xE0457B) };
     public static Color TicketColor(int ticket) => TicketColors[Mathf.Max(0, ticket - 1) % TicketColors.Length];
 
     // Simple damped spring step (unscaled time friendly).

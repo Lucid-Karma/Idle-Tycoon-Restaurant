@@ -52,26 +52,35 @@ public class Plate : PlaceableBase
         placeableCollider.enabled = true;
     }
 
+    // How far above the top layer's position the next one starts, in the plate's own units (the top bun goes there).
     private void SetDistanceBetweenIngredients()
     {
         _ingredientsCount = ingredients.Count;
 
         if(_ingredientsCount >= 1)
         {
-            distanceBetweenObjects = (ingredients[_ingredientsCount-1].collider.size.y);
+            distanceBetweenObjects = ingredients[_ingredientsCount-1].LookSpan().top / Mathf.Max(0.0001f, transform.lossyScale.y);
             ingredients.Last().isLastPiece = false;
         }
         else
             distanceBetweenObjects = 0;
     }
+
+    // Each layer sits on the one below it - its look's bottom on that one's look's top - in the middle of the plate
+    // (EdibleBase.LookSpan; it was the colliders' heights, and a whole onion's is half of what is drawn).
     private void SetIngredientPos(EdibleBase ingredient)
     {
         ingredient.gameObject.transform.parent = parentTransform;
-        Vector3 desiredPos = refTransform.localPosition;
-        desiredPos.y += distanceBetweenObjects;
-
         ingredient.gameObject.transform.localRotation = Quaternion.identity;
-        ingredient.gameObject.transform.localPosition = desiredPos;
+        int at = ingredients.IndexOf(ingredient);
+        ingredient.transform.position = OnTopOf(at > 0 ? ingredients[at - 1] : null, ingredient);
+    }
+
+    // Where `piece` goes on top of `below` (null: on the plate itself).
+    private Vector3 OnTopOf(EdibleBase below, EdibleBase piece)
+    {
+        float floor = below != null ? below.transform.position.y + below.LookSpan().top : transform.position.y;
+        return new Vector3(transform.position.x, floor - piece.LookSpan().bottom, transform.position.z);
     }
 
     #region Orders
@@ -92,10 +101,12 @@ public class Plate : PlaceableBase
         (Order != null ? Orders.Missing(Order, LayerNames).Count == 0
                        : NpcFsm.Active.Any(n => Orders.Waiting(n) && Orders.Missing(n.Ordered, LayerNames).Count == 0));
 
-    // The player says it is done: the top bun goes on and it is a burger.
+    // The player says it is done: the top bun goes on and it is a burger - of two things or more, as in his hands
+    // (one thing alone stays itself and can be taken back: a lone raw patty became a "burger" on its pink plate that
+    // looked like a mistake - user, 2026-11-04).
     public bool Close()
     {
-        if (doesHaveHamburger || ingredients.Count == 0) return false;
+        if (doesHaveHamburger || ingredients.Count < 2) return false;
         ClaimOnClose();
         GenerateHamburger(true);
         return doesHaveHamburger;
@@ -115,6 +126,7 @@ public class Plate : PlaceableBase
 
     private void Update()
     {
+        ForgetGone();
         if (doesHaveHamburger || ingredients.Count == 0) return;
         // Placeables switch their colliders off while the chef's hands are empty (taps then go to the food);
         // a plate with layers on it stays tappable, because empty hands on it mean "done!" (PlayerFSM.CloseBurger).
@@ -123,6 +135,24 @@ public class Plate : PlaceableBase
         if (ForCustomer != null && !Orders.Waiting(ForCustomer)) ForCustomer = null;
         if (ForCustomer == null) Claim();
 
+    }
+
+    // A layer that is no longer here - switched off, or taken somewhere else without the plate being told - leaves
+    // the plate's list, so the next one is not stacked on a ghost (the chaos bot found a bacon the plate still counted
+    // lying at the griddle).
+    private void ForgetGone()
+    {
+        if (doesHaveHamburger || ingredients.Count == 0) return;
+        for (int i = ingredients.Count - 1; i >= 0; i--)
+        {
+            var piece = ingredients[i];
+            if (piece != null && piece.gameObject.activeSelf && piece.transform.parent == parentTransform && piece.Placeable == this) continue;
+            ingredients.RemoveAt(i);
+            if (piece != null && piece.Placeable == this) piece.LeavePlaceable();
+            if (ingredients.Count == 0) { ResetColAndRef(); ForCustomer = null; HideTopBun(); return; }
+            refTransform.position = ingredients.Last().transform.position;
+            ingredients.Last().isLastPiece = true;
+        }
     }
 
     // Whose order this plate is: picked once and kept (2026-10-27, user: "which recipe is being made, and for whom,
@@ -171,7 +201,7 @@ public class Plate : PlaceableBase
 
     public override void UseFood(EdibleBase ingredient)
     {
-        if(doesHaveHamburger)   return;
+        if(doesHaveHamburger || ingredient is Fries)   return;
 
         if (ingredient is Hamburger burger)
         {
@@ -217,14 +247,12 @@ public class Plate : PlaceableBase
     // on the one below it, raised by that one's height.
     private void Restack(Vector3 bottom)
     {
-        float y = bottom.y;
         for (int i = 0; i < ingredients.Count; i++)
         {
             var piece = ingredients[i];
             piece.transform.localRotation = Quaternion.identity;
-            piece.transform.localPosition = new Vector3(bottom.x, y, bottom.z);
+            piece.transform.position = OnTopOf(i > 0 ? ingredients[i - 1] : null, piece);
             piece.isLastPiece = i == ingredients.Count - 1;
-            y += piece.collider != null ? piece.collider.size.y : 0f;
         }
         refTransform.position = ingredients[ingredients.Count - 1].transform.position;
     }
@@ -293,6 +321,7 @@ public class Plate : PlaceableBase
     // PlayerFSM.DropObject asks this right after UseFood, so "just placed this burger here" counts too.
     public override bool IsSuitable(EdibleBase ingredient)
     {
+        if (ingredient is Fries) return false;   // a side, tossed to the customer: never a layer (user, 2026-11-03)
         if (ingredient is Hamburger)
             return placedHamburger == ingredient || (!doesHaveHamburger && ingredients.Count == 0);
         return true;
@@ -300,7 +329,7 @@ public class Plate : PlaceableBase
 
     // For hints: would this plate take the food the chef is holding?
     public bool Accepts(EdibleBase food) =>
-        !doesHaveHamburger && (food is Hamburger ? ingredients.Count == 0 : ingredients.Count < Target);
+        !doesHaveHamburger && food is not Fries && (food is Hamburger ? ingredients.Count == 0 : ingredients.Count < Target);
 
     #region Additional Features
     /// <summary>

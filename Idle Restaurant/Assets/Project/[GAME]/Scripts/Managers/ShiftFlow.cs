@@ -85,17 +85,13 @@ public class ShiftFlow : MonoBehaviour
 
     private IEnumerator NextShift()
     {
-        bool shown = false;
         var ui = UIBreakCard.Instance;
         var days = DayGoals.Instance;
-        if (ui != null && days != null) ui.Play(Cards(days.Finish(), ui), () => shown = true);
-        else
-        {
-            Summary();
-            shown = true;
-        }
+        if (ui != null && days != null) ui.Play(Cards(days.Finish(), ui), null, autoNext: true);
+        else Summary();
+        // The next level does not wait for the cards (user, 2026-11-05: players left after the first level): its
+        // customers walk in behind them, and nobody's patience runs while they are up (NpcFsm.Wait).
         yield return new WaitForSeconds(Breather);
-        while (!shown) yield return null;
         // Not on top of the shop or the help card (both pause): wait until the player is back in the kitchen.
         while (Time.timeScale == 0f) yield return null;
         if (UIRewardedBonus.WatchedThisCard) Begin();
@@ -178,6 +174,19 @@ public class ShiftFlow : MonoBehaviour
             Icon = ui.starIcon, Tint = UITokens.Colors.DeepYellow, Label = "Average rating",
             Value = day.Average.ToString("0.0", CultureInfo.InvariantCulture),
         });
+        // A rough day is a story, not a failure (user, 2026-11-04): the burger it will be remembered for - or Mochi's
+        // word on it when nobody got fed.
+        if (day.Average < 2.5f)
+        {
+            var score = ScoreManager.Instance;
+            bool any = score != null && score.ServedCount > 0 && !string.IsNullOrEmpty(score.SignatureBurger);
+            card.Rows.Add(new UIBreakCard.Row
+            {
+                Icon = ui.starIcon, Tint = UITokens.Colors.Raspberry,
+                Label = any ? "Burger of the day" : "Mochi says",
+                Value = any ? score.SignatureBurger : "Tomorrow's ours!",
+            });
+        }
         card.Rows.Add(new UIBreakCard.Row
         {
             Icon = ui.moneyIcon, Tint = UITokens.Colors.DarkTeal, Label = "Earned this level", Value = $"+${day.Earned + day.Bonus + day.StarBonus}",

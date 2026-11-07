@@ -47,6 +47,9 @@ public class OvenDoor : MonoBehaviour
 
     private void Update()
     {
+        // Paused (the lesson starting again stops the clock): SmoothDamp divides by the frame's time, and a zero made
+        // the door's angle NaN for good (found by the chaos bot).
+        if (Time.deltaTime <= 0f) return;
         var food = oven.Food;
         if (food != lastFood)
         {

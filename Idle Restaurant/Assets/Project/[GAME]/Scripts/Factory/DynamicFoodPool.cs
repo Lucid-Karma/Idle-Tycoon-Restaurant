@@ -54,7 +54,10 @@ public class DynamicFoodPool
         if(ingredient != null)
         {   
             ingredient.transform.parent = spawnTransform;
-            ingredient.transform.rotation = Quaternion.identity;
+            // Upright in what it is put under, not in the world: a food's look taken while the food was in the chef's
+            // tilted hand (or a turned slot) came out tilted on the food for good - wide slices then measured taller
+            // than drawn, and his stack and the burgers had gaps (user, 2026-11-06). Every caller wants it upright there.
+            ingredient.transform.localRotation = Quaternion.identity;
             ingredient.transform.position = spawnTransform.position;
             ingredient.SetActive(true);
         }

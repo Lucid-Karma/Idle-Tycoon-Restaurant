@@ -137,16 +137,21 @@ public static class CafeProgress
         return level;
     }
 
-    // Progress towards the next level: stars into this level / stars this level spans (0/0 at the top).
-    public static (int into, int span) LevelProgress
+    // Progress towards the cafe's next tier, in levels played: levels into this tier / levels it spans (0/0 at the
+    // top). The tier follows the levels (TierLevels); this was still counted in stars against the old star
+    // thresholds and showed "-4 / 50" (user, 2026-11-06).
+    public static (int into, int span) LevelProgress => ProgressAfter(ShiftsPlayed);
+
+    // The same after `played` levels.
+    public static (int into, int span) ProgressAfter(int played)
     {
-        get
-        {
-            int level = Level;
-            if (level >= MaxLevel) return (0, 0);
-            int from = LevelStars[level - 1];
-            return (Stars - from, LevelStars[level] - from);
-        }
+        Load();
+        int tier = Mathf.Max(TierAt(played + 1), legacyTier);
+        if (tier >= MaxLevel) return (0, 0);
+        // Level n opens tier t when n >= TierLevels[t]: so many levels played since the tier's first one. A save from
+        // before levels may sit at a tier its levels have not reached yet: its bar starts there.
+        int from = Mathf.Min(TierLevels[tier - 1] - 1, played);
+        return (played - from, TierLevels[tier] - 1 - from);
     }
 
     public static void AddCoins(int amount)

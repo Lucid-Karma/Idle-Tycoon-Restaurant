@@ -10,6 +10,9 @@ public class GameManager : Singleton<GameManager>
     {
         if (GetComponent<ShiftFlow>() == null) gameObject.AddComponent<ShiftFlow>();
         if (GetComponent<DayGoals>() == null) gameObject.AddComponent<DayGoals>();
+        if (GetComponent<Unstuck>() == null) gameObject.AddComponent<Unstuck>();
+        if (GetComponent<CafeChatter>() == null) gameObject.AddComponent<CafeChatter>();
+        UIChefLaugh.Attach();
     }
 
     void Start()

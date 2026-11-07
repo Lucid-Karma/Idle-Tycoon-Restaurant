@@ -6,6 +6,8 @@ using UnityEngine.UI;
 // springs up, floats a little higher and fades, with small stars bursting out of it; a rush of three or more
 // serves in a row shows the same pill with a bolt - "Rush x3!". It is deliberately not the tomato "SPLAT!" (user:
 // that one is great for a splat, not for these): a calm card from the HUD's own family, not a comic burst.
+// Mochi says things with it too (Say): "Purr!" when he is petted, "Nom!" over a bite from the bin. And a tap that can't
+// do anything says why, plainly - no star, no sparks (OnNope: "Hands full!", "Buns go in here!"; PlayerFSM.Nope).
 // Built by Tools/Chibi Cafe/15 (CafeDaysBuilder) on the HUD canvas.
 [RequireComponent(typeof(CanvasGroup))]
 public class UICheerPop : MonoBehaviour
@@ -33,8 +35,59 @@ public class UICheerPop : MonoBehaviour
         sparkDirections = new Vector2[sparks.Length];
     }
 
-    private void OnEnable() => NpcFsm.OnRated.AddListener(OnRated);
-    private void OnDisable() => NpcFsm.OnRated.RemoveListener(OnRated);
+    // A word over something in the cafe (world position), on the same pill with a star.
+    public static readonly UnityEngine.Events.UnityEvent<Vector3, string> OnSay = new();
+    // ... or plainly, without the star and the sparks.
+    public static readonly UnityEngine.Events.UnityEvent<Vector3, string> OnNope = new();
+    private bool plain;
+
+    private void OnEnable()
+    {
+        NpcFsm.OnRated.AddListener(OnRated);
+        OnSay.AddListener(Say);
+        OnNope.AddListener(SayPlainly);
+    }
+
+    private void OnDisable()
+    {
+        NpcFsm.OnRated.RemoveListener(OnRated);
+        OnSay.RemoveListener(Say);
+        OnNope.RemoveListener(SayPlainly);
+    }
+
+    private void SayPlainly(Vector3 at, string text)
+    {
+        Say(at, text);
+        plain = true;
+        icon.enabled = false;
+        foreach (var s in sparks) s.rectTransform.localScale = Vector3.zero;
+    }
+
+    private void Say(Vector3 at, string text)
+    {
+        plain = false;
+        icon.enabled = true;
+        label.text = text;
+        icon.sprite = star;
+        icon.color = UITokens.Colors.Raspberry;
+        foreach (var s in sparks)
+        {
+            s.sprite = star;
+            s.color = UITokens.Colors.Pink;
+        }
+        Burst();
+        world = at;
+        age = 0f;
+    }
+
+    private void Burst()
+    {
+        for (int i = 0; i < sparks.Length; i++)
+        {
+            float a = (i / (float)sparks.Length) * Mathf.PI * 2f + Random.Range(-0.25f, 0.25f);
+            sparkDirections[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * Random.Range(90f, 140f);
+        }
+    }
 
     private void OnRated(NpcFsm npc, OrderResult order)
     {
@@ -42,6 +95,8 @@ public class UICheerPop : MonoBehaviour
         bool perfect = order.Review.IsPerfect;
         bool rush = order.RushStreak >= 3;
         if (!perfect && !rush) return;
+        plain = false;
+        icon.enabled = true;
         string rushText = $"Rush x{order.RushStreak}!";
         label.text = perfect
             ? "Perfect!" + (rush ? $"  <size=75%><color=#{ColorUtility.ToHtmlStringRGB(UITokens.Colors.DarkTeal)}>{rushText}</color></size>" : "")
@@ -53,11 +108,7 @@ public class UICheerPop : MonoBehaviour
             s.sprite = perfect ? star : bolt;
             s.color = perfect ? UITokens.Colors.Yellow : UITokens.Colors.Teal;
         }
-        for (int i = 0; i < sparks.Length; i++)
-        {
-            float a = (i / (float)sparks.Length) * Mathf.PI * 2f + Random.Range(-0.25f, 0.25f);
-            sparkDirections[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * Random.Range(90f, 140f);
-        }
+        Burst();
         world = npc.transform.position + Vector3.up * 2.3f;
         age = 0f;
         if (perfect) GameSfx.Play(GameSfx.Cue.Ready);   // a bright ding on top of the coin
@@ -86,6 +137,7 @@ public class UICheerPop : MonoBehaviour
         group.alpha = Mathf.Clamp01(age / 0.12f) * (1f - Mathf.Clamp01((age - (Life - Fade)) / Fade));
 
         // The sparks burst out of the pill and fade.
+        if (plain) return;
         float st = Mathf.Clamp01(age / SparkTime);
         for (int i = 0; i < sparks.Length; i++)
         {

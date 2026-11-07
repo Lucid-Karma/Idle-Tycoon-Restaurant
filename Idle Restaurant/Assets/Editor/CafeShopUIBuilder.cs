@@ -82,11 +82,11 @@ public static partial class CafeGrowthBuilder
         BuildResultCard(canvas, shop);
 
         // How to play: serving now also grows the cafe, and the pulse that says "use this next" is no
-        // longer teal (HighlightController).
+        // longer teal (HighlightController). The burger is stacked in the chef's hands, not on a plate (2026-11-03).
         canvas.Find("HelpPanel/HelpCard/HelpArea/ServingHelpArea/Body").GetComponent<TMP_Text>().text =
-            "Tap a waiting customer. Their stars level up the cafe and the shop.";
+            "Tap a waiting customer to serve. Their stars level up the cafe and the shop.";
         canvas.Find("HelpPanel/HelpCard/HelpArea/StackHelpArea/Body").GetComponent<TMP_Text>().text =
-            "Tap a plate to stack. Toss a spare ingredient at a customer to buy time!";
+            "Tap ingredients one after another: they stack up in your hands.";
         EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
         Debug.Log("[CafeGrowth] built shop UI");
     }

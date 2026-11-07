@@ -108,6 +108,7 @@ public class ScoreManager : Singleton<ScoreManager>
         float rating = QualityStars * Customers.Taste01(kind, review) + SpeedStars * speed01;
         if (mood == Mood.Delighted) rating = Mathf.Max(rating, 4f);
 
+        walkoutsInARow = 0;
         RushStreak = Time.time - lastServeTime <= RushWindow ? RushStreak + 1 : 1;
         lastServeTime = Time.time;
         BestStreak = Mathf.Max(BestStreak, RushStreak);
@@ -158,7 +159,14 @@ public class ScoreManager : Singleton<ScoreManager>
         hostedCustomer++;
         WalkoutCount++;
         RushStreak = 0;
+        walkoutsInARow++;
     }
+
+    // A bad run is not made worse (user, 2026-11-04: "the player should always have fun"): each customer who left
+    // hungry in a row gives the next ones 15% more patience (up to 45%), until someone is served again. Quietly:
+    // nothing on screen says so.
+    private static int walkoutsInARow;
+    public static float Mercy => 1f + 0.15f * Mathf.Min(walkoutsInARow, 3);
 
     // Money outside of a rated order (a snack thrown to a waiting customer).
     public void AddTip(int amount)

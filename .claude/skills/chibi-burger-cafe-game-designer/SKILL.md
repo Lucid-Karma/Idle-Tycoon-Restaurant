@@ -1416,6 +1416,72 @@ device); the beyzosh page (template `astcDataFile`, filled in after the build) l
 and not DXT (`?astc=1` forces it). Customers are made when first needed, not all 18 at the scene's start
 (`NpcSpawnController.GetPooledNpc`, same random pick). Builds take ~3 builds' time now.
 
+### Fries in the other hand, a livelier Mochi, the bin, the slip (2026-11-03)
+
+Asked: "fries must not be a burger layer - held in the other hand if the first is full; update the Help pictures;
+tapping Mochi should do something; Mochi can toss fries like the player; a binning animation, what is in the bin
+shows a little, Mochi can rummage/scatter/eat from it; when the chef falls, what he holds can fly up and be caught by
+him - or by Mochi first."
+
+- **Fries are a side, never a layer.** With anything else in his hands they ride in his other hand
+  (`PlayerFSM.Restack` → `SideHand`, the stack's `HamburgerHand` mirrored across his model's local X); alone they
+  are in the first hand. `CarryStack` has two columns (main, side). Plates refuse fries (`Plate.UseFood`,
+  `IsSuitable`, `Accepts`) - a plate used to take them and the potato rode between the patty and the top bun.
+- **Help card** (`HelpPanel/HelpCard/HelpArea/*HelpArea`): five new pictures rendered from the game camera
+  (`Graphics/Textures/Help/help_*.png`, the current chef at the pan, oven, board, with a stack in his hands, and a
+  served table); the Stack and Serving texts describe the hand stack (also in `CafeShopUIBuilder`).
+- **Mochi** (`Waiter`):
+  - a tap on him (`Waiter.PetAt`, asked first in `PlayerFSM.HandleScreenTap`, a customer nearer the finger wins)
+    pets him: a higher hop with a full turn (the tray turns with him), a happier tail, and a "Purr!"-style pill
+    (`UICheerPop.OnSay`, raspberry star). The chef does not walk off;
+  - fried fries (not burnt) in a fryer and a customer whose fries are due: he fetches them and tosses them from
+    within 4 m with `FoodFight.MochiThrows` (the chef's throw without the camera catcher). Nobody wants them any
+    more: back into the fryer, else the bin;
+  - when the chef slips he dashes over (twice his speed) if he can arrive in time and catches the things on his
+    tray (`Waiter.Catch`), then they fly back to the chef as he stands up;
+  - idle at home, every 25-45 s, if the bin holds leftovers: he digs in (`Bin.Dig`), a thing or two pops onto the
+    floor and he eats them ("Nom!"). Jobs: Waiting, Fetching, Delivering, GoingHome, Catching, Rummaging, Eating
+    (`Idle` = free for a job; rummaging can be dropped).
+- **The bin** (`Bin`): binned things fly in an arc, tumbling, and plop in (`Junk(food, delay)`, several staggered;
+  the "pft" when thrown, the trash sound on landing); the last 5 lie in its open mouth as mesh-only copies (the
+  food itself goes back to its pool).
+- **The slip** (`PlayerFSM.Slip` → `CarryStack.Scatter`): whatever he carries flies up out of his hands, tumbling
+  and spreading, and comes down into them as he gets up (or onto Mochi's tray). Nothing is ever lost: the things
+  stay in his carried list all along, only their look moves.
+- Testing tips: bridge calls take ~1 s, so slow time (`timescale 0.2`) to see the scatter; `PlayerPrefs` keys set
+  during play are ignored (GamePlatform cache) - set them before play (`level.sh` `EXTRA_SET`); Mochi is in the shop
+  from the cafe level that unlocks him (level 6 in `level.sh` terms).
+
+### The chaos bot, and "whatever the player does, no bug, always fun" (2026-11-04)
+
+- **Chaos bot** (`Assets/Editor/ChaosBot.cs`, editor only; Tools/Chibi Cafe/Chaos Bot, or `ChaosBot.Start(minutes,
+  speed)` / `Stop()` / `Status()`): in play mode it taps everything at random (crates, stations, plates, customers,
+  Mochi, the bin, food, the floor, HUD buttons, bursts of 3-10 taps on one thing, tomatoes thrown at the chef) at x2
+  time, and twice a second checks invariants: log errors, carried things under a hand and stacked in a column, plate
+  layers centred and not inside each other, food belonging to nothing, chef/Mochi/customers stuck or off the navmesh.
+  Report: `Temp/chaos_report.txt` (each break once, with a count, the last 25 actions before it, what the thing is
+  drawn with, and a navmesh report for floor problems) + `Temp/chaos_NN.png`. Run it after gameplay changes.
+- What it found and what fixed it: stack/plate spacing by colliders (a whole onion's collider is half its drawn
+  height) -> `EdibleBase.LookSpan` (look bounds) used by `CarryStack` and `Plate.OnTopOf`; a lone item closed into a
+  "burger" (pink plate + raw patty) -> `Plate.Close` needs 2+ layers; `UIOrderCard.NameOf` on an unnamed food;
+  `OvenDoor` NaN when paused (SmoothDamp with dt 0); **chairs of a table revealed mid-shift woke at scale 0 and their
+  carving box was 100x too big -> the whole cafe's navmesh carved away** -> `Chair.Fit` sizes the box for the current
+  scale, carves nothing while tiny; carried/plate lists holding things that were put away elsewhere ->
+  `PlayerFSM.ForgetGone`, `Plate.ForgetGone`.
+- **Nothing fails silently** (`PlayerFSM.Nope` + `WhyNot`, `UICheerPop.OnNope` plain pill): a use that changes
+  nothing (signature of carried things + the target's contents) bounces the thing, hops the chef and says why:
+  "Hands full!", "Buns go in here!", "Patties go here!", "Potatoes go here!", "Bacon goes here!", "Nothing to chop!",
+  "Not ready yet!", "Bring a burger!", "Table's taken!", "Fries go to a customer!", "Nothing to toss!".
+- **Plate**: a single thing stays itself and an empty-hand tap takes it back (TakeFromPlate); 2+ make a burger.
+- **Unstuck** (`Managers/Unstuck.cs`, added by GameManager): whoever should be walking but has not moved for 3 s
+  (or is off the floor) is quietly fixed - chef nudged onto the floor, then next to his goal; Mochi `Unstick` (home);
+  customer `NpcFsm.Unstick` (back on the floor, or gone if leaving). `NpcFsm.Door` is the one door constant.
+- **Kind on a bad day**: `ScoreManager.Mercy` (+15% patience per walkout in a row, max +45%, reset on a serve);
+  a rough day's card (avg < 2.5) adds "Burger of the day: <signature>" or "Mochi says: Tomorrow's ours!".
+- **Life in quiet moments**: `CafeChatter` (a waiting customer's small talk every 13-22 s, kind lines), Mochi
+  `Job.Visiting` (trots to an idle chef, "Mrrrp~", every 35-60 s), `ChefIdle` (7 s idle: empty hands twirl, else a
+  small juggle via `CarryStack.Scatter(height, spread)`).
+
 ### Next ideas (not built yet)
 
 - Money earned while away (the waiter makes this honest now) - tomorrow's treat covers part of this.

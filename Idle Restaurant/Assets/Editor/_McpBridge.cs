@@ -452,6 +452,74 @@ static class _McpBridge
                 UnityEngine.Object.FindFirstObjectByType<PlayerFSM>().HandleScreenTap(ScreenPointOf(src));
                 return src.name;
             }
+            case "lookcheck":
+            {
+                // Every food in use whose look is not shown under it (an invisible layer): where it is and what its look is doing.
+                var fv = FindField(typeof(EdibleBase), "currentVersion");
+                var sb = new StringBuilder();
+                foreach (var f in UnityEngine.Object.FindObjectsByType<EdibleBase>(FindObjectsSortMode.None))
+                {
+                    if (f is Hamburger) continue;
+                    var v = (GameObject)fv.GetValue(f);
+                    if (v != null && v.activeInHierarchy && v.transform.parent == f.transform)
+                    {
+                        // A look turned or sized differently from its prefab (what it measures is then not what is drawn).
+                        var lt = v.transform;
+                        float ang = Quaternion.Angle(lt.localRotation, Quaternion.identity);
+                        if (ang > 3f || (lt.localScale - Vector3.one).sqrMagnitude > 0.01f && p.Length > 1)
+                        {
+                            string at = f.name; for (var t = f.transform.parent; t != null; t = t.parent) at = t.name + "/" + at;
+                            sb.Append($"[TURNED {at} look={v.name} lrot={V(lt.localEulerAngles)} lscl={V(lt.localScale)} lpos={V(lt.localPosition)} foodscl={V(f.transform.localScale)}] ");
+                        }
+                        continue;
+                    }
+                    string path = f.name; for (var t = f.transform.parent; t != null; t = t.parent) path = t.name + "/" + path;
+                    sb.Append($"[{path} look={(v == null ? "null" : v.name + " act=" + v.activeSelf + " under=" + (v.transform.parent ? v.transform.parent.name : "-"))}] ");
+                }
+                // A burger showing fewer layers than it was made of.
+                foreach (var h in UnityEngine.Object.FindObjectsByType<Hamburger>(FindObjectsSortMode.None))
+                {
+                    if (h.Layers.Count == 0) continue;
+                    var shown = h.GetComponentsInChildren<EdibleBase>(false).Where(e => e != h).ToList();
+                    if (shown.Count >= h.Layers.Count) continue;
+                    sb.Append($"[LOST {(h.Placeable as Component)?.name}/{h.name} layers={string.Join(",", h.Layers.Select(l => l.Name))} shown={string.Join(",", shown.Select(e => e.name))} parent={(h.transform.parent ? h.transform.parent.name : "-")}] ");
+                }
+                return sb.Length == 0 ? "clean" : sb.ToString();
+            }
+            case "tables":
+            {
+                // Each table: where it is, what it says it holds, the burgers really lying in its slot, who sits at it.
+                var sb = new StringBuilder("\n");
+                foreach (var t in UnityEngine.Object.FindObjectsByType<TableService>(FindObjectsSortMode.None).OrderBy(x => x.name))
+                {
+                    var holds = t.IsHaveFood() ? t.GetHamburger()?.GetInstanceID().ToString() ?? "non-burger" : "-";
+                    var lying = string.Join(";", t.GetComponentsInChildren<Hamburger>(false).Select(h => $"{h.GetInstanceID()}[{string.Join(",", h.Layers.Select(l => l.Name))}] for={(h.ForCustomer ? h.ForCustomer.name : "-")}"));
+                    var who = string.Join(";", NpcFsm.Active.Where(n => n.chair != null && (UnityEngine.Object)n.chair.GetTableService() == t).Select(n => $"{n.name}:{n.executingNpcState}"));
+                    sb.Append($"{t.name}#{t.GetInstanceID()} at {V(t.transform.position)} active={t.isActiveAndEnabled} holds={holds} lying={lying} who={who}\n");
+                }
+                return sb.ToString();
+            }
+            case "carrydump":
+            {
+                // carrydump: each thing in the chef's hand (bottom first by height) or, with "burgers", every burger on a table
+                var sb = new StringBuilder("\n");
+                System.Collections.Generic.IEnumerable<Transform> roots;
+                if (p.Length > 1 && p[1] == "burgers") roots = UnityEngine.Object.FindObjectsByType<Hamburger>(FindObjectsSortMode.None).Select(h => h.transform);
+                else roots = new[] { (Transform)FindField(typeof(CarryStack), "hand").GetValue(UnityEngine.Object.FindFirstObjectByType<CarryStack>()) };
+                foreach (var root in roots)
+                {
+                    sb.Append($"[{root.name}] scl={V(root.lossyScale)} placeable={(root.GetComponent<EdibleBase>()?.Placeable as Component)?.name}\n");
+                    foreach (Transform c in root)
+                    {
+                        var f = c.GetComponent<EdibleBase>();
+                        var rs = c.GetComponentsInChildren<Renderer>(false).Where(r => r.enabled && !(r is ParticleSystemRenderer)).ToArray();
+                        string wb = rs.Length == 0 ? "-" : $"{rs.Min(r => r.bounds.min.y):0.000}..{rs.Max(r => r.bounds.max.y):0.000}";
+                        string span = f != null ? f.UprightSpan().ToString() : "";
+                        sb.Append($"  {c.name} act={c.gameObject.activeSelf} lpos={V(c.localPosition)} lscl={V(c.localScale)} world={wb} span={span} rends={string.Join(",", c.GetComponentsInChildren<Renderer>(true).Select(r => r.name + (r.enabled && r.gameObject.activeInHierarchy ? "" : "(off)")))}\n");
+                    }
+                }
+                return sb.ToString();
+            }
             case "npcscreen":
                 return string.Join(" | ", UnityEngine.Object.FindObjectsByType<NpcFsm>(FindObjectsSortMode.None).Select(n =>
                 {

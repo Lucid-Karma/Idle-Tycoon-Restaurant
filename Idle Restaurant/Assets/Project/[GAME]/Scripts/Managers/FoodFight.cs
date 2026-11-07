@@ -76,6 +76,14 @@ public class FoodFight : MonoBehaviour
     {
         catcher = npc;
         catcherUntil = Time.time + chefThrowSeconds + ReactionSeconds;
+        Throw(food, npc);
+    }
+
+    // Mochi tosses a customer their fries the way the chef does (the camera stays with the chef).
+    public void MochiThrows(EdibleBase food, NpcFsm npc) => Throw(food, npc);
+
+    private void Throw(EdibleBase food, NpcFsm npc)
+    {
         var item = new BurgerLayer(food.Name, food.Preparation); // read before the pooled object resets
         var body = food.transform;
         body.SetParent(null, true);
@@ -142,12 +150,15 @@ public class FoodFight : MonoBehaviour
         });
     }
 
+    // A tomato from nowhere: the new player's opening gag (Tutorial.TomatoOpening).
+    public void SurpriseTomato(Vector3 from, float seconds) => StartCoroutine(TomatoAtChef(from, seconds));
+
     // A customer's tomato at the chef: running into it puts him on his back; standing, it splats.
-    private IEnumerator TomatoAtChef(Vector3 start)
+    private IEnumerator TomatoAtChef(Vector3 start, float seconds = -1f)
     {
         var tomato = Tomato(start);
         GameSfx.Play(GameSfx.Cue.CustomerThrow);
-        yield return Fly(tomato.transform, ChefHead, customerThrowSeconds, () =>
+        yield return Fly(tomato.transform, ChefHead, seconds > 0f ? seconds : customerThrowSeconds, () =>
         {
             Splash(tomato.transform.position, ColorOf("tomato"), 28);
             Destroy(tomato);

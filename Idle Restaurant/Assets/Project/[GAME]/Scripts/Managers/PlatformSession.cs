@@ -122,6 +122,7 @@ public class PlatformSession : MonoBehaviour
     }
 
     private float touchedAt;
+    private int minutesReported;
 
     private void Update()
     {
@@ -130,6 +131,13 @@ public class PlatformSession : MonoBehaviour
         {
             touchedAt = Time.realtimeSinceStartup;
             OfflineEarnings.Touch();
+        }
+        if (reportedReady && minutesReported < 10 && Time.realtimeSinceStartup - readyAt >= (minutesReported + 1) * 60f)
+        {
+            minutesReported++;
+            var score = ScoreManager.Instance;
+            GoogleAnalytics.Event("play_minute", "minute", minutesReported, "level", DayGoals.LevelNow, "lesson", Tutorial.Running,
+                "served", score != null ? score.ServedCount : 0, "break_cards", UIBreakCard.Instance != null && UIBreakCard.Instance.Showing);
         }
         if (shiftRunning && Time.timeScale > 0f && !GamePlatform.AdShowing) GamePlatform.GameplayStart();
         else GamePlatform.GameplayStop();

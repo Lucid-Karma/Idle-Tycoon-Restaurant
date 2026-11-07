@@ -26,7 +26,7 @@ public class Audio : MonoBehaviour
     [SerializeField] private string streamedClip = "music_loop.m4a";   // in Assets/StreamingAssets
     private AudioSource background;
     private bool wanted;
-    private const float MusicVolume = 0.22f;
+    private const float MusicVolume = 0.16f;   // (0.22 felt loud: user, 2026-11-04)
     private string loaded;   // the file the music is from (or being fetched)
 #if UNITY_EDITOR
     private const string EditorMusic = "Assets/Audio/A-Symphony-of-Disarray_GameMusicPack/01 Loops/0110_A-Symphony-of-Disarray_Loop-1_114bpm4-4_L24M.wav";

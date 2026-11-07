@@ -21,6 +21,7 @@ public class UICoachCard : MonoBehaviour, IPointerClickHandler
     private float shownAt = -1f;
 
     private RectTransform Rect => (RectTransform)transform;
+    public RectTransform Face => face;   // (the bottom-left chef's portrait is put here: UIChefLaugh.Teach)
 
     private void Awake()
     {

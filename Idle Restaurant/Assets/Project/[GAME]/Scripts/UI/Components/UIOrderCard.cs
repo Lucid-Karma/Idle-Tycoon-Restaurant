@@ -124,7 +124,8 @@ public class UIOrderCard : MonoBehaviour
     private static PlayerFSM chef;
     private static PlayerFSM FindChef() => chef != null ? chef : chef = FindFirstObjectByType<PlayerFSM>();
 
-    private static string NameOf(string layer) => layer == "burger" ? "Patty" : char.ToUpperInvariant(layer[0]) + layer.Substring(1);
+    // (A food taken this very frame has no name yet - it gets it in its Start: the chaos bot hit that.)
+    private static string NameOf(string layer) => string.IsNullOrEmpty(layer) ? "" : layer == "burger" ? "Patty" : char.ToUpperInvariant(layer[0]) + layer.Substring(1);
 
     // How it has to be made to count as perfect.
     private static string PrepOf(string layer) => layer switch
@@ -202,7 +203,7 @@ public class UIOrderCard : MonoBehaviour
             AddTile("fries", who.GotFries, who.GotFries ? check : null, UITokens.Colors.Teal);
 
         // Extras are allowed: named in grey, never in red.
-        var names = unused.Select(l => NameOf(l.name)).Distinct().ToList();
+        var names = unused.Select(l => NameOf(l.name)).Where(n => n.Length > 0).Distinct().ToList();
         extras.text = names.Count == 0 ? ""
             : "+ " + string.Join(", ", names.Take(2)) + (names.Count > 2 ? $" +{names.Count - 2}" : "") + " <size=85%>· extra</size>";
 

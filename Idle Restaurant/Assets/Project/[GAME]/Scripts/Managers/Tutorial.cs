@@ -332,7 +332,10 @@ public class Tutorial : MonoBehaviour
             introShown = true;
             intro = true;
             card.Hide();
-            LessonIntro.Play(titleFont, () => { intro = false; if (step >= 0) Show(); });
+            // The opening is a joke, not titles (user, 2026-11-04; CrazyGames: half the players left in the first
+            // minute): a tomato out of nowhere hits the chef, the chef in the corner card laughs at him, big
+            // (UIChefLaugh), and the lesson starts - he is its teacher.
+            StartCoroutine(TomatoOpening(() => { intro = false; if (step >= 0) Show(); }));
             return;
         }
         Show();
@@ -646,10 +649,52 @@ public class Tutorial : MonoBehaviour
         return true;
     }
 
+    // The opening gag (Begin): about two and a half seconds; taps wait for it.
+    public static bool Opening { get; private set; }
+
+    private IEnumerator TomatoOpening(System.Action done)
+    {
+        Opening = true;
+        // Not while a phone is still held upright (the portal asks to turn it): the gag waits for the picture, then
+        // a moment more (user, 2026-11-04: "it was over before I had turned the phone").
+        while (Screen.height > Screen.width) yield return null;
+        float openedAt = Time.realtimeSinceStartup;
+        // Short (CrazyGames 2026-11-05: 44% of players gone inside the first minute): a beat, the throw, and the
+        // lesson starts while the corner chef is still laughing.
+        yield return new WaitForSeconds(0.6f);
+        var chef = FindFirstObjectByType<PlayerFSM>();
+        if (chef != null && FoodFight.Instance != null)
+        {
+            // From outside the picture (user, 2026-11-04): it comes in over the top-right edge of the screen, flies
+            // across, slowly enough to follow, and lands on his head.
+            var cam = Camera.main;
+            float depth = cam != null ? Vector3.Dot(chef.transform.position - cam.transform.position, cam.transform.forward) : 10f;
+            var from = cam != null ? cam.ViewportToWorldPoint(new Vector3(1.1f, 0.95f, depth)) : chef.transform.position + Vector3.up * 6f;
+            const float flight = 1.4f;
+            FoodFight.Instance.SurpriseTomato(from, flight);
+            yield return new WaitForSeconds(flight + 0.4f);   // the flight and the splat; the laugh goes on by itself
+        }
+        Opening = false;
+        GoogleAnalytics.Event("opening_done", "seconds", Time.realtimeSinceStartup - openedAt);
+        done();
+    }
+
+    // Taps the lesson turned down in a row: the third goes through - the lesson guides, it does not hold the player
+    // back (2026-11-04: CrazyGames, half the players gone within the first minute).
+    private int refused;
+
+    private static bool Refuse(Tutorial t)
+    {
+        if (++t.refused < 3) { if (t.spot != null) t.spot.Punch(); return false; }
+        t.refused = 0;
+        return true;
+    }
+
     public static bool AcceptsTap(Vector3 screen, out Vector3 aim)
     {
         aim = screen;
         if (LessonIntro.Playing) { LessonIntro.Skip(); return false; }   // a tap during the titles skips them
+        if (Opening) return false;
         var t = Instance;
         if (t == null || !Running) return true;
         // Planning: every step tapped (or the customer not in yet) - taps wait, so nothing knocks the plan over.
@@ -658,19 +703,12 @@ public class Tutorial : MonoBehaviour
         // A tap on something else the chef could use (the crate beside the oven...) is that thing, not the lit one: it
         // bounces (TapFeedback) and the light nudges; the chef goes nowhere (user, 2026-10-30: "I tapped something
         // else and he went to the oven anyway - the lesson doesn't care about my input").
-        if (TappedSomethingElse(screen))
-        {
-            if (t.spot != null) t.spot.Punch();
-            return false;
-        }
+        if (TappedSomethingElse(screen)) return Refuse(t);
         var r = t.focusRect;
         float slop = Screen.height * 0.035f;
         float dx = Mathf.Max(r.xMin - screen.x, 0f, screen.x - r.xMax), dy = Mathf.Max(r.yMin - screen.y, 0f, screen.y - r.yMax);
-        if (dx * dx + dy * dy > slop * slop)
-        {
-            if (t.spot != null) t.spot.Punch();
-            return false;
-        }
+        if (dx * dx + dy * dy > slop * slop) return Refuse(t);
+        t.refused = 0;
         aim = AimAt(Focus);
         if (Planning) t.TapPlanned();
         return true;
@@ -922,6 +960,9 @@ public class Tutorial : MonoBehaviour
         }
         foreach (var board in All<ChoppingBoard>())
             if (board.Food is CuttableBase { isSliced: true } ready) return new Step { Target = ready, Line = "<b>Take</b> it!" };
+        // On the board and being chopped: wait for it (it said "Grab the tomato" again - user, 2026-11-04).
+        foreach (var board in All<ChoppingBoard>())
+            if (board.Food is CuttableBase { isSliced: false }) return new Step { Target = board, Line = "<b>Chop</b> it!" };
         var wanted = NpcFsm.Active.Where(n => Orders.Waiting(n) && n.Ordered != null)
             .SelectMany(n => n.Ordered.Layers).FirstOrDefault(l => Choppable.Contains(l));
         return new Step { Target = wanted != null ? Source(wanted) : null, Line = $"Grab the <b>{wanted ?? "veg"}</b>!" };
@@ -945,7 +986,11 @@ public class Tutorial : MonoBehaviour
 
     // The first time the shop has something the wallet can pay for - from the second level, and only in a calm moment
     // (nobody waiting for an order, nothing in his hands): straight after the lesson it piled one more thing on.
-    private bool ShopDue() => CafeProgress.LevelNumber >= 2 && CafeShop.Instance != null && CafeShop.Instance.AnythingToBuy()
+    // Not as the game opens (user, 2026-11-05: the shop's pictures may not be there yet) nor over the level's end cards.
+    private const float ShopTipNotBefore = 45f;
+    private bool ShopDue() => CafeProgress.LevelNumber >= 2 && Time.timeSinceLevelLoad > ShopTipNotBefore && ShopIcons.Ready
+                              && !(UIBreakCard.Instance != null && UIBreakCard.Instance.Showing)
+                              && CafeShop.Instance != null && CafeShop.Instance.AnythingToBuy()
                               && ShopButton() != null && chef.HeldFood == null && !NpcFsm.Active.Any(Orders.Waiting);
 
     private Component ShopButton()

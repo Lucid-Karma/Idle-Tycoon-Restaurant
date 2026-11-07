@@ -16,6 +16,13 @@ public class UICafeLevel : MonoBehaviour
 
     private void OnEnable()
     {
+        // The bar counts levels now, not stars: the star in front of the shop's count went (the result card's star
+        // stays - it is the stars this level earned).
+        if (!showShiftStars && transform.Find("Star") is Transform star && star.gameObject.activeSelf)
+        {
+            star.gameObject.SetActive(false);
+            if (progressLabel.transform is RectTransform text) text.anchoredPosition += Vector2.left * 34f;   // into its place
+        }
         CafeProgress.Changed += Refresh;
         EventManager.OnLevelFinish.AddListener(OnShiftEnd);
         Refresh();
@@ -29,16 +36,16 @@ public class UICafeLevel : MonoBehaviour
         EventManager.OnLevelFinish.RemoveListener(OnShiftEnd);
     }
 
-    // The result card appears now: fill the bar from where the shift started (or from empty after a level up).
+    // The result card appears now: fill the bar from where it was before this level was counted (or from empty after
+    // the cafe went up a tier).
     private void OnShiftEnd()
     {
         Refresh();
-        if (!showShiftStars || ScoreManager.Instance == null) return;
-        int before = CafeProgress.Stars - ScoreManager.Instance.ShiftStars;
-        int level = CafeProgress.LevelFor(before);
-        shown = level == CafeProgress.Level && level < CafeProgress.MaxLevel
-            ? (float)(before - CafeProgress.LevelStars[level - 1]) / (CafeProgress.LevelStars[level] - CafeProgress.LevelStars[level - 1])
-            : 0f;
+        if (!showShiftStars) return;
+        int played = CafeProgress.ShiftsPlayed;
+        var (into, span) = CafeProgress.ProgressAfter(played - 1);
+        bool sameTier = played > 0 && Mathf.Max(CafeProgress.TierAt(played), CafeProgress.LegacyTier) == CafeProgress.Level;
+        shown = sameTier && span > 0 ? (float)into / span : 0f;
         velocity = 0f;
         Apply();
     }
@@ -54,7 +61,7 @@ public class UICafeLevel : MonoBehaviour
         if (showShiftStars && ScoreManager.Instance != null)
             progressLabel.text = "+" + ScoreManager.Instance.ShiftStars;
         else
-            progressLabel.text = span > 0 ? $"{into} / {span}" : "Max";
+            progressLabel.text = span > 0 ? $"{into} / {span} levels" : "Max";
         target = span > 0 ? (float)into / span : 1f;
     }
 

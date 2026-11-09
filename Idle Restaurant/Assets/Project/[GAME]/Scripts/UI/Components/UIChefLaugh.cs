@@ -11,9 +11,9 @@ using UnityEngine.UI;
 // He laughs when a tomato gets the kitchen chef or he slips, smirks when a customer leaves hungry, is shocked by a
 // Chaos Burger, dizzy at a flurry of taps that do nothing, and in love with the player's first burger. Not more often
 // than every 10 seconds, except the new player's opening gag (Tutorial.TomatoOpening) and the first burger.
-// He is also the lesson's teacher: his portrait, cloned, sits in the coach card (Teach) with faces of its own (never
-// sleepy - ChefAnimationController.teacher), and while that card is up his own card in the corner is hidden and his
-// reactions jump out of the coach card instead (the teacher hides meanwhile): one little chef on screen, never two.
+// In the lesson nothing of him sits on the floor any more (user, 2026-11-07: "he sits there tiny and still in the middle
+// of the floor - react like the other reactions"); his corner card stays up, and he jumps out of it at the player's lesson taps - in love with a right one, shocked at one the lesson turned down (Tutorial.LessonTap) - no
+// more often than the other reactions.
 // Attached at runtime by GameManager.
 public class UIChefLaugh : MonoBehaviour
 {
@@ -25,14 +25,12 @@ public class UIChefLaugh : MonoBehaviour
     private static UIChefLaugh instance;
     private RectTransform portrait;
     private Canvas ownCanvas;
-    private CanvasGroup group, cardGroup, teacherGroup;
-    private RectTransform teacher;
+    private CanvasGroup group;
     private Animator animator;
     private Image chibi;
-    private UICoachCard coach;
     private readonly Dictionary<Face, Sprite[]> faces = new();
     private float lastReaction = -100f;
-    private bool reacting, fromCard;
+    private bool reacting;
 
     public static void Attach()
     {
@@ -55,8 +53,6 @@ public class UIChefLaugh : MonoBehaviour
         animator = GetComponentInChildren<Animator>(true);
         foreach (var img in GetComponentsInChildren<Image>(true)) if (img.name == "ChibiIMG") chibi = img;
         if (!TryGetComponent(out group)) group = gameObject.AddComponent<CanvasGroup>();   // (not ??: Unity's missing component is not null to it)
-        var card = transform.parent;
-        if (card != null && !card.TryGetComponent(out cardGroup)) cardGroup = card.gameObject.AddComponent<CanvasGroup>();
         var all = Resources.LoadAll<Sprite>("ChefFaces");
         foreach (Face f in System.Enum.GetValues(typeof(Face)))
         {
@@ -66,7 +62,6 @@ public class UIChefLaugh : MonoBehaviour
             list.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
             faces[f] = list.ToArray();
         }
-        Teach();
     }
 
     private void OnEnable()
@@ -74,6 +69,7 @@ public class UIChefLaugh : MonoBehaviour
         FoodFight.OnChefSplatted.AddListener(OnSplatted);
         EventManager.OnCustomerProtest.AddListener(OnWalkout);
         NpcFsm.OnRated.AddListener(OnRated);
+        Tutorial.LessonTap += OnLessonTap;
     }
 
     private void OnDisable()
@@ -81,7 +77,10 @@ public class UIChefLaugh : MonoBehaviour
         FoodFight.OnChefSplatted.RemoveListener(OnSplatted);
         EventManager.OnCustomerProtest.RemoveListener(OnWalkout);
         NpcFsm.OnRated.RemoveListener(OnRated);
+        Tutorial.LessonTap -= OnLessonTap;
     }
+
+    private void OnLessonTap(bool right) => Play(right ? Face.Love : Face.Shock);
 
     private void OnSplatted(Vector3 at, FoodFight.Hit hit) => Play(Face.Laugh, Tutorial.Opening);
 
@@ -111,57 +110,10 @@ public class UIChefLaugh : MonoBehaviour
         StartCoroutine(Reaction(face));
     }
 
-    private bool CoachUp
-    {
-        get
-        {
-            if (coach == null) coach = FindFirstObjectByType<UICoachCard>(FindObjectsInactive.Include);
-            return coach != null && coach.isActiveAndEnabled;
-        }
-    }
-
-    // While the lesson's card is up its little chef is the one on screen: the corner card is hidden, and a reaction
-    // jumps out of the coach card with the teacher hidden until it is back.
     private void LateUpdate()
     {
-        bool coachUp = CoachUp;
-        if (cardGroup != null) { cardGroup.alpha = coachUp ? 0f : 1f; cardGroup.blocksRaycasts = !coachUp; }
-        // A reaction stays on screen even when the lesson's card comes up in the middle of it (the opening's laugh: the
-        // card hid his corner card and him with it - user, 2026-11-05), and the teacher waits hidden meanwhile.
+        // (His card stays up through the lesson now - user, 2026-11-07: "the last order card can show in the onboarding".)
         group.ignoreParentGroups = reacting;
-        group.alpha = coachUp && !reacting ? 0f : 1f;
-        if (teacherGroup != null) teacherGroup.alpha = reacting && coachUp ? 0f : 1f;
-    }
-
-    // The lesson's coach card shows him instead of Mochi: a copy of his portrait over the face, with faces of its own.
-    private void Teach()
-    {
-        coach = FindFirstObjectByType<UICoachCard>(FindObjectsInactive.Include);
-        if (coach == null) return;
-        var face = coach.Face;
-        if (face == null || face.Find("Chef Teacher") != null) return;
-        var copy = Instantiate(gameObject, face, false);
-        copy.name = "Chef Teacher";
-        DestroyImmediate(copy.GetComponent<UIChefLaugh>());
-        teacher = (RectTransform)copy.transform;
-        if (!copy.TryGetComponent(out teacherGroup)) teacherGroup = copy.AddComponent<CanvasGroup>();
-        teacherGroup.alpha = 1f;
-        teacherGroup.ignoreParentGroups = false;
-        foreach (var ctrl in copy.GetComponentsInChildren<ChefAnimationController>(true))
-        {
-            ctrl.enabled = false;   // (re-enabled as the teacher: listens to nothing, never sleepy)
-            ctrl.teacher = true;
-            ctrl.enabled = true;
-        }
-        var canvas = copy.GetComponent<Canvas>();
-        if (canvas != null) canvas.overrideSorting = false;
-        var rt = (RectTransform)copy.transform;
-        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-        rt.offsetMin = rt.offsetMax = Vector2.zero;
-        rt.localScale = Vector3.one;
-        rt.localRotation = Quaternion.identity;
-        foreach (var img in face.GetComponents<Image>()) img.enabled = false;
-        foreach (Transform child in face) if (child != copy.transform) child.gameObject.SetActive(false);
     }
 
     private IEnumerator Reaction(Face face)
@@ -170,10 +122,10 @@ public class UIChefLaugh : MonoBehaviour
         lastReaction = Time.unscaledTime;
         var corner = portrait.position;
         var homeScale = portrait.localScale;
-        // Out of the coach card while it is up: from the teacher's place and size, and back there.
-        fromCard = teacher != null && CoachUp;
-        var homePos = fromCard ? teacher.position : corner;
-        float rest = fromCard ? teacher.rect.height * teacher.lossyScale.y / Mathf.Max(1f, portrait.rect.height * portrait.lossyScale.y) : 1f;
+        var homePos = corner;
+        float rest = 1f;
+        // The opening gag's laugh is shorter (user, 2026-11-07: "shorten his laugh in the opening").
+        float hold = Tutorial.Opening || LessonIntro.Playing ? Hold * 0.55f : Hold;
         bool sorted = ownCanvas != null && ownCanvas.overrideSorting;
         int order = ownCanvas != null ? ownCanvas.sortingOrder : 0;
         if (ownCanvas != null) { ownCanvas.overrideSorting = true; ownCanvas.sortingOrder = 50; }
@@ -193,7 +145,7 @@ public class UIChefLaugh : MonoBehaviour
             ShowFrame(frames, t * Grow);
             yield return null;
         }
-        for (float t = 0f; t < Hold; t += Time.unscaledDeltaTime)
+        for (float t = 0f; t < hold; t += Time.unscaledDeltaTime)
         {
             // He shakes with it.
             float shake = Mathf.Sin(t * (face == Face.Laugh ? 38f : 14f));
@@ -204,12 +156,6 @@ public class UIChefLaugh : MonoBehaviour
         }
         portrait.localRotation = Quaternion.identity;
         var from = portrait.position;
-        // Back to wherever the little chef is now: the coach card may have come up while he was out.
-        if (!fromCard && teacher != null && CoachUp)
-        {
-            homePos = teacher.position;
-            rest = teacher.rect.height * teacher.lossyScale.y / Mathf.Max(1f, portrait.rect.height * portrait.lossyScale.y);
-        }
         for (float t = 0f; t < 1f; t += Time.unscaledDeltaTime / Shrink)
         {
             float k = t * t * (3f - 2f * t);
@@ -222,7 +168,7 @@ public class UIChefLaugh : MonoBehaviour
         if (chibi != null && restSprite != null) chibi.sprite = restSprite;
         if (animator != null) animator.enabled = animated;
         if (ownCanvas != null) { ownCanvas.overrideSorting = sorted; ownCanvas.sortingOrder = order; }
-        reacting = fromCard = false;
+        reacting = false;
     }
 
     private void ShowFrame(Sprite[] frames, float t)

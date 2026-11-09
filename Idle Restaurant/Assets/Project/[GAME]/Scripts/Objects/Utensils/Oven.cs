@@ -8,6 +8,8 @@ public class Oven : CookingBase
 
     void Update()
     {
+        // Hums while a bun bakes; quiet once it has burnt (like the pan's sizzle).
+        GameSfx.Bake(this, currentObject != null && state == State.Cook && bun != null && bun.Preparation != Prep.Burnt);
         if (currentObject != null)
         {
             switch (state)
@@ -51,6 +53,8 @@ public class Oven : CookingBase
         base.RemoveFood(ingredient);
         state = State.Idle;
     }
+
+    private void OnDisable() => GameSfx.Bake(this, false);
 
     public override bool IsSuitable(EdibleBase ingredient)
     {

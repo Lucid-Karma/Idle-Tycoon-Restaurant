@@ -17,7 +17,8 @@ public static class CafeProgress
     // The level (shift) at which each tier opens: tier 2 from level 2, tier 3 from level 4, then 6, 9 and 12 - a new
     // thing every second or third level early on. Whatever a tier brings (recipes, customers, shop items) is listed by
     // Orders.NewAt, Customers.ArrivesAt and the shop's upgrade levels.
-    public static readonly int[] TierLevels = { 1, 2, 4, 6, 9, 12 };
+    // Three more from level 15 on (user, 2026-11-07: "is there a level cap? if not, grow the shop"): shop items only.
+    public static readonly int[] TierLevels = { 1, 2, 4, 6, 9, 12, 15, 19, 24 };
     public static int MaxLevel => TierLevels.Length;
 
     // Before levels, tiers followed the stars customers gave (total stars for tier 1, 2, 3...). Kept for saves made

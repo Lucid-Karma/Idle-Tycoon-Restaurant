@@ -12,12 +12,10 @@ using UnityEngine.UI;
 // - "How to play" on the Help screen starts the lesson again.
 public static partial class CafeGrowthBuilder
 {
-    const string CoachFace = Game + "Graphics/Sprites/UI/mochi_face.png";
 
     [MenuItem("Tools/Chibi Cafe/10 Build the Tutorial")]
     public static void BuildTutorial()
     {
-        RenderCoachFace();
         var canvas = GameObject.Find(Canvas).transform;
         var hud = canvas.Find("InGamePanel/HUD");
 
@@ -80,47 +78,11 @@ public static partial class CafeGrowthBuilder
     }
 
     #region The card
+    // Nothing on screen any more (UICoachCard): only the object the lesson shows and hides.
     static UICoachCard BuildCard(Transform hud)
     {
         var card = Rect("Coach", hud, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 150f), new Vector2(860f, 190f));
-        var group = Get<CanvasGroup>(card.gameObject);
-        Get<Canvas>(card.gameObject);                      // its own canvas: it animates every frame
-        Get<GraphicRaycaster>(card.gameObject);
-
-        var shadow = Rect("Shadow", card, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -8f), new Vector2(16f, 16f));
-        Img(shadow.gameObject, "ui_rounded", UITokens.Colors.Shadow, sliced: true, ppu: 2.6f);
-        var surface = Rect("Surface", card, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        var face = Img(surface.gameObject, "ui_rounded", UITokens.Colors.WarmWhite, sliced: true, ppu: 2.6f);
-        face.raycastTarget = true;                          // the whole card is the "tap to go on" target
-
-        // Mochi, in a pink disc on the left.
-        var disc = Rect("Disc", card, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(105f, 0f), new Vector2(150f, 150f));
-        Img(disc.gameObject, "ui_circle", UITokens.Colors.Pink);
-        var mochi = Rect("Mochi", disc, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 6f), new Vector2(136f, 136f));
-        var portrait = Get<Image>(mochi.gameObject);
-        // Freshly written a moment ago: ask for it again, or the sprite comes back null and the card
-        // shows a plain white square where his face should be.
-        AssetDatabase.ImportAsset(CoachFace, ImportAssetOptions.ForceSynchronousImport);
-        portrait.sprite = AssetDatabase.LoadAllAssetsAtPath(CoachFace).OfType<Sprite>().FirstOrDefault();
-        if (portrait.sprite == null) Debug.LogWarning("[CafeGrowth] no sprite at " + CoachFace);
-        portrait.enabled = portrait.sprite != null;
-        portrait.preserveAspect = true;
-        portrait.raycastTarget = false;
-
-        var line = Rect("Line", card, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f), new Vector2(90f, 8f), new Vector2(-230f, -36f));
-        var text = Text(line, "", SemiBold, 40f, UITokens.Colors.Ink, TextAlignmentOptions.Left);
-
-        var hint = Rect("TapHint", card, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-28f, 16f), new Vector2(260f, 40f));
-        Text(hint, "tap to go on", Medium, 26f, UITokens.Colors.InkMuted, TextAlignmentOptions.Right);
-
-        var coach = Get<UICoachCard>(card.gameObject);
-        var so = new SerializedObject(coach);
-        so.FindProperty("group").objectReferenceValue = group;
-        so.FindProperty("line").objectReferenceValue = text;
-        so.FindProperty("tapHint").objectReferenceValue = hint.gameObject;
-        so.FindProperty("face").objectReferenceValue = disc;
-        so.ApplyModifiedPropertiesWithoutUndo();
-        return coach;
+        return Get<UICoachCard>(card.gameObject);
     }
     #endregion
 
@@ -199,49 +161,4 @@ public static partial class CafeGrowthBuilder
         return material;
     }
     #endregion
-
-    // Mochi's face for the card: the waiter himself, head on, matted like the shop icons.
-    static void RenderCoachFace()
-    {
-        // He is switched off until he is bought, so he has to be looked up among the inactive too.
-        var found = Object.FindObjectsByType<Waiter>(FindObjectsInactive.Include, FindObjectsSortMode.None).FirstOrDefault();
-        if (found == null) { Debug.LogWarning("[CafeGrowth] no waiter to photograph - run step 9 first"); return; }
-        var waiter = found.gameObject;
-        bool was = waiter.transform.parent.gameObject.activeSelf;
-        waiter.transform.parent.gameObject.SetActive(true);
-
-        var stage = new GameObject("__FaceStage") { hideFlags = HideFlags.DontSave };
-        try
-        {
-            var copy = Object.Instantiate(waiter.transform.Find("Cat").gameObject, stage.transform);
-            copy.transform.position = IconStage;
-            copy.transform.rotation = Quaternion.identity;
-            var cam = new GameObject("FaceCamera") { hideFlags = HideFlags.DontSave }.AddComponent<Camera>();
-            cam.transform.SetParent(stage.transform, false);
-            cam.orthographic = true;
-            cam.nearClipPlane = 0.01f;
-            cam.farClipPlane = 50f;
-            cam.enabled = false;
-            cam.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>().renderShadows = false;
-            var head = copy.GetComponent<Renderer>().bounds;
-            cam.transform.position = new Vector3(head.center.x, head.center.y + 0.18f, head.center.z) + Vector3.forward * 6f;
-            cam.transform.rotation = Quaternion.LookRotation(Vector3.back);
-            cam.orthographicSize = 0.34f;
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(CoachFace)));
-            File.WriteAllBytes(Path.GetFullPath(CoachFace), RenderMatted(cam, 256, 256));
-        }
-        finally
-        {
-            Object.DestroyImmediate(stage);
-            waiter.transform.parent.gameObject.SetActive(was);
-        }
-        AssetDatabase.ImportAsset(CoachFace, ImportAssetOptions.ForceSynchronousImport);
-        var imp = (TextureImporter)AssetImporter.GetAtPath(CoachFace);
-        imp.textureType = TextureImporterType.Sprite;
-        imp.spriteImportMode = SpriteImportMode.Single;   // the folder's default is Multiple, which has no sprite in it
-        imp.alphaIsTransparency = true;
-        imp.mipmapEnabled = false;
-        imp.maxTextureSize = 256;
-        imp.SaveAndReimport();
-    }
 }

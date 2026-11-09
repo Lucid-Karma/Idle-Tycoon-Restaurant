@@ -19,12 +19,12 @@ public class NpcSpawnController : MonoBehaviour
     void OnEnable()
     {
         EventManager.OnLevelStart.AddListener(StartLevelCustomers);
-        EventManager.OnCustomerWent.AddListener(StartDelayedCreation);
+        NpcFsm.SeatFreed += StartDelayedCreation;
     }
     void OnDisable()
     {
         EventManager.OnLevelStart.RemoveListener(StartLevelCustomers);
-        EventManager.OnCustomerWent.RemoveListener(StartDelayedCreation);
+        NpcFsm.SeatFreed -= StartDelayedCreation;
     }
 
     // Once per shift: a second OnLevelStart in the same scene (it is a static event, also raised by Replay's
@@ -36,7 +36,22 @@ public class NpcSpawnController : MonoBehaviour
         waveSent = true;
         StartCoroutine(CreateLevelCustomers());
     }
-    private void StartDelayedCreation() => StartCoroutine(DelayedCreation());
+    private void StartDelayedCreation(Vector3 seat) => StartCoroutine(DelayedCreation(seat));
+
+    // Customers walk in calmly from the door (NpcFsm.WalkSpeed) - except in the very first lesson, where they appear a
+    // few steps from their table (NpcFsm.Approach) so the first burger is not kept waiting. The walk is taken off the
+    // wait before the next one sets off, and the next one sets off as soon as a seat is freed (not once the last
+    // customer has walked all the way out): seats do not stand empty while the shift lasts (user, 2026-11-07).
+    private static bool FromNearby => Tutorial.Running || !CafeProgress.Taught;
+
+    private static float WalkSeconds(Vector3 seat) => FromNearby ? 3f : Vector3.Distance(NpcFsm.Door, seat) * 1.25f / NpcFsm.WalkSpeed;
+
+    // The usual walk, for waves sent before the seat is known.
+    private float AverageWalk()
+    {
+        var seats = targetChairs.Where(c => c != null && c.activeInHierarchy).Select(c => c.GetComponent<ISedile>().CalculateSitPos()).ToList();
+        return seats.Count == 0 ? 0f : seats.Average(WalkSeconds);
+    }
 
     // The next shift in the same scene (ShiftFlow): a new opening wave, sized for the tables owned now.
     public void ResetForNextShift()
@@ -111,9 +126,11 @@ public class NpcSpawnController : MonoBehaviour
                     chairIndex = specificChairs.IndexOf(specificChairs.OrderBy(c => Vector3.Distance(c.transform.position, door)).First());
                 }
                 //Debug.Log("SChairCount: " + specificChairs.Count + " chairIndex: " + chairIndex);
-                npc.GetComponent<NpcFsm>().chair = specificChairs[chairIndex].GetComponent<ISedile>();
+                var fsm = npc.GetComponent<NpcFsm>();
+                fsm.chair = specificChairs[chairIndex].GetComponent<ISedile>();
 
-                spawnPos = new Vector3(21.35f, 1.2f, 8.79f);
+                spawnPos = FromNearby ? NpcFsm.Approach(fsm.chair.CalculateSitPos()) : NpcFsm.Door;
+                fsm.ExitPoint = spawnPos;
                 npc.transform.position = spawnPos;
                 npc.SetActive(true);
                 spawnedCount++;
@@ -128,10 +145,10 @@ public class NpcSpawnController : MonoBehaviour
     [SerializeField] private Vector2 openingGap = new Vector2(10f, 16f);
     [SerializeField] private Vector2 refillGap = new Vector2(5f, 11f);
 
-    IEnumerator DelayedCreation()
+    IEnumerator DelayedCreation(Vector3 seat)
     {
-        timeBreak = Random.Range(refillGap.x, refillGap.y);
-        yield return new WaitForSeconds(timeBreak);
+        timeBreak = Random.Range(refillGap.x, refillGap.y) - WalkSeconds(seat);
+        yield return new WaitForSeconds(Mathf.Max(0.5f, timeBreak));
         CreateNpc();
     }
 
@@ -141,7 +158,7 @@ public class NpcSpawnController : MonoBehaviour
         {
             timeBreak = i == 0 ? (CafeProgress.Taught ? Random.Range(firstArrival.x, firstArrival.y) : 0.3f)   // the lesson's first customer at once
                                : Random.Range(openingGap.x, openingGap.y);
-            yield return new WaitForSeconds(timeBreak);
+            yield return new WaitForSeconds(Mathf.Max(i == 0 ? 0.3f : 2f, timeBreak - (i == 0 ? AverageWalk() : 0f)));
             CreateNpc();
         }
     }

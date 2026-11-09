@@ -35,6 +35,11 @@ public class IngredientsSource : MonoBehaviour, ISpawnable, ISelectable
         return food;
     }
 
+    // What it gives, by ingredient name ("bun", "tomato"... as EdibleBase.Name and the recipes' layers): each food's
+    // class is named after it.
+    public string Ingredient => spawnPrefab != null && spawnPrefab.GetComponent<EdibleBase>() is EdibleBase food
+        ? food.GetType().Name.ToLowerInvariant() : "";
+
     public Material DefaultMaterial()
     {
         return defaultMaterial;

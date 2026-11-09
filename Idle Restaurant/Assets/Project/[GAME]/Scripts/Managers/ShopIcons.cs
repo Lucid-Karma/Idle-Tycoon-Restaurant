@@ -37,6 +37,8 @@ public static class ShopIcons
     private static IEnumerator Load(List<Upgrade> upgrades, float delay, GameObject runner)
     {
         yield return new WaitForSecondsRealtime(delay);   // the first frames of the game first
+        // The lesson's gift first: it flies its picture after the first burger, before the shop is ever opened.
+        upgrades.Sort((a, b) => (b != null && b.id == Tutorial.FirstGift).CompareTo(a != null && a.id == Tutorial.FirstGift));
         foreach (var upgrade in upgrades)
         {
             if (upgrade == null || cache.ContainsKey(upgrade.id)) continue;
@@ -56,6 +58,10 @@ public static class ShopIcons
             sprite.name = "shop_" + upgrade.id;
             sprite.hideFlags = HideFlags.DontUnloadUnusedAsset;
             cache[upgrade.id] = sprite;
+            // Each one onto the catalogue as it arrives, not all at the end: the lesson's gift (the toque) flies its
+            // picture a few seconds in, and on the web the rest may still be on their way (user, 2026-11-07: "the hat's
+            // picture didn't show").
+            if (CafeShop.Instance != null) Apply(CafeShop.Instance.Upgrades);
         }
         loading = false;
         if (CafeShop.Instance != null) Apply(CafeShop.Instance.Upgrades);

@@ -64,6 +64,25 @@ public class NpcFsm : MonoBehaviour
     // Where customers come in and go out.
     public static readonly Vector3 Door = new(21.35f, 1.2f, 8.79f);
 
+    // Customers walk calmly (user, 2026-11-07: "they should walk more calmly, but not reach their tables late"): they
+    // come in a few steps from their table instead of at the door (NpcSpawnController, Approach), and leave back to
+    // that spot, where they vanish - a walk across the room at this pace held the next customer and the level's end.
+    public const float WalkSpeed = 1.2f;
+    private const float ApproachSteps = 3.5f;
+
+    // Where this customer came in, and goes out (a few metres from the chair, towards the door).
+    public Vector3 ExitPoint { get; set; } = Door;
+    // A customer got up and their seat is free (where it is): the next one is sent from here.
+    public static System.Action<Vector3> SeatFreed;
+
+    public static Vector3 Approach(Vector3 sitPos)
+    {
+        var away = Door - sitPos;
+        away.y = 0f;
+        var spot = sitPos + (away.sqrMagnitude > 0.01f ? away.normalized : Vector3.back) * ApproachSteps;
+        return NavMesh.SamplePosition(spot, out var hit, 2.5f, NavMesh.AllAreas) ? hit.position : Door;
+    }
+
     public NavMeshAgent Agent{ get { return (agent == null) ? agent = GetComponent<UnityEngine.AI.NavMeshAgent>() : agent; } }
     #endregion
 
@@ -135,6 +154,7 @@ public class NpcFsm : MonoBehaviour
         Active.Add(this);
         warnedOffFloor = false;
         if (!Agent.enabled) Agent.enabled = true;   // switched off while they sat (Seat)
+        Agent.speed = WalkSpeed;   // (before SeasonalDecor.Dress, which takes it as the base)
         Patience = Random.Range(patienceRange.x, patienceRange.y) * Customers.Of(kind).PatienceScale * CafeShop.PatienceScale
                    * ScoreManager.Mercy;
         unstuckTries = 0;
@@ -191,7 +211,6 @@ public class NpcFsm : MonoBehaviour
     {
         if(chair != null)
         {
-            transform.rotation = chair.GetSedileRot();
             Seat();
             Ticket = FreeTicket();
             Ordered = Orders.Pick();
@@ -331,9 +350,25 @@ public class NpcFsm : MonoBehaviour
     {
         seat = chair.CalculateSitPos();
         var at = new Vector3(seat.x, transform.position.y, seat.z);
-        if ((at - transform.position).sqrMagnitude < 1f) transform.position = at;
         Agent.enabled = false;
         chair.Open(this, false);
+        // Turned and slid onto the seat while the sit animation blends in, not snapped there: they spun round on the
+        // spot and jumped up to a metre as they sat (user, 2026-11-07: "the walk-to-sit moment is very sharp").
+        StartCoroutine(SettleOnSeat((at - transform.position).sqrMagnitude < 1f ? at : transform.position, chair.GetSedileRot()));
+    }
+
+    private IEnumerator SettleOnSeat(Vector3 at, Quaternion facing)
+    {
+        const float Seconds = 0.35f;
+        Vector3 from = transform.position;
+        Quaternion turnFrom = transform.rotation;
+        for (float t = 0f; t < 1f; t += Time.deltaTime / Seconds)
+        {
+            float k = t * t * (3f - 2f * t);
+            transform.SetPositionAndRotation(Vector3.Lerp(from, at, k), Quaternion.Slerp(turnFrom, facing, k));
+            yield return null;
+        }
+        transform.SetPositionAndRotation(at, facing);
     }
 
     // Getting up: the chair opens for them, and once the navmesh is back under their feet they walk off to the
@@ -375,7 +410,7 @@ public class NpcFsm : MonoBehaviour
         {
             if (!onFloor || unstuckTries++ > 0) { StartCoroutine(Vanish()); return; }
             Agent.isStopped = false;
-            Agent.SetDestination(Door);
+            Agent.SetDestination(ExitPoint);
         }
         else if (executingNpcState == ExecutingNpcState.COME && onFloor) MoveNpc();
     }
@@ -452,7 +487,7 @@ public class NpcFsm : MonoBehaviour
         }
         if (!found || !Agent.Warp(hit.position)) return false;
         if (executingNpcState == ExecutingNpcState.COME) MoveNpc();
-        else if (executingNpcState == ExecutingNpcState.GO) Agent.SetDestination(Door);
+        else if (executingNpcState == ExecutingNpcState.GO) Agent.SetDestination(ExitPoint);
         return Agent.isOnNavMesh;
     }
 

@@ -283,13 +283,6 @@ static class _McpBridge
                 UnityEngine.Object.FindFirstObjectByType<PlayerFSM>().HandleScreenTap(Camera.main.WorldToScreenPoint(npc.transform.position + Vector3.up));
                 return npc.name + " " + npc.Kind;
             }
-            case "coach":
-            {
-                if (Tutorial.Instance == null) return "none";
-                var card = (UICoachCard)FindField(typeof(Tutorial), "card").GetValue(Tutorial.Instance);
-                card.OnPointerClick(null);
-                return "ok";
-            }
             case "slot":
             {
                 // the food sitting in a station's slot: slot "OvenStuff%20FoodSlot"
@@ -485,6 +478,15 @@ static class _McpBridge
                     sb.Append($"[LOST {(h.Placeable as Component)?.name}/{h.name} layers={string.Join(",", h.Layers.Select(l => l.Name))} shown={string.Join(",", shown.Select(e => e.name))} parent={(h.transform.parent ? h.transform.parent.name : "-")}] ");
                 }
                 return sb.Length == 0 ? "clean" : sb.ToString();
+            }
+            case "tapfocus":
+            {
+                // a tap where the lesson points (Tutorial.AimAt(Focus)), as a player following the hand would make
+                var focus = Tutorial.Focus;
+                if (focus == null) return "no focus";
+                var aim = (Vector3)typeof(Tutorial).GetMethod("AimAt", All).Invoke(null, new object[] { focus });
+                UnityEngine.Object.FindFirstObjectByType<PlayerFSM>().HandleScreenTap(aim);
+                return $"{focus.name} at {aim.x:0},{aim.y:0}";
             }
             case "tables":
             {

@@ -110,7 +110,24 @@ public class UIOrderTags : MonoBehaviour
             badge.Point(pair.Value.toward);
             badge.Patience(pair.Value.waited);
             badge.Place(pair.Value.screen, root);
+            badge.Show(!OverSpeech(pair.Key, pair.Value.screen, size));
         }
+    }
+
+    // A badge of someone else lying on a customer's speech bubble: hidden while they speak (the badges are a screen
+    // overlay, over every world bubble; user, 2026-11-07: "the order tags of the ones in front cover what they say").
+    private bool OverSpeech(Object owner, Vector3 screen, float size)
+    {
+        foreach (var talk in UICustomerReaction.Speaking)
+        {
+            if (talk == null || talk.Npc == owner || talk.Surface == null) continue;
+            talk.Surface.GetWorldCorners(corners);
+            Vector2 min = Vector2.positiveInfinity, max = Vector2.negativeInfinity;
+            foreach (var c in corners) { var p = (Vector2)cam.WorldToScreenPoint(c); min = Vector2.Min(min, p); max = Vector2.Max(max, p); }
+            float r = size * 0.5f;
+            if (screen.x > min.x - r && screen.x < max.x + r && screen.y > min.y - r && screen.y < max.y + r) return true;
+        }
+        return false;
     }
 
     private void Collect(float size)
@@ -310,7 +327,7 @@ public class UIOrderTags : MonoBehaviour
         return ring;
     }
 
-    private static Sprite Circle()
+    internal static Sprite Circle()
     {
         if (circle != null) return circle;
         const int n = 64;
@@ -430,6 +447,14 @@ public class UIOrderTags : MonoBehaviour
         }
 
         public void Pop() => popUntil = Time.unscaledTime + 0.3f;
+
+        // Shown or kept out of the way (an alpha, not SetActive: Set switches it on every frame).
+        public void Show(bool on)
+        {
+            if (group == null) group = rt.gameObject.AddComponent<CanvasGroup>();
+            group.alpha = on ? 1f : 0f;
+        }
+        private CanvasGroup group;
 
         // How much of their patience is used up (0..1), or below zero for no ring (plates, burgers, the card).
         public void Patience(float waited)

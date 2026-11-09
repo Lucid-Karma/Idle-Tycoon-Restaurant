@@ -326,11 +326,13 @@ public static partial class CafeGrowthBuilder
         var pan = Clone("Level/Small Kitchen Utensil/pan_B", stove, "pan_B (2)");
         pan.SetPositionAndRotation(new Vector3(7.22f, 2.67f, 32.44f), Quaternion.Euler(0f, 148.7f, 0f));
 
-        // Second chopping board, on a new prep table in the open front corner of the kitchen.
+        // Second chopping board, on a new prep table in the open front corner of the kitchen. 0.7 m off the wall (was
+        // x 2.4): its carved hole left the chef a 7 cm strip to squeeze through on the way from the oven to the left
+        // tables, and he slowed to half speed there (user, 2026-11-07).
         var board = Group(root, "Upgrade Board");
-        Place(Model(RestFbx + "kitchentable_A.fbx", rest), board, new Vector3(2.4f, 1.5f, 17.6f), 0f);
+        Place(Model(RestFbx + "kitchentable_A.fbx", rest), board, new Vector3(3.1f, 1.5f, 17.6f), 0f);
         var chop = Clone("Level/Selectables/ChoppingArea", board, "ChoppingArea (2)");
-        chop.SetPositionAndRotation(new Vector3(2.4f, 2.65f, 17.6f), Quaternion.Euler(0f, 0f, 0f));
+        chop.SetPositionAndRotation(new Vector3(2.92f, 2.65f, 17.6f), Quaternion.Euler(0f, 0f, 0f));
 
         // Table for two: the right-hand table again, further back.
         CloneTable(root, "Upgrade TableForTwo", "table_round_A_small (1)", new Vector3(0f, 0f, 6.3f));
@@ -623,6 +625,102 @@ public static partial class CafeGrowthBuilder
         chairs.arraySize = all.Count;
         for (int i = 0; i < all.Count; i++) chairs.GetArrayElementAtIndex(i).objectReferenceValue = all[i];
         sso.ApplyModifiedPropertiesWithoutUndo();
+    }
+    #endregion
+
+
+    #region 3e. Late-game upgrades
+    // Three more cafe tiers, at levels 15, 19 and 24 (CafeProgress.TierLevels; user, 2026-11-07: "is there a level cap?
+    // if not, grow the shop"): the shop ran out at level 12. Made only of models already in the game (KayKit restaurant
+    // and adventurer props, the coins' gold), so the download does not grow. Adds to what step 3 placed and to the
+    // catalogue, without rebuilding either; re-runnable. Run step 4 afterwards for their pictures.
+    [MenuItem("Tools/Chibi Cafe/3e Late Upgrades")]
+    public static string LateUpgrades()
+    {
+        var root = GameObject.Find("Level/Upgrades").transform;
+        var rest = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "Rest.1.mat");
+        var gold = CoinMaterial();
+        Transform Fresh(string name)
+        {
+            var old = root.Find(name);
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            return Group(root, name);
+        }
+        Transform Put(string fbx, Material material, Transform parent, Vector3 at, Vector3 euler, float scale)
+        {
+            var t = Place(Model(fbx, material), parent, at, 0f, scale);
+            t.rotation = Quaternion.Euler(euler);
+            return t;
+        }
+        void Gild(Transform t) { foreach (var r in t.GetComponentsInChildren<MeshRenderer>()) r.sharedMaterials = r.sharedMaterials.Select(_ => gold).ToArray(); }
+
+        // Level 15: a big golden jar beside the tip jar, coins spilling round it.
+        var jar = Fresh("Upgrade GoldJar");
+        Gild(Put(RestFbx + "jar_A_large.fbx", rest, jar, new Vector3(6.2f, 2.5f, 23.25f), new Vector3(0f, -20f, 0f), 1f));
+        for (int i = 0; i < 4; i++)
+        {
+            var c = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            Object.DestroyImmediate(c.GetComponent<Collider>());
+            c.name = "Coin";
+            c.GetComponent<MeshRenderer>().sharedMaterial = gold;
+            c.transform.SetParent(jar, false);
+            c.transform.position = new Vector3(5.8f + (i % 2) * 0.12f, 2.53f + (i / 2) * 0.05f, 23.55f + i * 0.04f);
+            c.transform.localScale = new Vector3(0.22f, 0.025f, 0.22f);
+        }
+
+        // Level 15: an adventurer's shield over two crossed swords, on the back wall between the cabinet and the hood -
+        // something to look at while they wait.
+        var trophies = Fresh("Upgrade Trophies");
+        foreach (float tilt in new[] { 40f, -40f })
+        {
+            var sword = Put(AdvProps + "sword_2handed_color.fbx", null, trophies, Vector3.zero, Vector3.zero, 0.75f);
+            // pivot at the hilt's end: put the blade's middle behind the shield's middle
+            sword.rotation = Quaternion.AngleAxis(tilt, Vector3.right) * Quaternion.Euler(0f, 90f, 0f);
+            sword.position = new Vector3(-1.7f, 3.9f, 26.5f) - sword.up * (0.78f * 0.75f);
+        }
+        Put(AdvProps + "shield_round_color.fbx", null, trophies, new Vector3(-1.6f, 3.9f, 26.5f), new Vector3(0f, 90f, 0f), 1.3f);
+
+        // Level 19: an open spellbook on the back counter, by the shelf - a haste spell for the chef.
+        var book = Fresh("Upgrade Spellbook");
+        Put(AdvProps + "spellbook_open.fbx", null, book, new Vector3(2.6f, TopAt(2.6f, 32.7f) + 0.03f, 32.7f), new Vector3(-80f, 200f, 0f), 1.3f);
+
+        // Level 24: two golden pans hung, handles up, on the back wall under the cabinet, over the bun crate.
+        var pans = Fresh("Upgrade GoldPans");
+        Gild(Put(RestFbx + "pan_A.fbx", rest, pans, new Vector3(-1.72f, 3.15f, 24.2f), new Vector3(-90f, -90f, 0f), 0.55f));
+        Gild(Put(RestFbx + "pan_A.fbx", rest, pans, new Vector3(-1.72f, 3.2f, 25.0f), new Vector3(-90f, -90f, 8f), 0.55f));
+
+        foreach (var name in new[] { "Upgrade GoldJar", "Upgrade Trophies", "Upgrade Spellbook", "Upgrade GoldPans" })
+            root.Find(name).gameObject.SetActive(false);
+
+        // Onto the catalogue (same ids replaced), in the scene's CafeShop.
+        var shop = Object.FindFirstObjectByType<CafeShop>();
+        var field = typeof(CafeShop).GetField("upgrades", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var list = (List<Upgrade>)field.GetValue(shop);
+        GameObject G(string name) => root.Find(name).gameObject;
+        var late = new List<Upgrade>
+        {
+            new() { id = "goldjar", title = "Golden Tip Jar", blurb = "Another $1 on great orders", price = 200, level = 7, kind = UpgradeKind.Kitchen, show = new[] { G("Upgrade GoldJar") }, tipJar = 1 },
+            new() { id = "trophies", title = "Hero Trophies", blurb = "Customers wait 10% longer", price = 180, level = 7, kind = UpgradeKind.Dining, show = new[] { G("Upgrade Trophies") }, patienceBonus = 0.1f },
+            new() { id = "spellbook", title = "Haste Spellbook", blurb = "The chef moves 10% faster", price = 260, level = 8, kind = UpgradeKind.Chef, show = new[] { G("Upgrade Spellbook") }, chefSpeed = 0.1f },
+            new() { id = "goldpans", title = "Golden Pans", blurb = "Everything cooks 15% faster", price = 350, level = 9, kind = UpgradeKind.Kitchen, show = new[] { G("Upgrade GoldPans") }, cookSpeed = 0.15f },
+        };
+        list.RemoveAll(u => late.Any(l => l.id == u.id));
+        list.AddRange(late);
+        EditorUtility.SetDirty(shop);
+        EditorSceneManager.MarkSceneDirty(root.gameObject.scene);
+        return "late upgrades: " + list.Count + " in the shop";
+    }
+
+    // The height of whatever furniture top is under (x, z), below head height.
+    static float TopAt(float x, float z)
+    {
+        float top = 1.5f;
+        foreach (var r in Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+        {
+            var b = r.bounds;
+            if (x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z && b.max.y < 3.2f) top = Mathf.Max(top, b.max.y);
+        }
+        return top;
     }
     #endregion
 

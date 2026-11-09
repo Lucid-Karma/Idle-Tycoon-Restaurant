@@ -64,7 +64,9 @@ public class UIShopTile : MonoBehaviour
         switch (state)
         {
             case CafeShop.State.Locked:
-                Style(false, $"Lv {upgrade.level}", lockIcon, false);
+                // The level it opens at, as the HUD counts levels - not the cafe tier it belongs to ("Lv 4" was tier 4,
+                // which opens at level 6: the shop's numbers did not match the game's; user, 2026-11-07).
+                Style(false, $"Lv {CafeProgress.TierLevels[Mathf.Clamp(upgrade.level, 1, CafeProgress.TierLevels.Length) - 1]}", lockIcon, false);
                 break;
             case CafeShop.State.TooExpensive:
                 Style(true, "$" + upgrade.price, null, false);

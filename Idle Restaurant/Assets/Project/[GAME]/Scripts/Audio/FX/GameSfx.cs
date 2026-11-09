@@ -61,6 +61,16 @@ public class GameSfx : MonoBehaviour
         if (on) friers.Add(fryer); else friers.Remove(fryer);
     }
 
+    // The oven hums while a bun bakes in it (user, 2026-11-07: "a sound for the oven too - you make it, no files"):
+    // made here at start-up (OvenHum), so it adds nothing to the download.
+    public static void Bake(UnityEngine.Object oven, bool on)
+    {
+        if (on) bakers.Add(oven); else bakers.Remove(oven);
+    }
+    private const float BakeVolume = 0.08f;   // (0.14 was too loud - user, 2026-11-07)
+    private static readonly System.Collections.Generic.HashSet<UnityEngine.Object> bakers = new();
+    private AudioSource bake;
+
     // The fryer's crackle: a recording, CC0 (BigSoundBank, Graphics/Audio/CREDITS.txt). (A restaurant murmur that
     // grew with the seated customers was tried and taken out after the user heard it in a build, 2026-10-28.)
     private const float FryVolume = 0.2f;
@@ -88,6 +98,8 @@ public class GameSfx : MonoBehaviour
 
         friers.Clear();
         fry = Loop(Resources.Load<AudioClip>("Sounds/Fryer/fryer_loop"), first);
+        bakers.Clear();
+        bake = Loop(OvenHum(), first);
 
         sizzlers.Clear();
         if (sizzleLoop != null)
@@ -103,6 +115,43 @@ public class GameSfx : MonoBehaviour
             // for it to be decoded before starting it - the build that only waited never heard it, 2026-10-17).
             if (sizzleLoop.loadState == AudioDataLoadState.Unloaded) sizzleLoop.LoadAudioData();
         }
+    }
+
+    // A warm electric oven: a 100 Hz mains hum with a few soft harmonics, the fan's airy rush (filtered noise) and a
+    // slow swell, as a 4 s loop. Every tone completes whole cycles in the loop and the noise is cross-faded across the
+    // seam, so it loops without a click. ~90k samples, computed once.
+    private static AudioClip OvenHum()
+    {
+        const int Rate = 22050;
+        const float Seconds = 4f, Seam = 0.25f;
+        int n = (int)(Rate * Seconds), seam = (int)(Rate * Seam);
+        var rng = new System.Random(7);
+        var noise = new float[n + seam];
+        float low = 0f, band = 0f;
+        for (int i = 0; i < noise.Length; i++)
+        {
+            float white = (float)rng.NextDouble() * 2f - 1f;
+            low += 0.08f * (white - low);            // fan rush: noise low-passed...
+            band += 0.02f * (low - band);
+            noise[i] = low - band;                    // ...and its rumble taken out
+        }
+        var data = new float[n];
+        float peak = 1e-6f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Rate;
+            float rush = noise[i];
+            if (i < seam) { float k = (float)i / seam; rush = noise[i] * k + noise[n + i] * (1f - k); }
+            float hum = 0.55f * Mathf.Sin(2f * Mathf.PI * 100f * t) + 0.25f * Mathf.Sin(2f * Mathf.PI * 200f * t)
+                      + 0.10f * Mathf.Sin(2f * Mathf.PI * 300f * t) + 0.05f * Mathf.Sin(2f * Mathf.PI * 50f * t);
+            float swell = 1f + 0.08f * Mathf.Sin(2f * Mathf.PI * 0.5f * t);   // (0.5 Hz: two swells a loop)
+            data[i] = (hum * 0.6f + rush * 2.2f) * swell;
+            peak = Mathf.Max(peak, Mathf.Abs(data[i]));
+        }
+        for (int i = 0; i < n; i++) data[i] *= 0.8f / peak;
+        var clip = AudioClip.Create("oven_hum", n, 1, Rate, false);
+        clip.SetData(data, 0);
+        return clip;
     }
 
     // A looping source for a recorded loop, silent until asked for (Steer).
@@ -139,6 +188,8 @@ public class GameSfx : MonoBehaviour
         bool live = Audio.IsMusicOn && Time.timeScale > 0f && !LessonIntro.Playing;
         friers.RemoveWhere(x => x == null);
         Steer(fry, live && friers.Count > 0 ? FryVolume : 0f, FryVolume * 4f);
+        bakers.RemoveWhere(x => x == null);
+        Steer(bake, live && bakers.Count > 0 ? BakeVolume : 0f, BakeVolume * 4f);
 
         if (sizzle == null) return;
         sizzlers.RemoveWhere(x => x == null);

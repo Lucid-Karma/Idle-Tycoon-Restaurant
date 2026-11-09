@@ -9,7 +9,8 @@ public class NpcGoState : NpcStates
         fsm.OnNpcWalk.Invoke();
         fsm.OnNpcEatEnd.Invoke();
         fsm.chair.IsEmpty = true;   // !!!
-        fsm.LeaveChair(NpcFsm.Door, 1f);
+        NpcFsm.SeatFreed?.Invoke(fsm.chair.CalculateSitPos());   // the next customer sets off now (NpcSpawnController)
+        fsm.LeaveChair(fsm.ExitPoint, 1f);
     }
 
     public override void UpdateState(NpcFsm fsm)

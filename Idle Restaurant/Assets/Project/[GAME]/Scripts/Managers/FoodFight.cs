@@ -151,20 +151,26 @@ public class FoodFight : MonoBehaviour
     }
 
     // A tomato from nowhere: the new player's opening gag (Tutorial.TomatoOpening).
-    public void SurpriseTomato(Vector3 from, float seconds) => StartCoroutine(TomatoAtChef(from, seconds));
+    // The opening gag's tomato (Tutorial): only a splat - the player may already be on the move, and a first tap must
+    // never end on his back.
+    public void SurpriseTomato(Vector3 from, float seconds) => StartCoroutine(TomatoAtChef(from, seconds, harmless: true, size: 1.05f));   // (1.7, then 1.25, were too big: near the old size - user, 2026-11-07)
 
     // A customer's tomato at the chef: running into it puts him on his back; standing, it splats.
-    private IEnumerator TomatoAtChef(Vector3 start, float seconds = -1f)
+    private IEnumerator TomatoAtChef(Vector3 start, float seconds = -1f, bool harmless = false, float size = 1f)
     {
         var tomato = Tomato(start);
+        tomato.transform.localScale *= size;
+        bool loud = harmless;   // the lesson's opening tomato: a streak behind it and a burst where it lands
+        if (loud) KitchenFx.Streak(tomato.transform, ColorOf("tomato"));
         GameSfx.Play(GameSfx.Cue.CustomerThrow);
         yield return Fly(tomato.transform, ChefHead, seconds > 0f ? seconds : customerThrowSeconds, () =>
         {
             Splash(tomato.transform.position, ColorOf("tomato"), 28);
+            if (loud) KitchenFx.Impact(tomato.transform.position, ColorOf("tomato"));
             Destroy(tomato);
             GameSfx.Play(GameSfx.Cue.Splat);
             // Running into a tomato, he goes down every time: one rule the player can read off the screen.
-            bool slip = chef.IsRunning;
+            bool slip = chef.IsRunning && !harmless;
             if (slip)
             {
                 // From behind (flying the way he runs): onto his face; otherwise onto his back.
@@ -173,7 +179,7 @@ public class FoodFight : MonoBehaviour
                 chef.Slip(slipSeconds, Vector3.Dot(flight.normalized, chef.transform.forward) > 0.3f);
                 GameSfx.Play(GameSfx.Cue.Slip);
             }
-            else if (chef.HeldFood == null) chef.Splat(stunSeconds);
+            else if (chef.HeldFood == null && !harmless) chef.Splat(stunSeconds);
             OnChefSplatted.Invoke(ChefHead(), slip ? Hit.Slip : Hit.Splat);
         });
     }

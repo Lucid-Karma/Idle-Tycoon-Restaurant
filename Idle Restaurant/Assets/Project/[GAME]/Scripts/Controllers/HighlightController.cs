@@ -230,7 +230,11 @@ public class HighlightController : MonoBehaviour
                     if (npc.chair?.GetTableService() is ServiceBase table) into.Add(table);
                 }
             }
-            if (player.CanTakeMore) AddReady(into);
+            if (player.CanTakeMore)
+            {
+                AddReady(into);
+                AddOrderCrates(into);
+            }
             return;
         }
 
@@ -240,8 +244,23 @@ public class HighlightController : MonoBehaviour
         // Everything an order needs is on it: tap it to finish the burger (adding more is the player's choice).
         foreach (var plate in plates) if (plate.CoversAnOrder) into.Add(plate);
 
-        if (into.Count == 0)
-            foreach (var source in sources) into.Add(source);
+        AddOrderCrates(into);
+    }
+
+    // The crates of everything the waiting customers' burgers are made of, all the while there is room in his hands
+    // (user, 2026-11-07: "all the ingredients of the burgers the customers want should keep flashing"; and only those:
+    // "if no recipe has a tomato yet, no need to point at it"). With nobody waiting, what every burger needs.
+    private void AddOrderCrates(List<Component> into)
+    {
+        names.Clear();
+        foreach (var npc in NpcFsm.Active)
+        {
+            if (!Orders.Waiting(npc) || npc.Ordered == null) continue;
+            foreach (var layer in npc.Ordered.Layers) names.Add(layer);
+            if (npc.FriesDue) names.Add("fries");
+        }
+        if (names.Count == 0) { names.Add("bun"); names.Add("burger"); }
+        foreach (var source in sources) if (names.Contains(source.Ingredient) && !into.Contains(source)) into.Add(source);
     }
 
     private readonly List<string> names = new();

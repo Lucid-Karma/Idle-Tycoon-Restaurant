@@ -97,7 +97,8 @@ public class PlayerFSM : MonoBehaviour
         LooseDust();
         UITapQueue.Create(this);
         stack = gameObject.AddComponent<CarryStack>();
-        var anyPlate = FindFirstObjectByType<Plate>();
+        // (Inactive too: the plates only come into the kitchen with Mochi - CafeShop's waiter.)
+        var anyPlate = FindFirstObjectByType<Plate>(FindObjectsInactive.Include);
         stack.Init(this, holdParent.transform, anyPlate != null ? anyPlate.TopBunPrefab : null);
         sideHand = SideHand(holdParent.transform);
         gameObject.AddComponent<ChefIdle>();
@@ -1131,7 +1132,7 @@ public class PlayerFSM : MonoBehaviour
         if (parts.Count < 2 || table.IsHaveFood()) return false;
         if (assembler == null)
         {
-            var model = FindFirstObjectByType<Plate>();
+            var model = FindFirstObjectByType<Plate>(FindObjectsInactive.Include);   // (plates come with Mochi)
             if (model == null) return false;
             var go = Instantiate(model.gameObject);
             go.name = "Burger Assembler";

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -28,8 +29,18 @@ public class UICustomerReaction : MonoBehaviour
     private float lineAge = float.MaxValue, moneyAge = float.MaxValue, hold;
     private float pop = 1f, popVelocity;
 
+    // The customers saying something right now (their bubble on screen): UIOrderTags keeps its badges off them.
+    public static readonly List<UICustomerReaction> Speaking = new();
+    public NpcFsm Npc => npc;
+    public RectTransform Surface => surface;
+
     private void Awake()
     {
+        // Over every customer's order bubble, not only their own: each customer is one world canvas, drawn back to
+        // front, so a customer sitting in front covered what the one behind was saying (user, 2026-11-07).
+        var own = gameObject.AddComponent<Canvas>();
+        own.overrideSorting = true;
+        own.sortingOrder = 1;
         npc = GetComponentInParent<NpcFsm>();
         bubbleGroup = bubble.GetComponent<CanvasGroup>();
         moneyGroup = moneyPill.GetComponent<CanvasGroup>();
@@ -54,6 +65,7 @@ public class UICustomerReaction : MonoBehaviour
         npc.OnNpcWaitEnd.RemoveListener(OnGaveUp);
         npc.OnNpcSays.RemoveListener(OnSays);
         npc.OnNpcTipped.RemoveListener(OnTipped);
+        Speaking.Remove(this);
     }
 
     private void OnServed()
@@ -124,6 +136,8 @@ public class UICustomerReaction : MonoBehaviour
             bubbleGroup.alpha = 1f - Mathf.Clamp01((lineAge - hold) / UITokens.Motion.Slow);
             if (lineAge > hold + UITokens.Motion.Slow) bubble.gameObject.SetActive(false);
         }
+        bool speaking = bubble.gameObject.activeSelf;
+        if (speaking != Speaking.Contains(this)) { if (speaking) Speaking.Add(this); else Speaking.Remove(this); }
 
         if (moneyPill.gameObject.activeSelf)
         {

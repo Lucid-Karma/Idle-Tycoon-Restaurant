@@ -55,6 +55,36 @@ public class KitchenFx : MonoBehaviour
             instance.Emit(instance.hearts, at, 1, i % 3 == 2 ? UITokens.Colors.Pink : UITokens.Colors.Raspberry);
     }
 
+    // Something hitting hard (the lesson's opening tomato on the chef's head): a ring bursting out in its colour, and
+    // flares thrown from it, white and its colour.
+    public static void Impact(Vector3 at, Color color)
+    {
+        if (instance == null) return;
+        instance.Emit(instance.thickRing, at, 1, color);
+        instance.Emit(instance.flares, at, 5, color);
+        instance.Emit(instance.flares, at, 3, UITokens.Colors.WarmWhite);
+    }
+
+    // A speed streak behind something flying fast: a trail in its colour, thick at the thing and thinning to nothing,
+    // with the kitchen's crisp effects material. Goes with the thing.
+    public static void Streak(Transform thing, Color color)
+    {
+        if (instance == null || thing == null) return;
+        var trail = thing.gameObject.AddComponent<TrailRenderer>();
+        trail.time = 0.22f;
+        trail.minVertexDistance = 0.05f;
+        trail.widthCurve = new AnimationCurve(new Keyframe(0f, 0.55f), new Keyframe(1f, 0f));
+        var fade = new Gradient();
+        fade.SetKeys(new[] { new GradientColorKey(color, 0f), new GradientColorKey(UITokens.Colors.WarmWhite, 1f) },
+                     new[] { new GradientAlphaKey(0.85f, 0f), new GradientAlphaKey(0f, 1f) });
+        trail.colorGradient = fade;
+        trail.sharedMaterial = instance.streakMaterial ??= new Material(instance.crisp) { mainTexture = instance.disc, name = "Streak" };
+        trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        trail.receiveShadows = false;
+    }
+
+    private Material streakMaterial;
+
     private static Color ColorOf(string ingredient) => ingredient switch
     {
         "tomato" => UITokens.Colors.Tomato,

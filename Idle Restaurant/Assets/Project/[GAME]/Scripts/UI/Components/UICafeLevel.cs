@@ -57,11 +57,18 @@ public class UICafeLevel : MonoBehaviour
         if (shownLevel != 0 && level != shownLevel) shown = 0f;
         shownLevel = level;
         var (into, span) = CafeProgress.LevelProgress;
-        levelLabel.text = string.Format(levelFormat, level);
         if (showShiftStars && ScoreManager.Instance != null)
+        {
+            levelLabel.text = string.Format(levelFormat, level);
             progressLabel.text = "+" + ScoreManager.Instance.ShiftStars;
+        }
         else
-            progressLabel.text = span > 0 ? $"{into} / {span} levels" : "Max";
+        {
+            // The shop says the level being played, as the HUD does, and where the next new things are: "Cafe level 2"
+            // (the tier) over "0 / 2 levels" read as a wrong count next to the HUD's "Level 2" (user, 2026-11-07).
+            levelLabel.text = "Level " + CafeProgress.LevelNumber;
+            progressLabel.text = span > 0 ? $"New at level {CafeProgress.TierLevels[level]}" : "All open";
+        }
         target = span > 0 ? (float)into / span : 1f;
     }
 

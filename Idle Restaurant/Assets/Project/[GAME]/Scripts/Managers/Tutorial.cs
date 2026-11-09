@@ -59,7 +59,8 @@ public class Tutorial : MonoBehaviour
     public static Tutorial Instance { get; private set; }
     // The lesson itself (patience frozen, nothing burns, faster cooking); the snack tip is not "Running".
     public static bool Running => Instance != null && Instance.step >= 0 && !Instance.tip;
-    public static float CookSpeed => Running ? 3f : 1f;
+    // How fast things cook: three times in the lesson, otherwise as the shop's perks say (the Golden Pans).
+    public static float CookSpeed => Running ? 3f : CafeShop.CookSpeedScale;
     // The lesson's burger planned in one go: its taps queue up (PlayerFSM) and say exactly what they were for.
     public static bool Planning => Running && (Instance.Current == Combo || Instance.Current == ComboFirst) && Instance.plan != null && !Instance.planBroken;
 
@@ -85,6 +86,8 @@ public class Tutorial : MonoBehaviour
     private bool friesTossed;
     private int ratedCount;            // orders paid during the lesson
     private NpcFsm firstServed;        // the first customer, who may still be eating when the second order starts
+    private bool gifted;               // the first burger earned the toque (it was not owned yet)
+    public const string FirstGift = "toque";
     private bool intro;                // the opening titles are playing: the first step waits
     private static bool introShown;    // once a session
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -136,25 +139,48 @@ public class Tutorial : MonoBehaviour
         // plate, the plate again, the customer, all in a row: he grabs both and carries them (PlayerFSM's stack).
         ComboFirst,
         // The first coins: a cheer, and straight on to the next one.
+        // The first coins, and a present: a chef's toque pops onto his head (Roblox's onboarding guide: free items early
+        // let players feel those systems; 2026-11-07, half the starters gone in the first minute).
         new()
         {
             Name = "first", Line = "<b>First</b> burger!",
+            LineNow = t => t.gifted ? "A <b>hat</b> for you!" : "<b>First</b> burger!",
             Enter = t =>
             {
                 t.Celebrate();
                 t.firstServed = Served(null);
+                // Shown, not just worn (user, 2026-11-07: "the moment he gets the hat doesn't show - he is behind the
+                // customer"): its picture pops up big in the middle of the screen and flies onto him, and the hat pops
+                // onto his head as it lands (UIGiftPop).
+                var gift = CafeShop.Instance != null ? CafeShop.Instance.Gift(FirstGift, revealNow: false) : null;
+                t.gifted = gift != null;
+                if (gift != null) UIGiftPop.Play(() => gift.icon, t.chef.transform, () => CafeShop.Instance.RevealPending());
             },
-            Done = t => Time.time - t.stepStarted > 1.8f,
+            Done = t => Time.time - t.stepStarted > (t.gifted ? 2.8f : 1.8f),
         },
         // The second customer's Hamburger, from the crates (oven and pan), planned in one go.
         Combo,
         // A short cheer, and the shift is the player's.
+        // ...and what is coming: the next level's news ("Level 2: Knights"), so the first minute ends on something to look
+        // forward to (the first-hour study: intrigue keeps players as much as fun does).
         new()
         {
             Name = "done", Line = "<b>One</b> go, <b>one</b> burger!",
-            Enter = t => t.Celebrate(), Done = t => Time.time - t.stepStarted > 3f,
+            LineNow = t => NextGuests() is string who ? $"Next: <b>{who}</b> drop by!" : "<b>One</b> go, <b>one</b> burger!",
+            Enter = t => t.Celebrate(confetti: true), Done = t => Time.time - t.stepStarted > 3f,
         },
     };
+
+    // The next kind of customer the cafe opens up to ("Knights"): the lesson's last line, a few words long.
+    private static string NextGuests()
+    {
+        for (int level = CafeProgress.LevelNumber + 1; level <= CafeProgress.LevelNumber + 30; level++)
+        {
+            int tier = CafeProgress.TierOpensAt(level);
+            if (tier > 0 && Customers.ArrivesAt(tier, out var kind)) return Customers.Of(kind).Plural;
+        }
+        return null;
+    }
 
     // A customer (other than `except`) who has their burger: eating it, or it is on their table while they are still
     // walking to it (they can be served on their way in, and only start eating once they sit).
@@ -321,7 +347,7 @@ public class Tutorial : MonoBehaviour
 
     public void Begin()
     {
-        snacked = tip = false;
+        snacked = tip = gifted = false;
         ratedCount = 0;
         firstServed = null;
         step = 0;
@@ -384,30 +410,24 @@ public class Tutorial : MonoBehaviour
     }
 
     // What to tap swells and settles once a beat (TapPulse; user: "a player who doesn't read should still see the
-    // burger has to be tapped to finish it"). Always for the last tap of a burger - the plate to close ("Done!") and
-    // the finished burger to take; anything else only once the player has not found it for a while (IdleNudge), so
-    // the kitchen isn't bouncing all the time. Never a customer (their order bubble already says who).
-    private const float IdleNudge = 5f;
+    // burger has to be tapped"), from the moment it is pointed at. Never a customer (their order bubble says who).
     private TapPulse pulse;
-    private Component pulsing, focusSeen;
-    private float focusSince;
+    private Component pulsing;
 
     private void Nudge(Beat beat)
     {
-        if (Focus != focusSeen) { focusSeen = Focus; focusSince = Time.time; }
         Component target = null;
-        bool finish = false, patty = false;
+        bool food = false;
         if (Running && Focus != null && focusOnScreen && Focus is not NpcFsm)
         {
-            string line = beat.LineNow != null ? beat.LineNow(this) : beat.Line;
-            finish = Focus is Hamburger || (line != null && line.StartsWith("Done!"));
-            // A fried patty is brown on a dark pan, hard to pick out (user, 2026-10-28): it swells at once, and more.
-            patty = Focus is Burger;
-            if (finish || patty || Time.time - focusSince > IdleNudge) target = Focus;
+            // The ingredient itself swells, at once (user, 2026-11-07: "is it the patty or the cheese he points at? not
+            // clear"): the bun in the oven and the patty on the pan rather than the oven and the pan, a crate as it is.
+            target = Focus is NonStackBase station && station.Food != null ? station.Food : Focus;
+            food = target is EdibleBase;
         }
         if (target == pulsing && (target == null || pulse != null)) return;
         if (pulse != null) pulse.Stop();
-        pulse = target != null ? TapPulse.On(target.transform, finish ? 0.16f : patty ? 0.22f : 0.09f, finish || patty ? 0.9f : 1.5f) : null;
+        pulse = target != null ? TapPulse.On(target.transform, food ? 0.55f : 0.3f, 0.9f) : null;   // (0.24 was still missed - user, 2026-11-07)
         pulsing = target;
     }
 
@@ -429,10 +449,12 @@ public class Tutorial : MonoBehaviour
         sayUntil = -1f;
     }
 
-    private void Celebrate()
+    // A cheer; confetti only for the lesson's end - it burst at every step and tip, three or four times in a few seconds,
+    // and stopped meaning anything (user, 2026-11-07). The first burger's hat brings its own (CafeShop.RevealPending).
+    private void Celebrate(bool confetti = false)
     {
         GameSfx.Play(GameSfx.Cue.LevelUp);
-        if (CafeShop.Instance != null) CafeShop.Instance.Confetti(chef.transform.position + Vector3.up * 1.6f);
+        if (confetti && CafeShop.Instance != null) CafeShop.Instance.Confetti(chef.transform.position + Vector3.up * 1.6f);
     }
 
     // A line said for a moment over the step's own (the player did something the lesson is not about).
@@ -622,6 +644,7 @@ public class Tutorial : MonoBehaviour
             if (cardCanvas != null) { cardCanvas.overrideSorting = true; cardCanvas.sortingOrder = 10; }
         }
         focusOnScreen = (Running || tip) && Focus != null && TryScreenRect(Focus, out focusRect);
+        spot.Dimmed = Guided || tip;
         if (focusOnScreen) spot.Show(focusRect); else spot.Hide();
         spot.ShowHand(focusOnScreen);
     }
@@ -659,8 +682,11 @@ public class Tutorial : MonoBehaviour
         // a moment more (user, 2026-11-04: "it was over before I had turned the phone").
         while (Screen.height > Screen.width) yield return null;
         float openedAt = Time.realtimeSinceStartup;
-        // Short (CrazyGames 2026-11-05: 44% of players gone inside the first minute): a beat, the throw, and the
-        // lesson starts while the corner chef is still laughing.
+        // The lesson starts at once and the gag plays over it (2026-11-07, CrazyGames: half the players who start are
+        // gone inside the first minute - they waited through load and gag before they could do anything): the first
+        // tap works the moment the kitchen is on screen; the tomato (harmless) lands while he is already at work.
+        Opening = false;
+        done();
         yield return new WaitForSeconds(0.6f);
         var chef = FindFirstObjectByType<PlayerFSM>();
         if (chef != null && FoodFight.Instance != null)
@@ -671,20 +697,32 @@ public class Tutorial : MonoBehaviour
             float depth = cam != null ? Vector3.Dot(chef.transform.position - cam.transform.position, cam.transform.forward) : 10f;
             var from = cam != null ? cam.ViewportToWorldPoint(new Vector3(1.1f, 0.95f, depth)) : chef.transform.position + Vector3.up * 6f;
             const float flight = 1.4f;
+            // Made hard to miss (user, 2026-11-07: "the tomato on his head can go unnoticed"): a speed streak behind the
+            // tomato, a burst as it hits (FoodFight) and "Uh-oh!" over him then - as it hits, not as it is thrown (it came
+            // up before the tomato did; user, 2026-11-07). No slow motion (tried: the user did not want it).
             FoodFight.Instance.SurpriseTomato(from, flight);
-            yield return new WaitForSeconds(flight + 0.4f);   // the flight and the splat; the laugh goes on by itself
+            yield return new WaitForSeconds(flight);
+            UICheerPop.OnSay.Invoke(chef.transform.position + Vector3.up * 2.4f, "Uh-oh!");
+            yield return new WaitForSeconds(0.4f);   // the splat; the laugh goes on by itself
         }
-        Opening = false;
         GoogleAnalytics.Event("opening_done", "seconds", Time.realtimeSinceStartup - openedAt);
-        done();
     }
 
     // Taps the lesson turned down in a row: the third goes through - the lesson guides, it does not hold the player
     // back (2026-11-04: CrazyGames, half the players gone within the first minute).
     private int refused;
 
+    // Only the first burger is guided tap by tap, the rest of the screen dark and nothing else taking a tap (Apple's
+    // onboarding guide: let them play unguided as soon as possible; 2026-11-07, half the starters gone in the first
+    // minute). From the second burger the hand still points at the next thing, but the kitchen is the player's.
+    private bool Guided => step <= 0;
+
+    // Each lesson tap, right (the lit thing) or turned down: the little teacher chef answers it with a face.
+    public static event System.Action<bool> LessonTap;
+
     private static bool Refuse(Tutorial t)
     {
+        LessonTap?.Invoke(false);
         if (++t.refused < 3) { if (t.spot != null) t.spot.Punch(); return false; }
         t.refused = 0;
         return true;
@@ -698,17 +736,19 @@ public class Tutorial : MonoBehaviour
         var t = Instance;
         if (t == null || !Running) return true;
         // Planning: every step tapped (or the customer not in yet) - taps wait, so nothing knocks the plan over.
-        if (Planning && (Focus == null || !t.focusOnScreen)) return false;
+        bool free = !t.Guided;   // (after the first burger a tap elsewhere is the player's own: it just happens)
+        if (Planning && (Focus == null || !t.focusOnScreen)) return free;
         if (Focus == null || !t.focusOnScreen) return true;
         // A tap on something else the chef could use (the crate beside the oven...) is that thing, not the lit one: it
         // bounces (TapFeedback) and the light nudges; the chef goes nowhere (user, 2026-10-30: "I tapped something
         // else and he went to the oven anyway - the lesson doesn't care about my input").
-        if (TappedSomethingElse(screen)) return Refuse(t);
+        if (TappedSomethingElse(screen)) return free || Refuse(t);
         var r = t.focusRect;
         float slop = Screen.height * 0.035f;
         float dx = Mathf.Max(r.xMin - screen.x, 0f, screen.x - r.xMax), dy = Mathf.Max(r.yMin - screen.y, 0f, screen.y - r.yMax);
-        if (dx * dx + dy * dy > slop * slop) return Refuse(t);
+        if (dx * dx + dy * dy > slop * slop) return free || Refuse(t);
         t.refused = 0;
+        LessonTap?.Invoke(true);
         aim = AimAt(Focus);
         if (Planning) t.TapPlanned();
         return true;

@@ -15,8 +15,12 @@ public class UISpotlight : MaskableGraphic
     private const int RingSteps = 64;
 
     private Vector2 center, radius, targetCenter, targetRadius;
-    private float shown, punch;
+    private float shown, punch, dimShown = 1f;
     private bool on, placed;
+
+    // Whether the rest of the screen goes dark around the lit thing; off, only the hand points (Tutorial: the first
+    // burger dims, the second only points - the player plays it freely).
+    public bool Dimmed { get; set; } = true;
 
     public static UISpotlight Create()
     {
@@ -179,6 +183,7 @@ public class UISpotlight : MaskableGraphic
     {
         float dt = Mathf.Min(Time.unscaledDeltaTime, 1f / 20f);
         shown = Mathf.MoveTowards(shown, on ? 1f : 0f, dt / 0.3f);
+        dimShown = Mathf.MoveTowards(dimShown, Dimmed ? 1f : 0f, dt / 0.3f);
         float k = 1f - Mathf.Exp(-10f * dt);
         center = Vector2.Lerp(center, targetCenter, k);
         radius = Vector2.Lerp(radius, targetRadius * (1f + 0.18f * Mathf.Sin(punch * Mathf.PI)), k);
@@ -190,9 +195,9 @@ public class UISpotlight : MaskableGraphic
     protected override void OnPopulateMesh(VertexHelper vh)
     {
         vh.Clear();
-        if (shown <= 0f) return;
+        if (shown * dimShown <= 0f) return;
         var dim = UITokens.Colors.Ink;
-        dim.a = 0.6f * shown;
+        dim.a = 0.6f * shown * dimShown;
         var clear = dim; clear.a = 0f;
         float soft = Screen.height * 0.05f;
         float far = new Vector2(Screen.width, Screen.height).magnitude * 1.2f;

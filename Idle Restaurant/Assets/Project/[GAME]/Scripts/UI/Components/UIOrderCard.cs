@@ -62,7 +62,8 @@ public class UIOrderCard : MonoBehaviour
     private void LateUpdate()
     {
         var (order, who, layers) = Current();
-        bool visible = order != null && CafeProgress.Taught && !Tutorial.Running
+        // Shown in the lesson too (user, 2026-11-07); not over the opening titles and gag.
+        bool visible = order != null && !LessonIntro.Playing && !Tutorial.Opening
                        && (UIBreakCard.Instance == null || !UIBreakCard.Instance.Showing);
         float dt = Mathf.Min(Time.unscaledDeltaTime, 1f / 30f);
         group.alpha = Mathf.MoveTowards(group.alpha, visible ? 1f : 0f, dt / UITokens.Motion.Normal);

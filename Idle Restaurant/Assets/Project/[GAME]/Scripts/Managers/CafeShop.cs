@@ -26,6 +26,7 @@ public class Upgrade
     public float patienceBonus;       // 0.15 = customers wait 15% longer
     public int tipJar;                // extra $ on every order rated 4 stars or more
     public float chefSpeed;           // 0.15 = the chef moves 15% faster
+    public float cookSpeed;           // 0.15 = everything on the heat (and the oven) cooks 15% faster
 }
 
 // The cafe's upgrades: what's for sale, what it does, and putting bought things in the scene.
@@ -69,6 +70,7 @@ public class CafeShop : MonoBehaviour
     public static float PatienceScale => 1f + Sum(u => u.patienceBonus);
     public static int TipJar => Mathf.RoundToInt(Sum(u => u.tipJar));
     public static float ChefSpeedScale => 1f + Sum(u => u.chefSpeed);
+    public static float CookSpeedScale => 1f + Sum(u => u.cookSpeed);
 
     private static float Sum(Func<Upgrade, float> perk)
     {
@@ -108,6 +110,23 @@ public class CafeShop : MonoBehaviour
         EventManager.OnScoreUpdate.Invoke();
         GoogleAnalytics.Event("spend_virtual_currency", "item_name", upgrade.id, "value", upgrade.price, "virtual_currency_name", "coins");
         return true;
+    }
+
+    // Given rather than bought (the lesson's first burger earns the toque): owned and worn if a hat. It pops in at
+    // once - or, with revealNow off, when the caller says (RevealPending: the lesson flies its picture to the chef
+    // first). Null if it is already owned or not in the catalogue.
+    public Upgrade Gift(string id, bool revealNow = true)
+    {
+        Upgrade upgrade = null;
+        foreach (var u in upgrades) if (u.id == id) upgrade = u;
+        if (upgrade == null || CafeProgress.Owns(id)) return null;
+        CafeProgress.AddOwned(id);
+        if (upgrade.isHat) WearOnly(id);
+        else Apply(upgrade, true);
+        if (revealNow) RevealPending();
+        Changed?.Invoke(upgrade);
+        GoogleAnalytics.Event("gift", "item_name", id);
+        return upgrade;
     }
 
     // Owned hat tapped in the shop: put it on (taking the other one off), or take it off.
